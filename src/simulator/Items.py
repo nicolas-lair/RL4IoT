@@ -1,3 +1,6 @@
+from abc import ABC, abstractmethod
+
+
 class MethodUnavailableError(Exception):
     pass
 
@@ -21,15 +24,17 @@ def check_method_availability(func):
     return wrapper_check
 
 
-class AbstractItem:
+class AbstractItem(ABC):
     def __init__(self, type, methods):
         self.type = type
         self.methods = methods
         del self.methods['self']
 
+    @abstractmethod
     def get_state(self):
         raise NotImplementedError
 
+    @abstractmethod
     def set_state(self, value):
         raise NotImplementedError
 
@@ -202,9 +207,22 @@ class PlayerItem(AbstractItem):  # TODO Check state of players
     def get_state(self):
         return [self.playpause]
 
+    def set_state(self, value):
+        assertion_test = (value == 1) or (value == 0)
+        error_message = "playpause should be 0 or 1 (boolean)"
+        self.setAttribute(['playpause'], [value], assertion_test, error_message)
+
     @check_method_availability
     def PlayPause(self):
         self.playpause = bool(1 - self.playpause)
+
+    @check_method_availability
+    def play(self):
+        self.playpause = 1
+
+    @check_method_availability
+    def pause(self):
+        self.playpause = 0
 
     @check_method_availability
     def next(self):

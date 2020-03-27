@@ -22,9 +22,67 @@ class Channel:
         self.write = write
 
 
+class LightBulb(Thing):
+    """
+    Thing type 0210 (https://www.openhab.org/addons/bindings/hue/)
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.color = Channel(
+            name='color',
+            description="This channel supports full color control with hue, saturation and brightness values",
+            item=ColorItem(turnOn=True, turnOff=True, increase=True, decrease=True, setPercent=True,
+                           setHSB=True),
+            value=(0, 0, 0)
+        )
+
+        self.color_temperature = Channel(
+            name='color_temperature',
+            description='This channel supports adjusting the color temperature from cold (0%) to warm (100%)',
+            item=DimmerItem(increase=True, decrease=True, setPercent=True)
+        )
+
+        # # TODO decide if use or not : maybe not
+        # self.alert = Channel(
+        #     name='alert',
+        #     description='This channel supports displaying alerts by flashing the bulb either once or multiple times. Valid values are: NONE, SELECT and LSELECT.',
+        #     item=StringItem()
+        # )
+
+
+class PlugSwitch(Thing):
+    """
+    https://www.openhab.org/addons/bindings/zwave/thing.html?manufacturer=everspring&file=an180_0_0.html
+    """
+
+    def __init__(self):
+        super(PlugSwitch, self).__init__()
+        self.switch_binary = Channel(name="switch_binary",
+                                     description="Switch the power on and off.",
+                                     item=SwitchItem(OnOff=True))
+
+        # Ignore both channel
+        # self.alarm = Channel(
+        #     name='alarm_general',
+        #     description="Indicates if an alarm is triggered.",
+        #     item=SwitchItem(),
+        #     write=False,
+        # )
+        #
+        # self.alarm_power = Channel(
+        #     name='alarm_power',
+        #     description="Indicates if a power alarm is triggered.",
+        #     item=SwitchItem(),
+        #     write=False,
+        # )
+
+
 class LGTV(Thing):
     """
     https://www.openhab.org/addons/bindings/lgwebos/
+
+    See also PanasonicTV and SamsungTV
     """
 
     def __init__(self, power=1, mute=0):
@@ -90,66 +148,45 @@ class LGTV(Thing):
         # )
 
 
-class LightBulb(Thing):
-    """
-    Thing type 0210 (https://www.openhab.org/addons/bindings/hue/)
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.color = Channel(
-            name='color',
-            description="This channel supports full color control with hue, saturation and brightness values",
-            item=ColorItem(turnOn=True, turnOff=True, increase=True, decrease=True, setPercent=True,
-                           setHSB=True),
-            value=(0, 0, 0)
-        )
-
-        self.color_temperature = Channel(
-            name='color_temperature',
-            description='This channel supports adjusting the color temperature from cold (0%) to warm (100%)',
-            item=DimmerItem(increase=True, decrease=True, setPercent=True)
-        )
-
-        # # TODO decide if use or not : maybe not
-        # self.alert = Channel(
-        #     name='alert',
-        #     description='This channel supports displaying alerts by flashing the bulb either once or multiple times. Valid values are: NONE, SELECT and LSELECT.',
-        #     item=StringItem()
-        # )
-
-
-class PlugSwitch(Thing):
-    """
-    https://www.openhab.org/addons/bindings/zwave/thing.html?manufacturer=everspring&file=an180_0_0.html
-    """
-
-    def __init__(self):
-        super(PlugSwitch, self).__init__()
-        self.switch_binary = Channel(name="switch_binary",
-                                     description="Switch the power on and off.",
-                                     item=SwitchItem(OnOff=True))
-
-        # Ignore both channel
-        # self.alarm = Channel(
-        #     name='alarm_general',
-        #     description="Indicates if an alarm is triggered.",
-        #     item=SwitchItem(),
-        #     write=False,
-        # )
-        #
-        # self.alarm_power = Channel(
-        #     name='alarm_power',
-        #     description="Indicates if a power alarm is triggered.",
-        #     item=SwitchItem(),
-        #     write=False,
-        # )
-
-
-
 class Speaker(Thing):
+    """
+    https://www.openhab.org/addons/bindings/sonyaudio/
+    HT-CT800, SRS-ZR5, HT-ST5000, HT-ZF9, HT-Z9F, HT-MT500
+
+    maybe compare with Sonos or check STR-1080 for multiple zone compatibility
+    """
     def __init__(self):
         super(Speaker, self).__init__()
+
+        self.power = Channel(
+            name="power",
+            description="Main power on/off",
+            item=SwitchItem(OnOff=True)
+        )
+
+        # TODO Discretize this
+        self.input = Channel(
+            name="input",
+            description="Set or get the input source",
+            item=StringItem(setString=True)
+        )
+        self.volume = Channel(
+            name="volume",
+            description="Set or get the master volume",
+            item=DimmerItem(increase=True, decrease=True, setPercent=True)
+        )
+        self.mute = Channel(
+            name="mute",
+            description="Set or get the mute state of the master volume",
+            item=SwitchItem(OnOff=True)
+        )
+
+        # TODO check what is sound Field, for now disable
+        # self.soundField = Channel(
+        #     name="soundField",
+        #     description="Sound Field",
+        #     item=StringItem(setString=True)
+        # )
 
 
 class Store(Thing):
@@ -160,3 +197,76 @@ class Store(Thing):
 class Chromecast(Thing):
     def __init__(self):
         super(Chromecast, self).__init__()
+
+        self.control = Channel(
+            name='control',
+            description="Player control; currently only supports play/pause and does not correctly update, if the state changes on the device itself",
+            item=PlayerItem(PlayPause=True)
+        )
+        self.stop = Channel(
+            name='stop',
+            description="Send ON to this channel: Stops the Chromecast. If this channel is ON, the Chromecast is stopped, otherwise it is in another state (see control channel)",
+            item=SwitchItem(On=True)
+        )
+
+        # TODO link this channel to other volume channels
+        self.volume = Channel(
+            name='volume',
+            description="Control the volume, this is also updated if the volume is changed by another app",
+            item=DimmerItem(increase=True, decrease=True, setPercent=True)
+        )
+
+        self.mute = Channel(
+            name='mute',
+            description="Mute the audio",
+            item=SwitchItem(OnOff=True)
+        )
+
+        self.playuri = Channel(
+            name='playuri',
+            description="Can be used to tell the Chromecast to play media from a given url",
+            item=StringItem(setString=True)
+        )
+
+        self.appName = Channel(
+            name='appName',
+            description="Name of currently running application",
+            item=StringItem(),
+            write=False
+        )
+        self.appId = Channel(
+            name='appId',
+            description="ID of currently running application",
+            item=StringItem(),
+            write=False
+        )
+        self.idling = Channel(
+            name='idling',
+            description="Read-only indication on weather Chromecast is on idle screen",
+            item=SwitchItem(),
+            write=False
+        )
+
+        # TODO imlement Number ITem Time
+        self.currentTime = Channel(
+            name='currentTime',
+            description="Current time of currently playing media",
+            item=NumberItem(),
+            write=False
+        )
+
+        self.duration = Channel(
+            name='duration',
+            description="Duration of current track (null if between tracks)",
+            item=NumberItem(),
+            write=False
+        )
+
+        self.metadataType = Channel(
+            name='metadataType',
+            description="Type of metadata, this indicates what metadata may be available. One of: GenericMediaMetadata, MovieMediaMetadata, TvShowMediaMetadata, MusicTrackMediaMetadata, PhotoMediaMetadata.",
+            item=StringItem(),
+            write=False
+        )
+
+        # TODO See what to to with available metadata: Not necessary maybe?
