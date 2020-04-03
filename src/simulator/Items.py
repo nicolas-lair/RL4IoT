@@ -1,11 +1,41 @@
 from abc import ABC, abstractmethod
 
+import numpy as np
+from gym import spaces
+
 
 class MethodUnavailableError(Exception):
     pass
 
 
 INCREASE_DECREASE_STEP = 10
+
+ACTION_SPACE = {
+    'turnOn': spaces.Discrete(2),
+    'turnOff': spaces.Discrete(2),
+    'increase': spaces.Discrete(2),
+    'decrease': spaces.Discrete(2),
+    'setPercent': spaces.Box(low=0, high=100, shape=(1,), dtype=float),
+    'setHSB': spaces.Box(low=np.array([0, 0, 0]), high=np.array([360, 100, 100]), dtype=float),
+    'OpenClose': spaces.Discrete(2),
+    'Open': spaces.Discrete(2),
+    'Close': spaces.Discrete(2),
+    'setLocation': spaces.Box(low=np.array([-90, -180, -1000]), high=np.array([90, 180, 10000], dtype=float)),
+    'setValue': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=type),
+    'setQuantity': None,
+    'PlayPause': spaces.Discrete(2),
+    'play': spaces.Discrete(2),
+    'pause': spaces.Discrete(2),
+    'next': spaces.Discrete(2),
+    'previous': spaces.Discrete(2),
+    'rewind': spaces.Discrete(2),
+    'fastforward': spaces.Discrete(2),
+    'up': spaces.Discrete(2),
+    'down': spaces.Discrete(2),
+    'move': spaces.Discrete(2),
+    'stop': spaces.Discrete(2),
+    'turnOnOff': spaces.Discrete(2),
+}
 
 
 def check_method_availability(func):
@@ -30,6 +60,11 @@ class AbstractItem(ABC):
         self.methods = methods
         del self.methods['self']
 
+        self.observation_space = None
+        self.action_space = spaces.Dict(
+            {k: v for k, v in zip(self.methods.keys(), ACTION_SPACE.values()) if self.methods[k]})
+        self.attr_error_message = None
+
     @abstractmethod
     def get_state(self):
         raise NotImplementedError
@@ -38,16 +73,14 @@ class AbstractItem(ABC):
     def set_state(self, value):
         raise NotImplementedError
 
-    def setAttribute(self, attribute, value, valuetest, error_message, success_message=""):
-        try:
-            assert valuetest
+    def set_attribute(self, attribute, value):
+        assert self.observation_space.contains(value), self.attr_error_message
+        if isinstance(attribute, list):
             for a, v in zip(attribute, value):
                 setattr(self, a, v)
-            return 1, success_message
-        except AssertionError:
-            return 0, error_message
-        except Exception as e:
-            return 0, e
+            return 1
+        else:
+            setattr(self, attribute, value)
 
 
 class ColorItem(AbstractItem):
@@ -57,15 +90,15 @@ class ColorItem(AbstractItem):
         self.saturation = 0
         self.brightness = 0
 
+        self.observation_space = spaces.Box(low=np.array([0, 0, 0]), high=np.array([360, 100, 100]), dtype=float)
+
+        self.attr_error_message = "h, s, b should be positive int, h <=360, s <=100, b<=100"
+
     def get_state(self):
         return [self.hue, self.saturation, self.brightness]
 
     def set_state(self, value):
-        h, s, b = value
-        assertion_test = isinstance(h, int) and isinstance(s, int) and isinstance(b, int) and (0 <= h <= 360) and (
-                0 <= s <= 100) and (0 <= b <= 100)
-        error_message = "h, s, b should be positive int, h <=360, s <=100, b<=100"
-        self.setAttribute(['hue', 'saturation', 'brightness'], [h, s, b], assertion_test, error_message)
+        self.set_attribute(['hue', 'saturation', 'brightness'], value)
 
     @check_method_availability
     def turnOn(self):
@@ -85,9 +118,7 @@ class ColorItem(AbstractItem):
 
     @check_method_availability
     def setPercent(self, percent):
-        assertion_test = isinstance(percent, int) and (0 <= percent <= 100)
-        error_message = "Percent should be an int between 0 and100"
-        self.setAttribute(['percent'], [percent], assertion_test, error_message)
+        self.setHSB([self.hue, percent, self.saturation])
 
     @check_method_availability
     def setHSB(self, h, s, b):
@@ -99,13 +130,14 @@ class ContactItem(AbstractItem):
         super().__init__(type="contact", methods=locals())
         self.state = 0
 
+        self.observation_space = spaces.Discrete(2)
+        self.attr_error_message = "onoff should be 0 or 1 (boolean)"
+
     def get_state(self):
         return [self.state]
 
     def set_state(self, value):
-        assertion_test = (value == 1) or (value == 0)
-        error_message = "onoff should be 0 or 1 (boolean)"
-        self.setAttribute(['onoff'], [value], assertion_test, error_message)
+        self.set_attribute('onoff', value)
 
     @check_method_availability
     def OpenClose(self):
@@ -125,13 +157,17 @@ class DimmerItem(AbstractItem):
         super().__init__(type="dimmer", methods=locals())
         self.percent = 0
 
+        self.observation_space = spaces.Box(low=0, high=100, shape=(1,), dtype=float)
+        self.attr_error_message = "Percent should be an int between 0 and 100"
+
     def get_state(self):
         return [self.percent]
 
     def set_state(self, value):
-        assertion_test = isinstance(value, int) and (0 <= value <= 100)
-        error_message = "Percent should be an int between 0 and 100"
-        self.setAttribute(['percent'], [value], assertion_test, error_message)
+        self.set_attribute(['percent'], [value])
+
+    def get_observation_space(self):
+        return
 
     @check_method_availability
     def turnOn(self):
@@ -161,15 +197,17 @@ class LocationItem(AbstractItem):
         self.longitude = None
         self.altitude = None
 
+        self.observation_space = spaces.Box(low=np.array([-90, -180, -1000]),
+                                            high=np.array([90, 180, 10000], dtype=float))
+        self.attr_error_message = "longitude should be a float between -90 and 90, " \
+                                  "latitude should be float between -180 and 180" \
+                                  "and altitude should float between -1000 and 10000"
+
     def get_state(self):
         return [self.latitude, self.longitude, self.altitude]
 
     def set_state(self, value):
-        lat, lon, alt = value
-        assertion_test = isinstance(lat, float) and isinstance(lon, float) and isinstance(alt, float) and (
-                -90 <= lat <= 90) and (-180 <= lon <= 180) and (-500 <= alt <= 4000)
-        error_message = "h, s, b should be positive int, h <=360, s <=100, b<=100"
-        self.setAttribute(['latitude', 'longitude', 'altitude'], [alt, lon, alt], assertion_test, error_message)
+        self.set_attribute(['latitude', 'longitude', 'altitude'], value)
 
     @check_method_availability
     def setLocation(self, lat, lon, alt):
@@ -177,17 +215,20 @@ class LocationItem(AbstractItem):
 
 
 class NumberItem(AbstractItem):
-    def __init__(self, setValue=False, setQuantity=False):
-        super().__init__(type="numnber", methods=locals())
+    def __init__(self, setValue=False, setQuantity=False, type=float):
+        methods = locals()
+        del methods['type']
+        super().__init__(type="number", methods=methods)
         self.value = None
+
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=type)
+        self.attr_error_message = "value should a int or float"
 
     def get_state(self):
         return [self.value]
 
     def set_state(self, value):
-        assertion_test = isinstance(value, int)
-        error_message = "value should be an int"
-        self.setAttribute(['value'], [value], assertion_test, error_message)
+        self.set_attribute(['value'], [value])
 
     @check_method_availability
     def setValue(self, value):
@@ -204,13 +245,14 @@ class PlayerItem(AbstractItem):  # TODO Check state of players
         super().__init__(type="number", methods=locals())
         self.playpause = False
 
+        self.observation_space = spaces.Discrete(2)
+        self.attr_error_message = "playpause should be 0 or 1 (boolean)"
+
     def get_state(self):
         return [self.playpause]
 
     def set_state(self, value):
-        assertion_test = (value == 1) or (value == 0)
-        error_message = "playpause should be 0 or 1 (boolean)"
-        self.setAttribute(['playpause'], [value], assertion_test, error_message)
+        self.set_attribute('playpause', value)
 
     @check_method_availability
     def PlayPause(self):
@@ -247,13 +289,14 @@ class RollerShutterItem(AbstractItem):
         super().__init__(type="rollershutter", methods=locals())
         self.percent = 0
 
+        self.observation_space = spaces.Box(low=0, high=100, shape=(1,), dtype=float)
+        self.attr_error_message = "Percent should be an int between 0 and 100"
+
     def get_state(self):
         return [self.percent]
 
     def set_state(self, value):
-        assertion_test = isinstance(value, int) and (0 <= value <= 100)
-        error_message = "Percent should be an int between 0 and 100"
-        self.setAttribute(['percent'], [value], assertion_test, error_message)
+        self.set_attribute(['percent'], [value])
 
     @check_method_availability
     def up(self):
@@ -281,13 +324,16 @@ class StringItem(AbstractItem):
         super().__init__(type="string", methods=locals())
         self.string = ""
 
+        self.observation_space = None
+        self.action_space = None
+        self.attr_error_message = "String should be of type string"
+
     def get_state(self):
         return [self.string]
 
     def set_state(self, value):
-        assertion_test = isinstance(value, str)
-        error_message = "String should be of type string"
-        self.setAttribute(['string'], [value], assertion_test, error_message)
+        assert isinstance(value, str), self.attr_error_message
+        self.set_attribute(['string'], [value])
 
     @check_method_availability
     def setString(self, string):
@@ -296,26 +342,27 @@ class StringItem(AbstractItem):
 
 class SwitchItem(AbstractItem):
 
-    def __init__(self, OnOff=False, On=False, Off=False):
+    def __init__(self, turnOnOff=False, turnOn=False, turnOff=False):
         super().__init__(type="switch", methods=locals())
         self.onoff = 0
+
+        self.observation_space = spaces.Discrete(2)
+        self.attr_error_message = "onoff should be 0 or 1 (boolean)"
 
     def get_state(self):
         return [self.onoff]
 
     def set_state(self, value):
-        assertion_test = (value == 1) or (value == 0)
-        error_message = "onoff should be 0 or 1 (boolean)"
-        self.setAttribute(['onoff'], [value], assertion_test, error_message)
+        self.set_attribute('onoff', value)
 
     @check_method_availability
-    def OnOff(self):
+    def turnOnOff(self):
         self.onoff = 1 - self.onoff
 
     @check_method_availability
-    def On(self):
+    def turnOn(self):
         self.onoff = 1
 
     @check_method_availability
-    def Off(self):
+    def turnOff(self):
         self.onoff = 0

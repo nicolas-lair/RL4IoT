@@ -1,13 +1,38 @@
-from .Items import *
+from Items import *
+
+from gym import spaces
 
 
 class Thing:
     def __init__(self):
-        pass
+        self.observation_space = None
+        self.action_space = None
 
     # TODO
     def get_channels(self):
-        pass
+        v = vars(self)
+
+        return [x for x in vars(self).values() if isinstance(x, Channel)]
+
+    def build_gym_space(self):
+        channels = self.get_channels()
+        channels_name = [chn.name for chn in channels]
+
+        channels_observation_space = [chn.get_observation_space() for chn in channels]
+        self.observation_space = spaces.Dict(dict(zip(channels_name, channels_observation_space)))
+
+        channels_action_space = [chn.get_action_space() for chn in channels]
+        self.action_space = spaces.Dict(dict(zip(channels_name, channels_action_space)))
+
+    def get_observation_space(self):
+        if self.observation_space is None:
+            self.build_gym_space()
+        return self.observation_space
+
+    def get_action_space(self):
+        if self.action_space is None:
+            self.build_gym_space()
+        return self.action_space
 
 
 class Channel:
@@ -16,10 +41,17 @@ class Channel:
         self.description = description
 
         self.item = item
-        self.item.set_state(value)
+        if value is not None:
+            self.item.set_state(value)
 
         self.read = read
         self.write = write
+
+    def get_observation_space(self):
+        return self.item.observation_space
+
+    def get_action_space(self):
+        return self.item.action_space
 
 
 class LightBulb(Thing):
@@ -34,7 +66,6 @@ class LightBulb(Thing):
             description="This channel supports full color control with hue, saturation and brightness values",
             item=ColorItem(turnOn=True, turnOff=True, increase=True, decrease=True, setPercent=True,
                            setHSB=True),
-            value=(0, 0, 0)
         )
 
         self.color_temperature = Channel(
@@ -60,7 +91,8 @@ class PlugSwitch(Thing):
         super(PlugSwitch, self).__init__()
         self.switch_binary = Channel(name="switch_binary",
                                      description="Switch the power on and off.",
-                                     item=SwitchItem(OnOff=True))
+                                     item=SwitchItem(turnOnOff=True),
+                                     )
 
         # Ignore both channel
         # self.alarm = Channel(
@@ -90,14 +122,14 @@ class LGTV(Thing):
         self.power = Channel(
             name='power',
             description="Current power setting. TV can only be powered off, not on.",
-            item=SwitchItem(Off=True),
+            item=SwitchItem(turnOff=True),
             value=power
         )
 
         self.mute = Channel(
             name="mute",
             description="Current mute setting.",
-            item=SwitchItem(OnOff=True),
+            item=SwitchItem(turnOnOff=True),
             value=mute
         )
 
@@ -129,7 +161,7 @@ class LGTV(Thing):
         self.mediaStop = Channel(
             name="mediastop",
             description="Media control stop",
-            item=SwitchItem(Off=True),
+            item=SwitchItem(turnOff=True),
             read=False
         )
 
@@ -155,13 +187,14 @@ class Speaker(Thing):
 
     maybe compare with Sonos or check STR-1080 for multiple zone compatibility
     """
+
     def __init__(self):
         super(Speaker, self).__init__()
 
         self.power = Channel(
             name="power",
             description="Main power on/off",
-            item=SwitchItem(OnOff=True)
+            item=SwitchItem(turnOnOff=True)
         )
 
         # TODO Discretize this
@@ -178,7 +211,7 @@ class Speaker(Thing):
         self.mute = Channel(
             name="mute",
             description="Set or get the mute state of the master volume",
-            item=SwitchItem(OnOff=True)
+            item=SwitchItem(turnOnOff=True)
         )
 
         # TODO check what is sound Field, for now disable
@@ -206,7 +239,7 @@ class Chromecast(Thing):
         self.stop = Channel(
             name='stop',
             description="Send ON to this channel: Stops the Chromecast. If this channel is ON, the Chromecast is stopped, otherwise it is in another state (see control channel)",
-            item=SwitchItem(On=True)
+            item=SwitchItem(turnOn=True)
         )
 
         # TODO link this channel to other volume channels
@@ -219,7 +252,7 @@ class Chromecast(Thing):
         self.mute = Channel(
             name='mute',
             description="Mute the audio",
-            item=SwitchItem(OnOff=True)
+            item=SwitchItem(turnOnOff=True)
         )
 
         self.playuri = Channel(
@@ -270,3 +303,18 @@ class Chromecast(Thing):
         )
 
         # TODO See what to to with available metadata: Not necessary maybe?
+
+
+if __name__ == "__main__":
+    Env = {
+        'plug': PlugSwitch(),
+        'light': LightBulb(),
+        'TV': LGTV(),
+        'speaker': Speaker(),
+        'chromecast': Chromecast()
+    }
+
+    for k,v in Env.items():
+        print(k, v.get_action_space())
+
+
