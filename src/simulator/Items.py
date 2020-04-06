@@ -74,6 +74,8 @@ class AbstractItem(ABC):
         raise NotImplementedError
 
     def set_attribute(self, attribute, value):
+        if self.type == 'string':
+            raise NotImplementedError
         assert self.observation_space.contains(value), self.attr_error_message
         if isinstance(attribute, list):
             for a, v in zip(attribute, value):
@@ -166,9 +168,6 @@ class DimmerItem(AbstractItem):
     def set_state(self, value):
         self.set_attribute(['percent'], [value])
 
-    def get_observation_space(self):
-        return
-
     @check_method_availability
     def turnOn(self):
         self.percent = self.percent if self.percent != 0 else 100
@@ -237,7 +236,7 @@ class NumberItem(AbstractItem):
     # TODO
     @check_method_availability
     def setQuantity(self, quantity):
-        pass
+        raise NotImplementedError
 
 
 class PlayerItem(AbstractItem):  # TODO Check state of players
@@ -268,19 +267,19 @@ class PlayerItem(AbstractItem):  # TODO Check state of players
 
     @check_method_availability
     def next(self):
-        pass
+        raise NotImplementedError
 
     @check_method_availability
     def previous(self):
-        pass
+        raise NotImplementedError
 
     @check_method_availability
     def rewind(self):
-        pass
+        raise NotImplementedError
 
     @check_method_availability
     def fastforward(self):
-        pass
+        raise NotImplementedError
 
 
 class RollerShutterItem(AbstractItem):
@@ -300,19 +299,19 @@ class RollerShutterItem(AbstractItem):
 
     @check_method_availability
     def up(self):
-        pass
+        raise NotImplementedError
 
     @check_method_availability
     def down(self):
-        pass
+        raise NotImplementedError
 
     @check_method_availability
     def stop(self):
-        pass
+        raise NotImplementedError
 
     @check_method_availability
     def move(self):
-        pass
+        raise NotImplementedError
 
     @check_method_availability
     def setPercent(self, percent):

@@ -3,15 +3,27 @@ from Items import *
 from gym import spaces
 
 
+# TODO Update Volume, Mute, PLayer, Stop for connected things for TV, Chromecast and Speaker
 class Thing:
-    def __init__(self):
+    def __init__(self, connected_things):
         self.observation_space = None
         self.action_space = None
+        self.is_visible = None
+        self.connected_things = connected_things
 
-    # TODO
+    def update_visibility(self, visibility):
+        self.is_visible = visibility
+
+    def connect_thing(self, things):
+        if isinstance(things, Thing):
+            self.connected_things.append(things)
+        elif isinstance(things, list):
+            for t in things:
+                self.connect_thing(t)
+        else:
+            raise NotImplementedError
+
     def get_channels(self):
-        v = vars(self)
-
         return [x for x in vars(self).values() if isinstance(x, Channel)]
 
     def build_gym_space(self):
@@ -34,6 +46,10 @@ class Thing:
             self.build_gym_space()
         return self.action_space
 
+    def do_action(self, channel, action, params=None):
+        channel = getattr(self, channel)
+        channel.do_action(action, params)
+
 
 class Channel:
     def __init__(self, name, description, item, value=None, read=True, write=True):
@@ -47,11 +63,20 @@ class Channel:
         self.read = read
         self.write = write
 
+    def get_state(self):
+        return self.item.get_state()
+
+    def set_state(self, value):
+        return self.item.set_state(value)
+
     def get_observation_space(self):
         return self.item.observation_space
 
     def get_action_space(self):
         return self.item.action_space
+
+    def do_action(self, action, params=None):
+        getattr(self.item, action)(*params)
 
 
 class LightBulb(Thing):
@@ -59,8 +84,8 @@ class LightBulb(Thing):
     Thing type 0210 (https://www.openhab.org/addons/bindings/hue/)
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, connected_things=None):
+        super().__init__(connected_things)
         self.color = Channel(
             name='color',
             description="This channel supports full color control with hue, saturation and brightness values",
@@ -87,12 +112,14 @@ class PlugSwitch(Thing):
     https://www.openhab.org/addons/bindings/zwave/thing.html?manufacturer=everspring&file=an180_0_0.html
     """
 
-    def __init__(self):
-        super(PlugSwitch, self).__init__()
+    def __init__(self, connected_things=None):
+        super(PlugSwitch, self).__init__(connected_things)
         self.switch_binary = Channel(name="switch_binary",
                                      description="Switch the power on and off.",
                                      item=SwitchItem(turnOnOff=True),
                                      )
+
+        self.connected_things = connected_things
 
         # Ignore both channel
         # self.alarm = Channel(
@@ -109,6 +136,17 @@ class PlugSwitch(Thing):
         #     write=False,
         # )
 
+    def add_connected_things(self, thing):
+        assert isinstance(thing, Thing), "thing must be an object of class Thing"
+        self.connected_things.append(thing)
+
+    def do_action(self, channel, action, params=None):
+        assert channel == "switch_binary", f"Switch_binary is the only available channel, {channel} was called instead"
+        super().do_action(channel, action, params)
+        power_status = self.switch_binary.get_state()
+        for thing in self.connected_things:
+            thing.update_visibility(power_status)
+
 
 class LGTV(Thing):
     """
@@ -117,8 +155,8 @@ class LGTV(Thing):
     See also PanasonicTV and SamsungTV
     """
 
-    def __init__(self, power=1, mute=0):
-        super().__init__()
+    def __init__(self, power=1, mute=0, connected_things=None):
+        super().__init__(connected_things)
         self.power = Channel(
             name='power',
             description="Current power setting. TV can only be powered off, not on.",
@@ -188,8 +226,8 @@ class Speaker(Thing):
     maybe compare with Sonos or check STR-1080 for multiple zone compatibility
     """
 
-    def __init__(self):
-        super(Speaker, self).__init__()
+    def __init__(self, connected_things=None):
+        super(Speaker, self).__init__(connected_things)
 
         self.power = Channel(
             name="power",
@@ -223,13 +261,13 @@ class Speaker(Thing):
 
 
 class Store(Thing):
-    def __init__(self):
-        super(Store, self).__init__()
+    def __init__(self, connected_things=None):
+        super(Store, self).__init__(connected_things)
 
 
 class Chromecast(Thing):
-    def __init__(self):
-        super(Chromecast, self).__init__()
+    def __init__(self, connected_things=None):
+        super(Chromecast, self).__init__(connected_things)
 
         self.control = Channel(
             name='control',
@@ -314,7 +352,5 @@ if __name__ == "__main__":
         'chromecast': Chromecast()
     }
 
-    for k,v in Env.items():
+    for k, v in Env.items():
         print(k, v.get_action_space())
-
-
