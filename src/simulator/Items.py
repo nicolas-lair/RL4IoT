@@ -218,7 +218,7 @@ class NumberItem(AbstractItem):
         methods = locals()
         del methods['type']
         super().__init__(type="number", methods=methods)
-        self.value = None
+        self.value = 0
 
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=type)
         self.attr_error_message = "value should a int or float"
