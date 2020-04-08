@@ -6,6 +6,7 @@ from gym import spaces
 # TODO Update Volume, Mute, PLayer, Stop for connected things for TV, Chromecast and Speaker
 class Thing:
     def __init__(self, name, connected_things, is_visible=True):
+        self.initial_value = {'name': name, 'connected_things': connected_things, 'is_visible': is_visible}
         self.name = name
         self.is_visible = is_visible
         self.connected_things = set()
@@ -77,13 +78,11 @@ class Thing:
         channel.do_action(action, params)
 
     def reset(self):
-        self.is_visible = True
-        for c in self.channels:
-            c.reset()
+        self.__init__(**self.initial_value)
 
 
 class Channel:
-    def __init__(self, name, description, item, value, read=True, write=True):
+    def __init__(self, name, description, item, value=None, read=True, write=True):
         self.name = name
         self.description = description
 
@@ -110,18 +109,14 @@ class Channel:
     def do_action(self, action, params=None):
         getattr(self.item, action)(*params)
 
-    def reset(self):
-        self.item = type(self.item)(**self.item['methods'])
-        value=self.initial_value
-
 
 class LightBulb(Thing):
     """
     Thing type 0210 (https://www.openhab.org/addons/bindings/hue/)
     """
 
-    def __init__(self, name="lightbulb", connected_things=None):
-        super().__init__(name=name, connected_things=connected_things)
+    def __init__(self, name="lightbulb", connected_things=None, is_visible=True):
+        super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
         self.color = Channel(
             name='color',
             description="This channel supports full color control with hue, saturation and brightness values",
@@ -148,8 +143,8 @@ class PlugSwitch(Thing):
     https://www.openhab.org/addons/bindings/zwave/thing.html?manufacturer=everspring&file=an180_0_0.html
     """
 
-    def __init__(self, name="plugswitch", connected_things=None):
-        super().__init__(name=name, connected_things=connected_things)
+    def __init__(self, name="plugswitch", connected_things=None, is_visible=True):
+        super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
         self.switch_binary = Channel(name="switch_binary",
                                      description="Switch the power on and off.",
                                      item=SwitchItem(turnOnOff=True),
@@ -189,8 +184,9 @@ class LGTV(Thing):
     See also PanasonicTV and SamsungTV
     """
 
-    def __init__(self, name="LGTV", power=1, mute=0, connected_things=None):
-        super().__init__(name=name, connected_things=connected_things)
+    def __init__(self, name="LGTV", power=1, mute=0, connected_things=None, is_visible=True):
+        super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
+        self.initial_value.update({'power': power, 'mute': mute})
         self.power = Channel(
             name='power',
             description="Current power setting. TV can only be powered off, not on.",
@@ -260,8 +256,8 @@ class Speaker(Thing):
     maybe compare with Sonos or check STR-1080 for multiple zone compatibility
     """
 
-    def __init__(self, name="speaker", connected_things=None):
-        super().__init__(name=name, connected_things=connected_things)
+    def __init__(self, name="speaker", connected_things=None, is_visible=True):
+        super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
 
         self.power = Channel(
             name="power",
@@ -295,13 +291,13 @@ class Speaker(Thing):
 
 
 class Store(Thing):
-    def __init__(self, name="store", connected_things=None):
-        super().__init__(name=name, connected_things=connected_things)
+    def __init__(self, name="store", connected_things=None, is_visible=True):
+        super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
 
 
 class Chromecast(Thing):
-    def __init__(self, name="Chromecast", connected_things=None):
-        super().__init__(name=name, connected_things=connected_things)
+    def __init__(self, name="Chromecast", connected_things=None, is_visible=True):
+        super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
 
         self.control = Channel(
             name='control',

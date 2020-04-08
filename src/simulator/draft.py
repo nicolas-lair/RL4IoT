@@ -18,14 +18,24 @@ class DiscreteToBoxWrapper(gym.ObservationWrapper):
 
 
 class Parent(object):
-    def __init__(self):
+    def __init__(self, name='papa', **kwargs):
+        # del self.initial_value['__class__']
         self.parent = 1
         pass
 
+    def reset(self):
+        self.__init__(**self.initial_value)
+
 class Child(Parent):
     def __init__(self, value=2):
-        super().__init__()
+        self.initial_value = locals().copy()
+        del self.initial_value['self']
+        del self.initial_value['__class__']
+        hello = 3
+        print(locals())
+        super().__init__(value=2)
         self.child = value
+        print(locals())
 
 
 if __name__ == "__main__":

@@ -57,7 +57,7 @@ def check_method_availability(func):
 class AbstractItem(ABC):
     def __init__(self, type, methods):
         self.type = type
-        self.methods = methods
+        self.methods = methods.copy()
         del self.methods['self']
 
         self.observation_space = None
@@ -215,7 +215,7 @@ class LocationItem(AbstractItem):
 
 class NumberItem(AbstractItem):
     def __init__(self, setValue=False, setQuantity=False, type=float):
-        methods = locals()
+        methods = locals().copy()
         del methods['type']
         super().__init__(type="number", methods=methods)
         self.value = 0

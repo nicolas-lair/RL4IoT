@@ -90,3 +90,4 @@ class IoTEnv(gym.Env):
 
 if __name__ == "__main__":
     env = IoTEnv()
+    initial_state = env.reset()
