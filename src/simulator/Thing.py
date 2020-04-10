@@ -55,6 +55,8 @@ class Thing:
         self.action_space = spaces.Dict(dict(zip(channels_name, channels_action_space)))
 
     def _build_description_and_item_type(self):
+        self.description = dict()
+        self.item_type = dict()
         channels = self.get_channels()
         for c in channels:
             self.description[c.name] = c.description
@@ -72,20 +74,28 @@ class Thing:
 
     def _get_state(self):
         """
-        Get internal state of the object as a dict of channel/item state
-        :return: state : {channel1_name: channel1_state, ...} dict where key are channel name and value  _channels states
+        Get internal state of the object as a dict of dict of channel/item state WITH their description and item type
+        :return: state : { channel1_name: {
+                                            'state': channel1_state,
+                                            'description': "...",
+                                            'item_type': "..."
+                                            },
+                            channel2_name: {...}
+
         """
         state = dict()
         channels = self.get_channels()
         for c in channels:
-            state[c.name] = c.get_state()
+            state[c.name] = {
+                'state': c.get_state(),
+                'description': c.description,
+                'item_type': c.item.type
+            }
         return state
 
     def get_state(self):
         if self.is_visible:
-            if (self.description is None) or (self.item_type is None):
-                self._build_description_and_item_type()
-            return self._get_state(), self.description, self.item_type
+            return self._get_state()
         else:
             return None, None, None
 
@@ -126,7 +136,9 @@ class Channel:
         return self.item.action_space
 
     def do_action(self, action, params=None):
-        getattr(self.item, action)(*params)
+        if params is None:
+            params = []
+        getattr(self.item, action)(self.item, *params)
 
 
 class LightBulb(Thing):
@@ -146,7 +158,8 @@ class LightBulb(Thing):
         self.color_temperature = Channel(
             name='color_temperature',
             description='This channel supports adjusting the color temperature from cold (0%) to warm (100%)',
-            item=DimmerItem(increase=True, decrease=True, setPercent=True)
+            item=DimmerItem(increase=True, decrease=True, setPercent=True),
+            value=50
         )
 
         # # TODO decide if use or not : maybe not
@@ -160,26 +173,32 @@ class LightBulb(Thing):
         achieved_instructions = []
 
         # Check color channel change
-        previous_color = get_color_name_from_hsb(*previous_state['color'])
-        next_color = get_color_name_from_hsb(*next_state['color'])
+        previous_color_state = previous_state["color"]["state"]
+        next_color_state = next_state["color"]["state"]
+        previous_color = get_color_name_from_hsb(*previous_color_state)
+        next_color = get_color_name_from_hsb(*next_color_state)
         if previous_color != next_color:
             achieved_instructions.append(f"You changed the color to {next_color} of {self.name}")
-        if previous_state["color"][2] == 0 and next_state["color"][2] > 0:
+        if previous_color_state[2] == 0 and next_color_state[2] > 0:
             achieved_instructions.append(f"You turned on the {self.name}")
-        if previous_state["color"][2] > 0 and next_state["color"][2] == 0:
+        if previous_color_state[2] > 0 and next_color_state[2] == 0:
             achieved_instructions.append(f"You turned off the {self.name}")
         ### INCREASE_DECREASE_STEP is like a threshold for the oracle to detect a change
-        if next_state["color"][2] >= INCREASE_DECREASE_STEP + previous_state["color"][2]:
+        if next_color_state[2] >= INCREASE_DECREASE_STEP + previous_color_state[2]:
             achieved_instructions.append(f"You increased the luminosity of {self.name}")
-        if next_state["color"][2] + INCREASE_DECREASE_STEP <= previous_state["color"][2]:
+        if next_color_state[2] + INCREASE_DECREASE_STEP <= previous_color_state[2]:
             achieved_instructions.append(f"You decreased the luminosity of {self.name}")
 
+        previous_color_temperature = previous_state["color_temperature"]["state"][0]
+        next_color_temperature = next_state["color_temperature"]["state"][0]
         # Check color_temperature change
         ### INCREASE_DECREASE_STEP is like a threshold for the oracle to detect a change
-        if next_state["color_temperature"][2] >= INCREASE_DECREASE_STEP + previous_state["color"][2]:
+        if next_color_temperature >= INCREASE_DECREASE_STEP + previous_color_temperature:
             achieved_instructions.append(f"You made the light of {self.name} warmer")
-        if next_state["color_temperature"][2] + INCREASE_DECREASE_STEP <= previous_state["color"][2]:
+        if next_color_temperature + INCREASE_DECREASE_STEP <= previous_color_temperature:
             achieved_instructions.append(f"You made the light of {self.name} colder")
+
+        return achieved_instructions
 
 
 class PlugSwitch(Thing):
@@ -191,7 +210,7 @@ class PlugSwitch(Thing):
         super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
         self.switch_binary = Channel(name="switch_binary",
                                      description="Switch the power on and off.",
-                                     item=SwitchItem(turnOnOff=True),
+                                     item=SwitchItem(turnOn=True, turnOff=True),
                                      )
 
         # Ignore both channel
@@ -218,13 +237,13 @@ class PlugSwitch(Thing):
 
     def get_state_change(self, previous_state, next_state):
         achieved_instructions = []
-        previous_state = previous_state["switch_binary"][0]
-        next_state = next_state["switch_binary"][0]
+        previous_state = previous_state["switch_binary"]["state"][0]
+        next_state = next_state["switch_binary"]["state"][0]
         if previous_state and not next_state:
             achieved_instructions.append(f"You turned off the {self.name}")
         if not previous_state and next_state:
             achieved_instructions.append(f"You turned on the {self.name}")
-
+        return achieved_instructions
 
 class LGTV(Thing):
     """
