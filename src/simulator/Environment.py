@@ -28,12 +28,18 @@ class IoTEnv(gym.Env):
             "lightbulb": self.lightbulb.get_action_space()
         })
 
-
-        self.things_list = self._build_things_list()
+        self._things_lookup_table = self._build_things_lookup_table()
+        self.previous_state = None
         self.state = self.build_state()
 
-    def _build_things_list(self):
-        return [x for x in vars(self).values() if isinstance(x, Thing)]
+    def get_thing_list(self):
+        return self._things_lookup_table.values()
+
+    def get_thing(self, name):
+        return self._things_lookup_table[name]
+
+    def _build_things_lookup_table(self):
+        return {x.name: x for x in vars(self).values() if isinstance(x, Thing)}
 
     def step(self, action):
         """
@@ -47,15 +53,16 @@ class IoTEnv(gym.Env):
         :param action:
         :return:
         """
-        thing = getattr(self, action["thing"])
+        thing = self.get_thing(action["thing"])
         thing.do_action(action["channel"], action["action"], action["params"])
 
-        next_state = self.build_state()
+        self.previous_state = self.state
+        self.state = self.build_state()
 
         reward = None
         done = None
         info = None
-        return next_state, reward, done, info
+        return self.state, reward, done, info
 
     def build_state(self, thing=None):
         """
@@ -64,7 +71,7 @@ class IoTEnv(gym.Env):
         :return:
         """
         if thing is None:
-            thing_list = self.things_list
+            thing_list = self.get_thing_list()
         elif isinstance(thing, Thing):
             thing_list = [thing]
         elif isinstance(thing, list):
@@ -78,11 +85,10 @@ class IoTEnv(gym.Env):
         return state
 
     def reset(self):
-        for thing in self.things_list:
+        for thing in self.get_thing_list():
             thing.reset()
         state = self.build_state()
         return state
-
 
     def render(self, mode='human'):
         raise NotImplementedError

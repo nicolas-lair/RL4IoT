@@ -2,6 +2,8 @@ from Items import *
 
 from gym import spaces
 
+from utils import get_color_name_from_hsb
+
 
 # TODO Update Volume, Mute, PLayer, Stop for connected things for TV, Chromecast and Speaker
 class Thing:
@@ -14,9 +16,12 @@ class Thing:
         self.observation_space = None
         self.action_space = None
 
+        self.description = None
+        self.item_type = None
+
         if connected_things is not None:
             self.connect_thing(connected_things)
-        self.channels = []
+        self._channels = None
 
     def update_visibility(self, visibility):
         self.is_visible = visibility
@@ -32,15 +37,15 @@ class Thing:
 
     def get_channels(self):
         """
-        Initialize the list of channels of the Thing object
+        Initialize the list of _channels of the Thing object
         :return: list of Channel objects
         """
-        channels = [x for x in vars(self).values() if isinstance(x, Channel)]
-        self.channels = channels
-        return channels
+        if self._channels is None:
+            self._channels = [x for x in vars(self).values() if isinstance(x, Channel)]
+        return self._channels
 
-    def build_gym_space(self):
-        channels = self.channels if len(self.channels) > 0 else self.get_channels()
+    def build_observation_and_action_space(self):
+        channels = self.get_channels()
         channels_name = [chn.name for chn in channels]
 
         channels_observation_space = [chn.get_observation_space() for chn in channels]
@@ -49,29 +54,40 @@ class Thing:
         channels_action_space = [chn.get_action_space() for chn in channels]
         self.action_space = spaces.Dict(dict(zip(channels_name, channels_action_space)))
 
+    def _build_description_and_item_type(self):
+        channels = self.get_channels()
+        for c in channels:
+            self.description[c.name] = c.description
+            self.item_type[c.name] = c.item.type
+
     def get_observation_space(self):
         if self.observation_space is None:
-            self.build_gym_space()
+            self.build_observation_and_action_space()
         return self.observation_space
 
     def get_action_space(self):
         if self.action_space is None:
-            self.build_gym_space()
+            self.build_observation_and_action_space()
         return self.action_space
 
     def _get_state(self):
+        """
+        Get internal state of the object as a dict of channel/item state
+        :return: state : {channel1_name: channel1_state, ...} dict where key are channel name and value  _channels states
+        """
         state = dict()
-        description = dict()
-        item_type = dict()
-        channels = self.channels if len(self.channels) > 0 else self.get_channels()
+        channels = self.get_channels()
         for c in channels:
             state[c.name] = c.get_state()
-            description[c.name] = c.description
-            item_type[c.name] = c.item.type
-        return state, description, item_type
+        return state
 
     def get_state(self):
-        return self._get_state() if self.is_visible else None
+        if self.is_visible:
+            if (self.description is None) or (self.item_type is None):
+                self._build_description_and_item_type()
+            return self._get_state(), self.description, self.item_type
+        else:
+            return None, None, None
 
     def do_action(self, channel, action, params=None):
         channel = getattr(self, channel)
@@ -79,6 +95,9 @@ class Thing:
 
     def reset(self):
         self.__init__(**self.initial_value)
+
+    def get_state_change(self, previous_state, next_state):
+        raise NotImplementedError
 
 
 class Channel:
@@ -137,6 +156,31 @@ class LightBulb(Thing):
         #     item=StringItem()
         # )
 
+    def get_state_change(self, previous_state, next_state):
+        achieved_instructions = []
+
+        # Check color channel change
+        previous_color = get_color_name_from_hsb(*previous_state['color'])
+        next_color = get_color_name_from_hsb(*next_state['color'])
+        if previous_color != next_color:
+            achieved_instructions.append(f"You changed the color to {next_color} of {self.name}")
+        if previous_state["color"][2] == 0 and next_state["color"][2] > 0:
+            achieved_instructions.append(f"You turned on the {self.name}")
+        if previous_state["color"][2] > 0 and next_state["color"][2] == 0:
+            achieved_instructions.append(f"You turned off the {self.name}")
+        ### INCREASE_DECREASE_STEP is like a threshold for the oracle to detect a change
+        if next_state["color"][2] >= INCREASE_DECREASE_STEP + previous_state["color"][2]:
+            achieved_instructions.append(f"You increased the luminosity of {self.name}")
+        if next_state["color"][2] + INCREASE_DECREASE_STEP <= previous_state["color"][2]:
+            achieved_instructions.append(f"You decreased the luminosity of {self.name}")
+
+        # Check color_temperature change
+        ### INCREASE_DECREASE_STEP is like a threshold for the oracle to detect a change
+        if next_state["color_temperature"][2] >= INCREASE_DECREASE_STEP + previous_state["color"][2]:
+            achieved_instructions.append(f"You made the light of {self.name} warmer")
+        if next_state["color_temperature"][2] + INCREASE_DECREASE_STEP <= previous_state["color"][2]:
+            achieved_instructions.append(f"You made the light of {self.name} colder")
+
 
 class PlugSwitch(Thing):
     """
@@ -165,16 +209,21 @@ class PlugSwitch(Thing):
         #     write=False,
         # )
 
-    def add_connected_things(self, thing):
-        assert isinstance(thing, Thing), "thing must be an object of class Thing"
-        self.connected_things.append(thing)
-
     def do_action(self, channel, action, params=None):
         assert channel == "switch_binary", f"Switch_binary is the only available channel, {channel} was called instead"
         super().do_action(channel, action, params)
         power_status = self.switch_binary.get_state()
         for thing in self.connected_things:
             thing.update_visibility(power_status)
+
+    def get_state_change(self, previous_state, next_state):
+        achieved_instructions = []
+        previous_state = previous_state["switch_binary"][0]
+        next_state = next_state["switch_binary"][0]
+        if previous_state and not next_state:
+            achieved_instructions.append(f"You turned off the {self.name}")
+        if not previous_state and next_state:
+            achieved_instructions.append(f"You turned on the {self.name}")
 
 
 class LGTV(Thing):
@@ -310,7 +359,7 @@ class Chromecast(Thing):
             item=SwitchItem(turnOn=True)
         )
 
-        # TODO link this channel to other volume channels
+        # TODO link this channel to other volume _channels
         self.volume = Channel(
             name='volume',
             description="Control the volume, this is also updated if the volume is changed by another app",
