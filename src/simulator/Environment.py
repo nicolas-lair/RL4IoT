@@ -1,9 +1,10 @@
 import numpy as np
+from sklearn.preprocessing import OneHotEncoder
+
 import gym
-
-from gym import spaces
-
+from Items import ITEM_TYPE
 from Thing import Thing, PlugSwitch, Speaker, LightBulb, LGTV, Chromecast
+from description_embedder import Description_embedder
 
 
 class IoTEnv(gym.Env):
@@ -17,13 +18,13 @@ class IoTEnv(gym.Env):
         # self.plug.connect_thing(self.lightbulb)
 
         # Compute observation_space
-        self.observation_space = spaces.Dict({
+        self.observation_space = gym.spaces.Dict({
             "plug": self.plug.get_observation_space(),
             "lightbulb": self.lightbulb.get_observation_space(),
         })
 
         # Compute action_space
-        self.action_space = spaces.Dict({
+        self.action_space = gym.spaces.Dict({
             "plug": self.plug.get_action_space(),
             "lightbulb": self.lightbulb.get_action_space()
         })
@@ -94,6 +95,32 @@ class IoTEnv(gym.Env):
         raise NotImplementedError
 
 
+class IoTEnv4ML(gym.ObservationWrapper):
+    def __init__(self, env=IoTEnv()):
+        super().__init__(env=env)
+        self.description_embedder = Description_embedder(embedding='glove', dimension=50, reduction='mean',
+                                                         authorize_cache=True)
+        self.item_type_embedder = OneHotEncoder(sparse=False)
+        self.item_type_embedder.fit(np.array(ITEM_TYPE).reshape(-1, 1))
+
+    def observation(self, observation):
+        new_obs = dict()
+        for thing_name, thing in observation.items():
+            thing_obs = dict()
+            for channel_name, channel in thing.items():
+                if channel['item_type'] == 'string':
+                    raise NotImplementedError
+                description_embedding = self.description_embedder.get_description_embedding(channel['description'])
+                item_embedding = self.item_type_embedder.transform(
+                    np.array(channel['item_type']).reshape(-1, 1)).flatten()
+                state_embedding = np.zeros(3)
+                state_embedding[:len(channel['state'])] = channel['state']
+                channel_embedding = np.concatenate([description_embedding, item_embedding, state_embedding])
+                thing_obs[channel_name] = channel_embedding
+            new_obs[thing_name] = thing_obs
+        return new_obs
+
+
 if __name__ == "__main__":
-    env = IoTEnv()
+    env = IoTEnv4ML()
     initial_state = env.reset()

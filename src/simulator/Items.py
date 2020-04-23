@@ -37,6 +37,8 @@ ACTION_SPACE = {
     'turnOnOff': spaces.Discrete(2),
 }
 
+ITEM_TYPE = ['color', 'contac', 'dimmer', 'location', 'number', 'player', 'rollershutter', 'string', 'switch']
+
 
 def check_method_availability(func):
     """
@@ -56,6 +58,7 @@ def check_method_availability(func):
 
 class AbstractItem(ABC):
     def __init__(self, type, methods):
+        assert type in ITEM_TYPE, 'Wrong item type'
         self.type = type
         self.methods = methods.copy()
         del self.methods['self']
@@ -241,7 +244,7 @@ class NumberItem(AbstractItem):
 
 class PlayerItem(AbstractItem):  # TODO Check state of players
     def __init__(self, PlayPause=False, next=False, previous=False, rewind=False, fastforward=False):
-        super().__init__(type="number", methods=locals())
+        super().__init__(type="player", methods=locals())
         self.playpause = False
 
         self.observation_space = spaces.Discrete(2)

@@ -15,7 +15,7 @@ class Description_embedder:
             raise NotImplementedError
 
         if reduction == 'mean':
-            self.reduction_func = torch.mean
+            self.reduction_func = lambda x: torch.mean(x, dim=0)
         elif reduction == "no_reduction":
             self.reduction_func = lambda x: x
         else:
@@ -25,7 +25,7 @@ class Description_embedder:
         assert isinstance(description, str), 'description should be string'
         tokens = self.tokenizer(description)
         description_embedding = self.vocab.get_vecs_by_tokens(tokens, lower_case_backup=self.lower_case)
-        description_embedding = self.reduction_func(description_embedding)
+        description_embedding = self.reduction_func(description_embedding).numpy()
         if self.authorize_cache:
             self.cached_embedded_description.update({description: description_embedding})
         return description_embedding
@@ -41,17 +41,25 @@ class Description_embedder:
         else:
             raise TypeError("Wrong description format: list or string")
 
-    def get_description_embedding(self, description_list, use_cache=True):
-        assert isinstance(description_list, list), 'descriptions should be provided as list'
-        embedding_list = []
-        for d in description_list:
+    def get_description_embedding(self, descriptions, use_cache=True):
+        def aux(d):
             assert isinstance(d, str), 'description should be string'
             if use_cache:
                 embedded_description = self.cached_embedded_description.get(d, self.embed_single_description(d))
             else:
                 embedded_description = self.embed_single_description(d)
-            embedding_list.append(embedded_description)
-        return embedding_list
+            return embedded_description
+
+        if isinstance(descriptions, str):
+            embedding = aux(descriptions)
+        elif isinstance(descriptions, list):
+            embedding = []
+            for d in descriptions:
+                embedding.append(aux(d))
+        else:
+            raise TypeError('descriptions should be provided as list or str')
+
+        return embedding
 
 
 
