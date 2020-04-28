@@ -106,6 +106,7 @@ class Thing:
     def reset(self):
         self.__init__(**self.initial_value)
 
+    #TODO Collect all possible actions from object
     def get_state_change(self, previous_state, next_state):
         raise NotImplementedError
 

@@ -108,7 +108,7 @@ class IoTEnv4ML(gym.ObservationWrapper):
         for thing_name, thing in observation.items():
             thing_obs = dict()
             for channel_name, channel in thing.items():
-                if channel['item_type'] == 'string':
+                if channel['item_type'] == 'goal_string':
                     raise NotImplementedError
                 description_embedding = self.description_embedder.get_description_embedding(channel['description'])
                 item_embedding = self.item_type_embedder.transform(

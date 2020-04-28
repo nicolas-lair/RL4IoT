@@ -22,7 +22,7 @@ class Description_embedder:
             raise NotImplementedError
 
     def embed_single_description(self, description):
-        assert isinstance(description, str), 'description should be string'
+        assert isinstance(description, str), 'description should be goal_string'
         tokens = self.tokenizer(description)
         description_embedding = self.vocab.get_vecs_by_tokens(tokens, lower_case_backup=self.lower_case)
         description_embedding = self.reduction_func(description_embedding).numpy()
@@ -39,11 +39,11 @@ class Description_embedder:
                 embedding_lists.append(self.embed_single_description(d))
             return embedding_lists
         else:
-            raise TypeError("Wrong description format: list or string")
+            raise TypeError("Wrong description format: list or goal_string")
 
     def get_description_embedding(self, descriptions, use_cache=True):
         def aux(d):
-            assert isinstance(d, str), 'description should be string'
+            assert isinstance(d, str), 'description should be goal_string'
             if use_cache:
                 embedded_description = self.cached_embedded_description.get(d, self.embed_single_description(d))
             else:
