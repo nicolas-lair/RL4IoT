@@ -5,7 +5,7 @@ import torchtext as text
 
 
 class LanguageModel(nn.Module):
-    def __init__(self, type, embedding_size, linear1_out=256, linear2_out=100, lstm_hidden_size=100,
+    def __init__(self, type, embedding_size, linear1_out=256, out_features=100,
                  vocab=None, vocab_size=500):
         """
 
@@ -18,6 +18,7 @@ class LanguageModel(nn.Module):
         :param vocab_size:
         """
         super().__init__()
+        self.out_features = out_features
         self.word_to_ix = dict()
         self.type = type
         self.tokenizer = text.data.utils.get_tokenizer(tokenizer="spacy", language="en")
@@ -35,10 +36,10 @@ class LanguageModel(nn.Module):
         if self.type == 'linear':
             self.type = 'linear'
             self.linear1 = nn.Linear(in_features=embedding_size, out_features=linear1_out)
-            self.linear2 = nn.Linear(in_features=linear1_out, out_features=linear2_out)
+            self.linear2 = nn.Linear(in_features=linear1_out, out_features=out_features)
         elif self.type == 'lstm':
             self.type = 'lstm'
-            self.lstm = nn.LSTM(input_size=embedding_size, hidden_size=lstm_hidden_size, bias=False, batch_first=True)
+            self.lstm = nn.LSTM(input_size=embedding_size, hidden_size=out_features, bias=False, batch_first=True)
         else:
             raise NotImplementedError
 
@@ -77,6 +78,7 @@ class LanguageModel(nn.Module):
             elif self.type == 'lstm':
                 output, (h, c) = self.lstm(s)
                 out = h
+                # out = F.tanh(h)
             else:
                 raise NotImplementedError('Language model type should be linear or LSTM')
             return out

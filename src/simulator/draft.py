@@ -39,8 +39,24 @@ class Child(Parent):
 
 
 if __name__ == "__main__":
-    c = Child()
-    print(isinstance(c, Parent))
-    d = dict()
-    d['a'] = 1
-    print(d)
+
+    import numpy as np
+    n = np.random.randint(1,5,1000)
+
+
+    # for i in range(1000):
+    #     print(i, n[i])
+    #     a = np.random.rand(n[i])
+    #     a_relu = np.maximum(np.zeros(n[i]), a - 0.5)
+    #     sum = np.sum(a_relu)
+    #     or_ = int(sum > 0)
+    #     assert or_ == (max(a) > 0.5)
+    # print('end')
+    import torch
+    for i in range(10000):
+        t = torch.rand(3)
+        temp = (t - 0.5).relu() # met toutes les proba < 0.5 à 0
+        temp = temp.sum() # stricly positive only if at least one proba > 0.5
+        temp *= 100000 # define sensibility to 0.00001, make temp > 1 if at least one proba > 0.50001
+        bool = temp.clamp(0, 1)
+        assert (t.max() > 0.5) == bool
