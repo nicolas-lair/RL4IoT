@@ -1,7 +1,7 @@
 from torch import nn
 import torch.nn.functional as F
 
-from utils import differentiable_or
+from architecture.utils import differentiable_or
 
 
 class RewardFunction:

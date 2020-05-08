@@ -3,7 +3,7 @@ from sklearn.preprocessing import OneHotEncoder
 
 import gym
 from Items import ITEM_TYPE
-from Thing import Thing, PlugSwitch, Speaker, LightBulb, LGTV, Chromecast
+from Thing import Thing, PlugSwitch, LightBulb
 from description_embedder import Description_embedder
 
 

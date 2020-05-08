@@ -1,6 +1,6 @@
 from Environment import IoTEnv
 from oracle import Oracle
-from goal_sampler import Goal, GoalSampler
+from architecture.goal_sampler import GoalSampler
 
 if __name__ == "__main__":
     env = IoTEnv()
