@@ -37,7 +37,7 @@ ACTION_SPACE = {
     'turnOnOff': spaces.Discrete(2),
 }
 
-ITEM_TYPE = ['color', 'contac', 'dimmer', 'location', 'number', 'player', 'rollershutter', 'string', 'switch']
+ITEM_TYPE = ['color', 'contact', 'dimmer', 'location', 'number', 'player', 'rollershutter', 'string', 'switch']
 
 
 def check_method_availability(func):
