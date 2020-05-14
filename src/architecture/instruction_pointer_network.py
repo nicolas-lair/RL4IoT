@@ -75,18 +75,18 @@ class Attention(nn.Module):
 
     def forward(self,
                 encoder_out,
-                instruction_embedding):
+                condition_embedding):
         # encoder_out: (BATCH, ARRAY_LEN, HIDDEN_SIZE)
         # decoder_hidden: (BATCH, HIDDEN_SIZE)
 
         # Add time axis to decoder hidden state
         # in order to make operations compatible with encoder_out
-        # instruction_embedding: (BATCH, 1, HIDDEN_SIZE)
-        instruction_embedding = instruction_embedding.unsqueeze(1)
+        # condition_embedding: (BATCH, 1, HIDDEN_SIZE)
+        condition_embedding = condition_embedding.unsqueeze(1)
 
         # uj: (BATCH, ARRAY_LEN, ATTENTION_UNITS)
         # Note: we can add the both linear outputs thanks to broadcasting
-        uj = self.W1(encoder_out) + self.W2(instruction_embedding)
+        uj = self.W1(encoder_out) + self.W2(condition_embedding)
         uj = torch.tanh(uj)
 
         # uj: (BATCH, ARRAY_LEN, 1)
@@ -110,24 +110,24 @@ class InstructedPointerNetwork(nn.Module):
         super().__init__()
         self.encoder = Encoder(hidden_size=hidden_size, bidirectional=bidirectional_encoder, n_layers=n_encoder_layers)
         self.attention = Attention(hidden_size=(1 + int(bidirectional_encoder)) * hidden_size, units=units)
-        self.instruction_embedding = nn.Embedding(num_embeddings=n_instruction,
-                                                  embedding_dim=(1 + int(bidirectional_encoder)) * hidden_size)
+        # self.condition_embedding = nn.Embedding(num_embeddings=n_instruction,
+        #                                           embedding_dim=(1 + int(bidirectional_encoder)) * hidden_size)
 
-    def forward(self, sequence, instruction):
-        embedded_instruction = self.instruction_embedding(instruction)
+    def forward(self, sequence, embedded_condition):
+        # embedded_condition = self.condition_embedding(instruction)
         output, _ = self.encoder(sequence.float())
         # if self.encoder.bidirectional:
         #     output = output.view(output.size(0), output.size(1), 2, output.size(2) // 2)
         #     h0 = output[:, 0, 1, :]
         #     hn = output[:, -1, 0, :]
         #     output = torch.cat([h0, hn], dim=-1)
-        attn_vector = self.attention(output, embedded_instruction)
+        attn_vector = self.attention(output, embedded_condition)
         seq_proba = attn_vector.squeeze(-1)
         prediction = seq_proba.softmax(1).argmax(1)
         return seq_proba, prediction
 
 
-def train(model, optimizer, task, epoch, step_per_epoch, batch_size, len_range, max_nb, clip=1.,
+def train(model, embedder, optimizer, task, epoch, step_per_epoch, batch_size, len_range, max_nb, clip=1.,
           cuda=torch.cuda.is_available()):
     """Train single epoch"""
     print('Epoch [{}] -- Train'.format(epoch))
@@ -142,7 +142,9 @@ def train(model, optimizer, task, epoch, step_per_epoch, batch_size, len_range, 
                                   instruction=task)
         if cuda:
             x, y, instruction = x.cuda(), y.cuda(), instruction.cuda()
-        seq_proba, _ = model(sequence=x, instruction=instruction)
+
+        embedded_instruction = embedder(instruction)
+        seq_proba, _ = model(sequence=x, embedded_condition=embedded_instruction)
 
         # Forward
         # x, y = batch(BATCH_SIZE)
@@ -163,7 +165,7 @@ def train(model, optimizer, task, epoch, step_per_epoch, batch_size, len_range, 
 
 
 @torch.no_grad()
-def evaluate(model, task, epoch, eval_batch_size, len_range, max_nb, n_eval, verbose=True):
+def evaluate(model, embedder, task, epoch, eval_batch_size, len_range, max_nb, n_eval, verbose=True):
     import numpy as np
     """Evaluate after a train epoch"""
     print('Epoch [{}] -- Evaluate'.format(epoch))
@@ -178,7 +180,9 @@ def evaluate(model, task, epoch, eval_batch_size, len_range, max_nb, n_eval, ver
         x_val, y_val, instruction = batch(eval_batch_size, min_len=len_range[0], max_len=len_range[1], max_nb=max_nb,
                                           instruction=task)
 
-        _, prediction = model(sequence=x_val, instruction=instruction)
+        embedded_instruction = embedder(instruction)
+        _, prediction = model(sequence=x_val, embedded_condition=embedded_instruction)
+
         idx_accuracy.append((y_val == prediction).float().mean().item())
         # min_max_accuracy.append((x_val[:, y_val] == x_val[:, prediction]).float().mean().item())
 
@@ -202,6 +206,7 @@ if __name__ == "__main__":
     CUDA = True
     HIDDEN_SIZE = 256
     ATTENTION_UNITS = 128
+    BIDIR = True
 
     BATCH_SIZE = 64
     LEN_RANGE = (5, 15)
@@ -215,8 +220,10 @@ if __name__ == "__main__":
     if 'many' in TASK:
         TASK += f'_{N_INSTR}'
 
+    instruction_embedder = nn.Embedding(num_embeddings=N_INSTR,
+                                        embedding_dim=(1 + int(BIDIR)) * HIDDEN_SIZE)
     ptr_net = InstructedPointerNetwork(hidden_size=HIDDEN_SIZE, units=ATTENTION_UNITS, n_instruction=N_INSTR,
-                                       bidirectional_encoder=True)
+                                       bidirectional_encoder=BIDIR)
 
     optimizer = optim.Adam(ptr_net.parameters())
     # min_max_acc = []
@@ -224,16 +231,19 @@ if __name__ == "__main__":
     loss_record = []
     for epoch in range(EPOCHS):
         t0 = time.time()
-        loss = train(ptr_net, optimizer,
-              task=TASK,
-              epoch=epoch + 1,
-              step_per_epoch=STEPS_PER_EPOCH,
-              batch_size=BATCH_SIZE,
-              len_range=LEN_RANGE,
-              max_nb=MAX_NB,
-              cuda=CUDA)
+        loss = train(ptr_net,
+                     embedder=instruction_embedder,
+                     optimizer=optimizer,
+                     task=TASK,
+                     epoch=epoch + 1,
+                     step_per_epoch=STEPS_PER_EPOCH,
+                     batch_size=BATCH_SIZE,
+                     len_range=LEN_RANGE,
+                     max_nb=MAX_NB,
+                     cuda=CUDA)
         print('{} seconds'.format(time.time() - t0))
         acc = evaluate(ptr_net,
+                       embedder=instruction_embedder,
                        task=TASK,
                        epoch=epoch + 1,
                        step_per_epoch=STEPS_PER_EPOCH,

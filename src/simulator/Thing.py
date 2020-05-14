@@ -5,7 +5,7 @@ from gym import spaces
 from utils import get_color_name_from_hsb
 
 
-# TODO Update Volume, Mute, PLayer, Stop for connected things for TV, Chromecast and Speaker
+# TODO Update Volume, Mute, Player, Stop for connected things for TV, Chromecast and Speaker
 class Thing:
     def __init__(self, name, connected_things, is_visible=True):
         self.initial_value = {'name': name, 'connected_things': connected_things, 'is_visible': is_visible}
@@ -17,6 +17,7 @@ class Thing:
         self.action_space = None
 
         self.description = None
+        self.description_embedding = None
         self.item_type = None
 
         if connected_things is not None:

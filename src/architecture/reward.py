@@ -27,10 +27,13 @@ class LearnedReward(nn.Module, RewardFunction):
         attn_vector = self.linear_attn(instruction_embedding)
         attn_vector = F.sigmoid(attn_vector)
 
-        object_reward = []
         x = attn_vector * state
         x = self.reward_layer(x)
         x = F.sigmoid(x)
 
         reward = differentiable_or(x.view(-1))
         return reward
+
+
+if __name__ == "__main__":
+    pass

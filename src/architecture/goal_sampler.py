@@ -8,27 +8,28 @@ import numpy as np
 
 
 class Goal:
-    def __init__(self, goal_string, iter_discovery, id, target_counter=0, reached_counter=0, goal_embedding=None,
+    def __init__(self, goal_string, episode_discovery, id, target_counter=0, reached_counter=0, goal_embedding=None,
                  language_model=None):
-        self.iter_discovery = iter_discovery
+        self.iter_discovery = episode_discovery
         self.id = id
         self.goal_embedding = None
         self.goal_string = goal_string
         self.target_counter = target_counter
         self.reached_counter = reached_counter
-        if language_model is not None:
-            self.update_embedding(language_model)
         if goal_embedding is not None:
             self.goal_embedding = goal_embedding
+        elif language_model is not None:
+            self.update_embedding(language_model)
 
     def update_embedding(self, language_model):
         self.goal_embedding = language_model(self.goal_string)
 
 
 class GoalSampler:
-    def __init__(self, language_model):
+    def __init__(self, language_model, sampling_stategy='random'):
         self.discovered_goals = dict()
 
+        self.goal_sampling_strategy = sampling_stategy
         self.nb_feedbacks = 0
         self.nb_positive_feedbacks = 0
 
@@ -36,7 +37,7 @@ class GoalSampler:
 
     def _update_discovered_goals(self, goal_string, iter):
         if isinstance(goal_string, str):
-            new_goal = Goal(goal_string=goal_string, iter_discovery=iter, id=len(self.discovered_goals),
+            new_goal = Goal(goal_string=goal_string, episode_discovery=iter, id=len(self.discovered_goals),
                             language_model=self.language_model)
             self.discovered_goals.update({goal_string: new_goal})
         elif isinstance(goal_string, list):
@@ -71,6 +72,7 @@ class GoalSampler:
             g.update_embedding(self.language_model)
 
     def sample_goal(self, strategy='random'):
+        strategy = strategy if strategy is not None else self.goal_sampling_strategy
         if strategy == 'random':
             target = np.random.choice(list(self.discovered_goals.values()), 1).item()
         else:
