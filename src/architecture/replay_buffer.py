@@ -2,7 +2,7 @@ import random
 from collections import namedtuple, deque
 
 Transition = namedtuple('Transition',
-                        ('goal', 'state', 'action', 'next_state', 'reward', 'previous_action'))
+                        ('goal', 'state',  'action', 'next_state', 'done', 'reward', 'hidden_state'))
 
 class ReplayBuffer:
     def __init__(self, max_size):
@@ -11,11 +11,8 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.memory)
 
-    def store(self, transitions):
-        if isinstance(transitions, list):
-            [self.store(t) for t in transitions]
-        elif isinstance(transitions, Transition):
-            self.memory.append(transitions)
+    def store(self, *args):
+        self.memory.append(Transition(*args))
 
     def sample(self, n_sample):
         return random.sample(self.memory, n_sample)

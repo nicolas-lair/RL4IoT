@@ -1,32 +1,41 @@
+import torch
+
 from simulator.Environment import IoTEnv4ML
-from architecture.agent import Agent
+from architecture.dqnagent import DQNAgent
 from architecture.dqn import FlatCritic
 from architecture.goal_sampler import GoalSampler
+from architecture.replay_buffer import ReplayBuffer
+
+
+def dqn_update():
 
 model_params = {'instruction_embedding': None, 'state_embedding': None, 'action_embedding': None, 'n_step': None,
                 'net_params': None}
 exploration_params = {}
 env = IoTEnv4ML()
-agent = Agent(FlatCritic(**model_params),
-              exploration_params=exploration_params)
-goal_sampler = GoalSampler(language_model=None)
-
+agent = DQNAgent(FlatCritic(**model_params), exploration_params=exploration_params,
+                 goal_sampler=GoalSampler(language_model=None), language_model=None)
+replay_buffer = ReplayBuffer(max_size=10000)
 
 num_episodes = 50
 for i_episode in range(num_episodes):
     # Initialize the environment and state
-    overall_state, available_actions = env.reset()
+    state = env.reset()
+    (overall_state, available_actions) = state
+    hidden_state = torch.zeros(1, model_params['action_embedding'])
     g = agent.sample_goal()
     running_episode = True
 
-    while running_episode:
+    done = False
+    while not done:
+        action, hidden_state = agent.select_action(state=overall_state, instruction=g.goal_embedding,
+                                                   actions=available_actions, hidden_state=hidden_state)
+        next_state, reward, done, info = env.step(action=action)
+        replay_buffer.store(g, state, action, next_state, done, reward, hidden_state)
 
-        action = agent.select_action(state=overall_state, instruction=g.goal_embedding, actions=available_actions)
-        env.step(action=action)
+        state = next_state
 
-    last_screen = get_screen()
-    current_screen = get_screen()
-    state = current_screen - last_screen
+
     for t in count():
         # Select and perform an action
         action = select_action(state)

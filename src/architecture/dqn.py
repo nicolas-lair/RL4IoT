@@ -1,3 +1,7 @@
+import itertools
+
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -26,26 +30,43 @@ class FlatCritic(nn.Module):
             nn.ReLU()
         )
 
+    def project_action_embedding(self, actions):
+        """
+
+        :param actions: list of size BATCH_SIZE [
+                            list of size N_ACTION [
+                                tuple(string, torch.tensor(1, ACTION_EMBEDDING))
+                            ]
+                        ]
+        :return: torch tensor of size (BATCH_SIZE, longest_sequence, PROJECTED_ACTION_EMBEDDING)
+        """
+        # Project each action to a common embedding space and create a tensor for each sublist of action
+        # (corresponding to the possible action in one state)
+        embedded_actions = [torch.cat([self.action_embedding_layers[a[0]](a[1]) for a in seq]) for seq in actions]
+        # Create a unique tensor that contains all the possible actions for the different element in the batch
+        # Need to pad in case some element in the batch have different number of possible actions
+        embedded_actions = rnn_utils.pad_sequence(embedded_actions, batch_first=True)
+
+        return embedded_actions
+
     def forward(self, instruction, state, hidden_state, actions):
         """
 
         :param instruction: torch tensor (BATCH_SIZE, INSTRUCTION_EMBEDDING)
         :param state: torch tensor (BATCH_SIZE, STATE_EMBEDDING)
-        :param previous_action: list[tuple(string ,torch.tensor(1, ACTION_EMBEDDING))] of length BATCH_SIZE
+        :param hidden_state: torch.tensor(BATCH_SIZE, ACTION_EMBEDDING)
                     string can be "action_with_description" or "action_without_description"
-        :param actions: list[tuple(string, torch.tensor(N_ACTION, ACTION_EMBEDDING))] of length BATCH_SIZE
-        :return: torch tensor of size (BATCH_SIZE, longest_sequence, 1), sequence_size, hidden_state
+        :param actions: torch tensor of size (BATCH_SIZE, longest_sequence, PROJECTED_ACTION_EMBEDDING)
+
+        :return: torch tensor of size (BATCH_SIZE, longest_sequence, 1), hidden_state (actions here)
         """
-        embedded_actions = [self.action_embedding_layers[a[0]](a[1]) for a in actions]
-        sequence_size = [a.size(0) for a in embedded_actions]
-        longest_sequence = max(sequence_size)
-        embedded_actions = rnn_utils.pad_sequence(embedded_actions, batch_first=True)
+        embedded_actions = self.project_action_embedding(actions)
 
         context = torch.cat([instruction, state, hidden_state], dim=1)
-        context = context.unsqueeze(1).repeat_interleave(repeats=longest_sequence, dim=1)
+        context = context.unsqueeze(1).repeat_interleave(repeats=embedded_actions.size(1), dim=1)
         x = torch.cat([context, embedded_actions], dim=2)
         x = self.q_network(x)
-        return x, sequence_size, None
+        return x, embedded_actions
 
 
 class DeepSetActionCritic(nn.Module):
