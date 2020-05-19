@@ -9,6 +9,7 @@ from architecture.replay_buffer import ReplayBuffer
 
 def dqn_update():
 
+
 model_params = {'instruction_embedding': None, 'state_embedding': None, 'action_embedding': None, 'n_step': None,
                 'net_params': None}
 exploration_params = {}
@@ -34,7 +35,6 @@ for i_episode in range(num_episodes):
         replay_buffer.store(g, state, action, next_state, done, reward, hidden_state)
 
         state = next_state
-
 
     for t in count():
         # Select and perform an action

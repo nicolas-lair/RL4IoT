@@ -2,39 +2,34 @@ from Items import *
 
 from gym import spaces
 
+from Channel import Channel
 from utils import get_color_name_from_hsb
+from TreeView import Node
 
 
-# TODO Update Volume, Mute, Player, Stop for connected things for TV, Chromecast and Speaker
-class Thing:
-    def __init__(self, name, connected_things, is_visible=True):
-        self.initial_value = {'name': name, 'connected_things': connected_things, 'is_visible': is_visible}
-        self.name = name
+class Thing(Node):
+    def __init__(self, name, description, is_visible=True):
+        """
+        Init a generic Thing object as a Node of the environment. The super function that instantiates subclass should
+        be called after the definition of the channels. The channels are indeed the children of the node.
+        :param name:
+        :param description:
+        :param is_visible:
+        """
+        super().__init__(name=name, description=description, children=self.get_action_channels())
+        self.initial_value = {'name': name, 'is_visible': is_visible}
         self.is_visible = is_visible
-        self.connected_things = set()
 
         self.observation_space = None
         self.action_space = None
 
-        self.description = None
         self.description_embedding = None
         self.item_type = None
 
-        if connected_things is not None:
-            self.connect_thing(connected_things)
         self._channels = None
 
     def update_visibility(self, visibility):
         self.is_visible = visibility
-
-    def connect_thing(self, things):
-        if isinstance(things, Thing):
-            self.connected_things.add(things)
-        elif isinstance(things, list):
-            for t in things:
-                self.connect_thing(t)
-        else:
-            raise NotImplementedError
 
     def get_channels(self):
         """
@@ -44,6 +39,10 @@ class Thing:
         if self._channels is None:
             self._channels = [x for x in vars(self).values() if isinstance(x, Channel)]
         return self._channels
+
+    def get_action_channels(self):
+        action_channels = [x for x in vars(self).values() if (isinstance(x, Channel) and x.write)]
+        return action_channels
 
     def build_observation_and_action_space(self):
         channels = self.get_channels()
@@ -107,40 +106,9 @@ class Thing:
     def reset(self):
         self.__init__(**self.initial_value)
 
-    #TODO Collect all possible actions from object
+    # TODO Collect all possible actions from object
     def get_state_change(self, previous_state, next_state):
         raise NotImplementedError
-
-
-class Channel:
-    def __init__(self, name, description, item, value=None, read=True, write=True):
-        self.name = name
-        self.description = description
-
-        self.item = item
-        self.initial_value = value
-        if value is not None:
-            self.item.set_state(value)
-
-        self.read = read
-        self.write = write
-
-    def get_state(self):
-        return self.item.get_state()
-
-    def set_state(self, value):
-        return self.item.set_state(value)
-
-    def get_observation_space(self):
-        return self.item.observation_space
-
-    def get_action_space(self):
-        return self.item.action_space
-
-    def do_action(self, action, params=None):
-        if params is None:
-            params = []
-        getattr(self.item, action)(self.item, *params)
 
 
 class LightBulb(Thing):
@@ -148,8 +116,7 @@ class LightBulb(Thing):
     Thing type 0210 (https://www.openhab.org/addons/bindings/hue/)
     """
 
-    def __init__(self, name="lightbulb", connected_things=None, is_visible=True):
-        super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
+    def __init__(self, name="lightbulb", description='This is a light bulb', is_visible=True):
         self.color = Channel(
             name='color',
             description="This channel supports full color control with hue, saturation and brightness values",
@@ -164,6 +131,7 @@ class LightBulb(Thing):
             value=50
         )
 
+        super().__init__(name=name, description=description, is_visible=is_visible)
         # # TODO decide if use or not : maybe not
         # self.alert = Channel(
         #     name='alert',
@@ -208,12 +176,13 @@ class PlugSwitch(Thing):
     https://www.openhab.org/addons/bindings/zwave/thing.html?manufacturer=everspring&file=an180_0_0.html
     """
 
-    def __init__(self, name="plugswitch", connected_things=None, is_visible=True):
-        super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
+    def __init__(self, name="plugswitch", description='This is a switch that controls multiple switchs',
+                 is_visible=True):
         self.switch_binary = Channel(name="switch_binary",
                                      description="Switch the power on and off.",
                                      item=SwitchItem(turnOn=True, turnOff=True),
                                      )
+        super().__init__(name=name, description=description, is_visible=is_visible)
 
         # Ignore both channel
         # self.alarm = Channel(
@@ -233,9 +202,6 @@ class PlugSwitch(Thing):
     def do_action(self, channel, action, params=None):
         assert channel == "switch_binary", f"Switch_binary is the only available channel, {channel} was called instead"
         super().do_action(channel, action, params)
-        power_status = self.switch_binary.get_state()
-        for thing in self.connected_things:
-            thing.update_visibility(power_status)
 
     def get_state_change(self, previous_state, next_state):
         achieved_instructions = []
@@ -247,6 +213,7 @@ class PlugSwitch(Thing):
             achieved_instructions.append(f"You turned on the {self.name}")
         return achieved_instructions
 
+
 class LGTV(Thing):
     """
     https://www.openhab.org/addons/bindings/lgwebos/
@@ -254,9 +221,7 @@ class LGTV(Thing):
     See also PanasonicTV and SamsungTV
     """
 
-    def __init__(self, name="LGTV", power=1, mute=0, connected_things=None, is_visible=True):
-        super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
-        self.initial_value.update({'power': power, 'mute': mute})
+    def __init__(self, name="LGTV", description='This is TV of the brand LG', power=1, mute=0, is_visible=True):
         self.power = Channel(
             name='power',
             description="Current power setting. TV can only be powered off, not on.",
@@ -309,6 +274,9 @@ class LGTV(Thing):
             item=StringItem(setString=True)
         )
 
+        super().__init__(name=name, description=description, is_visible=is_visible)
+        self.initial_value.update({'power': power, 'mute': mute})
+
         # Ignore this for now
         # self.rcButton = Channel(
         #     name='rcButton',
@@ -326,9 +294,7 @@ class Speaker(Thing):
     maybe compare with Sonos or check STR-1080 for multiple zone compatibility
     """
 
-    def __init__(self, name="speaker", connected_things=None, is_visible=True):
-        super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
-
+    def __init__(self, name="speaker", description="This is a speaker", is_visible=True):
         self.power = Channel(
             name="power",
             description="Main power on/off",
@@ -352,6 +318,8 @@ class Speaker(Thing):
             item=SwitchItem(turnOnOff=True)
         )
 
+        super().__init__(name=name, description=description, is_visible=is_visible)
+
         # TODO check what is sound Field, for now disable
         # self.soundField = Channel(
         #     name="soundField",
@@ -360,15 +328,15 @@ class Speaker(Thing):
         # )
 
 
-class Store(Thing):
-    def __init__(self, name="store", connected_things=None, is_visible=True):
-        super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
-
+#
+# class Store(Thing):
+#     def __init__(self, name="store", connected_things=None, is_visible=True):
+#         super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
+#
 
 class Chromecast(Thing):
-    def __init__(self, name="Chromecast", connected_things=None, is_visible=True):
-        super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
-
+    def __init__(self, name="Chromecast", description='This is a Chromecast that allows streaming videos on the TV',
+                 is_visible=True):
         self.control = Channel(
             name='control',
             description="Player control; currently only supports play/pause and does not correctly update, if the state changes on the device itself",
@@ -439,6 +407,8 @@ class Chromecast(Thing):
             item=StringItem(),
             write=False
         )
+
+        super().__init__(name=name, description=description, is_visible=is_visible)
 
         # TODO See what to to with available metadata: Not necessary maybe?
 

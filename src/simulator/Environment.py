@@ -4,8 +4,10 @@ from sklearn.preprocessing import OneHotEncoder
 import gym
 from Items import ITEM_TYPE
 from Thing import Thing, PlugSwitch, LightBulb
+from Channel import Channel
 from description_embedder import Description_embedder
-
+from Action import ExecAction, OpenHABAction, Params
+from TreeView import Node
 
 class IoTEnv(gym.Env):
     def __init__(self):
@@ -86,24 +88,26 @@ class IoTEnv(gym.Env):
         return state
 
     def reset(self):
-        for thing in self.get_thing_list():
+        thing_list = self.get_thing_list()
+        for thing in thing_list:
             thing.reset()
         state = self.build_state()
-        return state
+        return (state, thing_list)
 
     def render(self, mode='human'):
         raise NotImplementedError
 
 
-class IoTEnv4ML(gym.ObservationWrapper):
+class IoTEnv4ML(gym.Wrapper):
     def __init__(self, env=IoTEnv()):
         super().__init__(env=env)
         self.description_embedder = Description_embedder(embedding='glove', dimension=50, reduction='mean',
                                                          authorize_cache=True)
         self.item_type_embedder = OneHotEncoder(sparse=False)
         self.item_type_embedder.fit(np.array(ITEM_TYPE).reshape(-1, 1))
+        self.running_action = dict()
 
-    def observation(self, observation):
+    def get_overall_observation(self, observation):
         new_obs = dict()
         for thing_name, thing in observation.items():
             thing_obs = dict()
@@ -120,7 +124,46 @@ class IoTEnv4ML(gym.ObservationWrapper):
             new_obs[thing_name] = thing_obs
         return new_obs
 
+    def observation(self, observation):
+        overall_observation = self.get_overall_observation(observation[0])
+        local_observation = self.get_local_observation(observation[1])
+        return overall_observation, local_observation
+
+    def step(self, action):
+        assert isinstance(action, Node), 'ERROR : action should be a Node'
+        if isinstance(action, ExecAction):
+            super().step(self.running_action)
+        else:
+            self.save_running_action(action)
+            available_actions = action.get_children_nodes()
+            return available_actions
+
+    def save_running_action(self, action):
+        if isinstance(action, Thing):
+            self.running_action['thing'] = action.name
+        elif isinstance(action, Channel):
+            self.running_action['channel'] = action.name
+        elif isinstance(action, OpenHABAction):
+            self.running_action['action'] = action.name
+        elif isinstance(action, Params):
+            self.running_action['param'] = action.name # TODO Have a param interpreter
+        else:
+            raise NotImplementedError
+
+    def reset(self):
+        state, thing_list = super().reset()
+        self.running_action = dict()
+        return state, thing_list
+
+
+class IoTEnvTreeLike(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env=env)
+
 
 if __name__ == "__main__":
     env = IoTEnv4ML()
     initial_state = env.reset()
+
+    env2 = IoTEnv()
+    initial_state2 = env2.reset()

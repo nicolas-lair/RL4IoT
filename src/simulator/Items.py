@@ -3,39 +3,14 @@ from abc import ABC, abstractmethod
 import numpy as np
 from gym import spaces
 
+from Action import ACTION_SPACE
+
 
 class MethodUnavailableError(Exception):
     pass
 
 
 INCREASE_DECREASE_STEP = 10
-
-ACTION_SPACE = {
-    'turnOn': spaces.Discrete(2),
-    'turnOff': spaces.Discrete(2),
-    'increase': spaces.Discrete(2),
-    'decrease': spaces.Discrete(2),
-    'setPercent': spaces.Box(low=0, high=100, shape=(1,), dtype=float),
-    'setHSB': spaces.Box(low=np.array([0, 0, 0]), high=np.array([360, 100, 100]), dtype=float),
-    'OpenClose': spaces.Discrete(2),
-    'Open': spaces.Discrete(2),
-    'Close': spaces.Discrete(2),
-    'setLocation': spaces.Box(low=np.array([-90, -180, -1000]), high=np.array([90, 180, 10000], dtype=float)),
-    'setValue': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=type),
-    'setQuantity': None,
-    'PlayPause': spaces.Discrete(2),
-    'play': spaces.Discrete(2),
-    'pause': spaces.Discrete(2),
-    'next': spaces.Discrete(2),
-    'previous': spaces.Discrete(2),
-    'rewind': spaces.Discrete(2),
-    'fastforward': spaces.Discrete(2),
-    'up': spaces.Discrete(2),
-    'down': spaces.Discrete(2),
-    'move': spaces.Discrete(2),
-    'stop': spaces.Discrete(2),
-    'turnOnOff': spaces.Discrete(2),
-}
 
 ITEM_TYPE = ['color', 'contact', 'dimmer', 'location', 'number', 'player', 'rollershutter', 'string', 'switch']
 
@@ -60,12 +35,11 @@ class AbstractItem(ABC):
     def __init__(self, type, methods):
         assert type in ITEM_TYPE, 'Wrong item type'
         self.type = type
-        self.methods = methods.copy()
-        del self.methods['self']
+        # Filter to keep only valid and active methods for the items
+        self.methods = [m for m, b in methods.items() if (b and m in ACTION_SPACE.keys())]
 
         self.observation_space = None
-        self.action_space = spaces.Dict(
-            {k: v for k, v in zip(self.methods.keys(), ACTION_SPACE.values()) if self.methods[k]})
+        self.action_space = spaces.Dict({k: ACTION_SPACE[k] for k in self.methods})
         self.attr_error_message = None
 
     @abstractmethod
@@ -86,6 +60,9 @@ class AbstractItem(ABC):
             return 1
         else:
             setattr(self, attribute, value)
+
+    def get_available_actions(self):
+        return self.methods
 
 
 class ColorItem(AbstractItem):
