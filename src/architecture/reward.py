@@ -11,6 +11,16 @@ class RewardFunction:
     def get_reward(self, episode):
         pass
 
+class TrueReward:
+    def __init__(self):
+        pass
+
+    def _get_reward(self, state, instruction):
+        pass
+
+    def __call__(self, state, instruction):
+        self._get_reward(state, instruction)
+
 
 class LearnedReward(nn.Module, RewardFunction):
     def __init__(self, language_model, observation_size, hidden_layer_size=100):
