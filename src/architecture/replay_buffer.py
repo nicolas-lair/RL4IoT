@@ -11,8 +11,8 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.memory)
 
-    def store(self, *args):
-        self.memory.append(Transition(*args))
+    def store(self, **kwargs):
+        self.memory.append(Transition(**kwargs))
 
     def sample(self, n_sample):
         return random.sample(self.memory, n_sample)

@@ -7,10 +7,10 @@ from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, percent_level
 
 instruction_embedding = 100
-description_embedding = 50
+description_embedding = 100
 state_encoding_size = 3  # size of the vector in which is encoded the value of a channel
 state_embedding_size = state_encoding_size + description_embedding + len(ITEM_TYPE)
-action_embedding = 50
+action_embedding = 67
 
 params = {
     'env_params': {
@@ -25,7 +25,7 @@ params = {
     'model_params': {
         'instruction_embedding': instruction_embedding,
         'state_embedding': state_embedding_size,  # TODO
-        'action_embedding': action_embedding,  # TODO
+        'action_embedding_size': action_embedding,  # TODO
         'raw_action_size': {
             'action_description_embedding': description_embedding,
             'action_standard_embedding': len(ACTION_SPACE),

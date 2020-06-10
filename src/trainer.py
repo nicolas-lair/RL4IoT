@@ -9,6 +9,8 @@ from architecture.dqn import FlatQnet
 from architecture.language_model import LanguageModel
 from architecture.utils import flatten
 
+torch.autograd.set_detect_anomaly(True)
+
 if __name__ == "__main__":
     env = IoTEnv4ML(params=params['env_params'])
     oracle = Oracle(env=env)
@@ -16,11 +18,11 @@ if __name__ == "__main__":
     agent = DQNAgent(FlatQnet, language_model=language_model, params=params)
 
     num_episodes = 50
-    deep_action_space_embedding_size = params['model_params']['action_embedding']
+    deep_action_space_embedding_size = params['model_params']['action_embedding_size']
     for i in tqdm.trange(num_episodes):
         # Initialize the environment and state + flatten
         (state, available_actions) = env.reset()
-        #TODO change to use Modualr archi
+        # TODO change to use Modualr archi
         flatten_state = flatten(state)
         state = torch.stack(list(flatten_state.values())).mean(0, keepdim=True).float()
 
@@ -33,14 +35,14 @@ if __name__ == "__main__":
             action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
                                                        actions=available_actions, hidden_state=hidden_state)
             (next_state, next_available_actions), reward, done, info = env.step(action=action)
-            #TODO change to use Modualr archi
+            # TODO change to use Modualr archi
             next_state = torch.stack(list(flatten(next_state).values())).mean(0, keepdim=True).float()
             if not done:
                 assert isinstance(next_available_actions, list)
-                if next_available_actions is []:
-                    pass
-                agent.store_transitions(target_goal, state, action, (next_state, next_available_actions), done, reward,
-                                        hidden_state)
+
+                agent.store_transitions(goal=target_goal, state=state, action=action,
+                                        next_state=(next_state, next_available_actions), done=done, reward=reward,
+                                        hidden_state=hidden_state)
                 state = next_state
                 available_actions = next_available_actions
 
@@ -56,9 +58,10 @@ if __name__ == "__main__":
         agent.store_final_transitions(achieved_goals=achieved_goals,
                                       failed_goals=failed_goals,
                                       state=state,
-                                      action=available_actions,
-                                      next_state=next_state,
-                                      hidden_state=hidden_state)
+                                      action=action,
+                                      next_state=(next_state, []),
+                                      hidden_state=hidden_state
+                                      )
 
         if i % params['target_update_frequence'] == 0:
             agent.update_target_net()

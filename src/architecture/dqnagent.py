@@ -35,14 +35,16 @@ class DQNAgent:
         self.optimizer = params['optimizer'](self.policy_network.parameters(), **params['optimizer_params'])
         self.device = device
 
-    def store_transitions(self, *args):
-        self.replay_buffer.store(*args)
+    def store_transitions(self, **kwargs):
+        self.replay_buffer.store(**kwargs)
 
     def store_final_transitions(self, achieved_goals, failed_goals, state, action, next_state, hidden_state):
         for g in achieved_goals:
-            self.store_transitions(g, state, action, next_state, True, 1, hidden_state)
+            self.store_transitions(goal=g, state=state, action=action, next_state=next_state, done=True, reward=1,
+                                   hidden_state=hidden_state)
         for g in failed_goals:
-            self.store_transitions(g, state, action, next_state, True, 0, hidden_state)
+            self.store_transitions(goal=g, state=state, action=action, next_state=next_state, done=True, reward=0,
+                                   hidden_state=hidden_state)
 
     def sample_goal(self, strategy=None):
         return self.goal_sampler.sample_goal(strategy=strategy)
@@ -124,7 +126,7 @@ class DQNAgent:
         transitions = self.replay_buffer.sample(batch_size)
         transitions = Transition(*zip(*transitions))
 
-        goals = torch.cat([g.goal_embedding for g in transitions.goal])
+        goals = torch.cat([g.goal_embedding for g in transitions.goal]).to(self.device)
 
         # states = zip(*transitions.state)
         states = torch.cat(transitions.state).to(self.device)
@@ -134,11 +136,10 @@ class DQNAgent:
 
         next_states, next_av_actions = zip(*transitions.next_state)
         next_states = torch.cat(next_states).to(self.device)
-        next_av_actions_embedded = self.embed_actions(list(next_av_actions))
 
-        done = torch.cat(transitions.done).to(self.device)
-        rewards = torch.cat(transitions.reward).to(self.device)
-        hidden_states = torch.cat(transitions.hidden_states).to(self.device)
+        done = torch.tensor(transitions.done).to(self.device)
+        rewards = torch.tensor(transitions.reward).to(self.device)
+        hidden_states = torch.cat(transitions.hidden_state).to(self.device)
 
         Q_sa, normalized_action_embedding = self.policy_network(state=states,
                                                                 instruction=goals,
@@ -146,17 +147,19 @@ class DQNAgent:
                                                                 hidden_state=hidden_states)
         next_hidden_states = normalized_action_embedding.squeeze()
 
+        next_av_actions_embedded = self.embed_actions([a for a, mask in zip(next_av_actions, done) if not mask])
         maxQ = torch.zeros(batch_size, device=self.device)
-        maxQ[done], _ = self.target_network(state=next_states[done],
-                                            instruction=goals[done],
-                                            actions=[a for a, mask in zip(next_av_actions_embedded, done) if mask],
-                                            hidden_states=next_hidden_states[done])
-        maxQ = maxQ.max(1)
+        with torch.no_grad():
+            Q_target_net, _ = self.target_network(state=next_states[~done],
+                                                  instruction=goals[~done],
+                                                  actions=next_av_actions_embedded,
+                                                  hidden_state=next_hidden_states[~done])
+        maxQ[~done] = Q_target_net.max(1).values.squeeze()
 
         expected_value = rewards + self.discount_factor * maxQ
-        loss = self.loss(expected_value.detach(), Q_sa)
+        loss = self.loss(expected_value.detach(), Q_sa.squeeze())
 
-        loss.backward()
+        loss.backward(retain_graph=True)
         clip_grad_norm_(self.policy_network.parameters(), 1)
         self.optimizer.step()
 
