@@ -20,35 +20,39 @@ class FlatQnet(nn.Module):
         super().__init__()
         self.type = 'FlatQnet'
         self.in_features = instruction_embedding + state_embedding + 2 * action_embedding_size
+
+        self.raw_action_size = max(raw_action_size.values())
         self.action_embedding_size = action_embedding_size
+
         # Projection layer for action with description embedding
-        self.description_embedding_projector = nn.Linear(in_features=raw_action_size['action_description_embedding'],
+        self.description_embedding_projector = nn.Linear(in_features=self.raw_action_size,
                                                          out_features=self.action_embedding_size)
 
         # Projection layer for action with their own embedding
-        self.openhab_action_projector = nn.Linear(in_features=raw_action_size['action_standard_embedding'],
+        self.openhab_action_projector = nn.Linear(in_features=self.raw_action_size,
                                                   out_features=self.action_embedding_size)
 
-        self.color_projector = nn.Linear(in_features=raw_action_size['color'],
+        self.color_projector = nn.Linear(in_features=self.raw_action_size,
                                          out_features=self.action_embedding_size)
 
-        self.level_projector = nn.Linear(in_features=raw_action_size['level'],
+        self.level_projector = nn.Linear(in_features=self.raw_action_size,
                                          out_features=self.action_embedding_size)
 
         # Dictionnary of projection layer for normalizing the action embedding. The projector should be defined as
         # attributes of the current module to ensure that they are passed to cuda
-        self.raw_action_size = raw_action_size
         self.action_embedding_layers = {
-            raw_action_size['action_description_embedding']: self.description_embedding_projector,
-            raw_action_size['action_standard_embedding']: self.openhab_action_projector,
-            raw_action_size['color']: self.color_projector,
-            raw_action_size['level']: self.level_projector
+            'description_node': self.description_embedding_projector,
+            'openHAB_action': self.openhab_action_projector,
+            'color_params': self.color_projector,
+            'level_params': self.level_projector
         }
-        # for v in self.action_embedding_layers.values():
-        #     for param in v.parameters():
-        #         param.requires_grad = False
+        # for k, v in self.action_embedding_layers.items():
+        #     if k == '':
+        #         pass
+        #     else:
+        #         for param in v.parameters():
+        #             param.requires_grad = False
 
-        # self.action_embedding_layers[action_description_embedding].cuda()
         self.q_network = nn.Sequential(
             nn.Linear(in_features=self.in_features, out_features=net_params['hidden1_out']),
             nn.ReLU(),
@@ -59,21 +63,23 @@ class FlatQnet(nn.Module):
         )
 
     def _project_one_action(self, action):
-        s = action.size(1)
-        projection = torch.zeros((1, self.action_embedding_size)).to(action.device)
-        for k, m in self.action_embedding_layers.items():
-            if (k == s):
-                projection += m(action)
-            else:
-                projection = 0 * m(torch.rand(1, m.in_features).to(action.device))
-        return projection
+        with torch.autograd.set_detect_anomaly(False):
+            s = action.size(1)
+            projection = []
+            for k, m in self.action_embedding_layers.items():
+                if (k == s):
+                    projection.append(m(action))
+                else:
+                    pass
+                    # projection.append(m(torch.rand(1, m.in_features).to(action.device)))
+            return torch.stack(projection, dim=0).sum(dim=0, keepdim=False)
         # return ((s == self.raw_action_size['action_description_embedding']) * self.description_embedding_projector(
         #     action) +
         #         (s == self.raw_action_size['action_standard_embedding']) * self.openhab_action_projector(action) +
         #         (s == self.raw_action_size['color']) * self.color_projector(action) +
         #         (s == self.raw_action_size['level']) * self.level_projector(action))
 
-    def project_action_embedding(self, actions):
+    def project_action_embedding(self, actions, action_type):
         """
 
         :param actions: list of size BATCH_SIZE [
@@ -83,15 +89,52 @@ class FlatQnet(nn.Module):
                         ]
         :return: torch tensor of size (BATCH_SIZE, longest_sequence, PROJECTED_ACTION_EMBEDDING)
         """
-        # Project each action to a common embedding space and create a tensor for each sublist of action
-        # (corresponding to the possible action in one user_state)
-        embedded_actions = [torch.cat([self._project_one_action(a) for a in seq]) for seq in actions]
+        with torch.autograd.set_detect_anomaly(False):
+            with torch.no_grad():
+                action_type_list = list(self.action_embedding_layers.keys())
+                action_type_indices = [torch.tensor([action_type_list.index(t) for t in seq]) for seq in action_type]
+                action_type_indices = rnn_utils.pad_sequence(action_type_indices, batch_first=True)
+                action_type_mask = torch.zeros(*action_type_indices.size(), len(action_type_list))
+                action_type_mask = action_type_mask.scatter_(-1, action_type_indices.unsqueeze(dim=-1), 1.).unsqueeze(-1).detach()
 
-        # Create a unique tensor that contains all the possible actions for the different element in the batch
-        # Need to pad in case some element in the batch have different number of possible actions
-        embedded_actions = rnn_utils.pad_sequence(embedded_actions, batch_first=True)
+                actions = [torch.cat([F.pad(a, pad=(0, self.raw_action_size - a.size(1), 0, 0)) for a in seq], dim=0) for
+                           seq in actions]
+                actions = rnn_utils.pad_sequence(actions, batch_first=True).detach()
 
-        return embedded_actions
+            projection_des = self.description_embedding_projector(actions)
+            projection_openhab = self.openhab_action_projector(actions)
+            projection_color = self.color_projector(actions)
+            projection_level = self.level_projector(actions)
+            projection = [projection_des, projection_openhab, projection_color, projection_level]
+            # projection = []
+            # for v in self.action_embedding_layers.values():
+            #     projection.append(v(actions))
+            p = torch.stack(projection, dim=-2)
+            embedded_actions = (action_type_mask.to(p.device) * p).sum(dim=-2, keepdim=False)
+
+            # Project each action to a common embedding space and create a tensor for each sublist of action
+            # (corresponding to the possible action in one user_state)
+
+            # Method 3
+            # embedded_actions = []
+            # for seq in actions:
+            #     embedded_actions.append(self._project_one_action(torch.cat(seq)))
+            # Method 2
+            # embedded_actions = []
+            # for seq in actions:
+            #     sequence = []
+            #     for a in seq:
+            #         sequence.append(self._project_one_action(a))
+            #     embedded_actions.append(torch.cat(sequence))
+
+            # Method 1
+            # embedded_actions = [torch.cat([self._project_one_action(a) for a in seq]) for seq in actions]
+
+            # Create a unique tensor that contains all the possible actions for the different element in the batch
+            # Need to pad in case some element in the batch have different number of possible actions
+            # embedded_actions = rnn_utils.pad_sequence(embedded_actions, batch_first=True)
+
+            return embedded_actions
 
     def forward(self, instruction, state, actions, hidden_state):
         """
@@ -100,17 +143,17 @@ class FlatQnet(nn.Module):
         :param state: torch tensor (BATCH_SIZE, STATE_EMBEDDING)
         :param hidden_state: torch.tensor(BATCH_SIZE, ACTION_EMBEDDING)
                     string can be "action_with_description" or "action_without_description"
-        :param actions: torch tensor of size (BATCH_SIZE, longest_sequence, PROJECTED_ACTION_EMBEDDING)
-
+        :param actions: tuple containing actions pre-embedding and action type
         :return: torch tensor of size (BATCH_SIZE, longest_sequence, 1), hidden_state (actions here)
         """
-        embedded_actions = self.project_action_embedding(actions)
+        with torch.autograd.set_detect_anomaly(False):
+            embedded_actions = self.project_action_embedding(*actions)
 
-        context = torch.cat([instruction, state, hidden_state], dim=1)
-        context = context.unsqueeze(1).repeat_interleave(repeats=embedded_actions.size(1), dim=1)
-        x = torch.cat([context, embedded_actions], dim=2)
-        x = self.q_network(x)
-        return x, embedded_actions
+            context = torch.cat([instruction, state, hidden_state], dim=1)
+            context = context.unsqueeze(1).repeat_interleave(repeats=embedded_actions.size(1), dim=1)
+            x = torch.cat([context, embedded_actions], dim=2)
+            x = self.q_network(x)
+            return x, embedded_actions
 
 
 class DeepSetActionCritic(nn.Module):

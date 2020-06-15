@@ -7,10 +7,11 @@ from spacy.lang.en import English
 
 nlp = English()
 
+
 # TODO check where is language model CPU or GPU
 class LanguageModel(nn.Module):
     def __init__(self, type, embedding_size, linear1_out=256, out_features=100,
-                 vocab=None, vocab_size=500):
+                 vocab=None, vocab_size=500, device='cuda' if torch.cuda.is_available() else 'cpu'):
         """
 
         :param type: string 'linear' or 'lstm'
@@ -46,6 +47,9 @@ class LanguageModel(nn.Module):
         else:
             raise NotImplementedError
 
+        self.device = device
+        self.to(device)
+
     def add_tokens(self, token):
         idx = len(self.word_to_ix)
         if idx in self.word_to_ix.values():
@@ -70,8 +74,7 @@ class LanguageModel(nn.Module):
     def forward(self, sentence):
         if isinstance(sentence, str):
             s = self.prepare_sentence(sentence)
-            s_len = len(s)
-            s = self.embedding_layer(s)
+            s = self.embedding_layer(s.to(self.device))
             if self.type == 'linear':
                 s = self.linear1(s)
                 s = F.relu(s)

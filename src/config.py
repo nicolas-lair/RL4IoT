@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 from torch import optim
 
@@ -11,6 +12,8 @@ description_embedding = 100
 state_encoding_size = 3  # size of the vector in which is encoded the value of a channel
 state_embedding_size = state_encoding_size + description_embedding + len(ITEM_TYPE)
 action_embedding = 67
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 params = {
     'env_params': {
@@ -51,7 +54,8 @@ params = {
     },
     'discount_factor': 0.999,
     'batch_size': 128,
-    'loss': nn.SmoothL1Loss(reduction='mean'),
+    # 'loss': nn.SmoothL1Loss(reduction='mean'),
+    'loss': nn.functional.smooth_l1_loss,
     'optimizer': optim.Adam,
     'optimizer_params': {},
     'language_model_params': {
@@ -61,6 +65,8 @@ params = {
         'out_features': instruction_embedding,
         'vocab': torchtext.vocab.GloVe(name='6B', dim=100),
         'vocab_size': 500,
+        'device': device
     },
     'target_update_frequence': 10,
+    'device': device,
 }

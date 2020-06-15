@@ -45,7 +45,7 @@ percent_embedder.fit(np.array(percent_level).reshape(-1, 1))
 class OpenHABAction(NoDescriptionNode):
     def __init__(self, name):
         embedding = baseaction_type_embedder.transform(np.array([name]).reshape(-1, 1)).flatten()
-        super().__init__(name, children=[ExecAction()], node_embedding=embedding)
+        super().__init__(name, children=[ExecAction()], node_embedding=embedding, node_type='openHAB_action')
         if name == 'setPercent':
             self.children = [Params(p) for p in percent_level]
         elif name == 'setHSB':
@@ -63,7 +63,7 @@ class OpenHABAction(NoDescriptionNode):
 class ExecAction(NoDescriptionNode):
     def __init__(self, name='exec_action'):
         embedding = np.zeros(len(ACTION_SPACE))
-        super().__init__(name, children=[], node_embedding=embedding)
+        super().__init__(name, children=[], node_embedding=embedding, node_type='openHAB_action')
 
 
 class Params(NoDescriptionNode):
@@ -75,7 +75,8 @@ class Params(NoDescriptionNode):
         else:
             raise NotImplementedError
         embedding = embedder.transform(np.array([name]).reshape(-1, 1)).flatten()
-        super().__init__(name=name, children=[ExecAction()], node_embedding=embedding)
+        node_type = (name in percent_level) * 'level' + (name in color_list) * 'color' + '_params'
+        super().__init__(name=name, children=[ExecAction()], node_embedding=embedding, node_type=node_type)
 
     def interpret_params(self):
         if self.name in percent_level:

@@ -1,4 +1,5 @@
 import random
+import time
 
 import torch
 import numpy as np
@@ -26,14 +27,20 @@ class DQNAgent:
 
         self.goal_sampler = GoalSampler(language_model=language_model, **params['goal_sampler_params'])
 
-        self.language_model = language_model
+        self.language_model = language_model.to(device)
+        self.language_model.device = device
+
         self.replay_buffer = ReplayBuffer(**params['replay_buffer_params'])
 
         self.batch_size = params['batch_size']
         self.discount_factor = params['discount_factor']
         self.loss = params['loss']
-        self.optimizer = params['optimizer'](self.policy_network.parameters(), **params['optimizer_params'])
+        self.optimizer = params['optimizer'](
+            list(self.policy_network.parameters()) + list(self.language_model.parameters()),
+            **params['optimizer_params'])
         self.device = device
+
+        self.update_counter = 0
 
     def store_transitions(self, **kwargs):
         self.replay_buffer.store(**kwargs)
@@ -50,6 +57,11 @@ class DQNAgent:
         return self.goal_sampler.sample_goal(strategy=strategy)
 
     def _embed_one_action(self, a):
+        """
+
+        :param a: object of Node Type
+        :return:
+        """
         # embedding = a.get_node_embedding()
         # if embedding is None and a.has_description:
         #     # if action has no embedding already, it should have a description
@@ -59,7 +71,7 @@ class DQNAgent:
         #     raise NotImplementedError
         embedding = torch.tensor(a.get_node_embedding())
         embedding = embedding.view(1, -1)
-        return embedding.float().to(self.device)
+        return embedding.float().to(self.device), a.node_type
 
     # TODO adapt to a policy_network of actions, for now suppose that possible attributes are 'embedding' 'description' 'has_description'
     def embed_actions(self, actions):
@@ -72,11 +84,14 @@ class DQNAgent:
         """
         assert isinstance(actions, list)
         if isinstance(actions[0], list):
-            return [self.embed_actions(a) for a in actions]
+            action_embedding, action_type = zip(*[self.embed_actions(a) for a in actions])
+            return action_embedding, action_type
         else:
             action_embeddings = [self._embed_one_action(a) for a in actions]
-            return action_embeddings
-            # return torch.cat(action_embeddings, dim=0).to(self.device)
+            action_embedding, action_type = zip(*action_embeddings)
+
+        return action_embedding, action_type
+        # return torch.cat(action_embeddings, dim=0).to(self.device)
 
     def select_action(self, state, instruction, actions, hidden_state):
         """
@@ -96,17 +111,18 @@ class DQNAgent:
                 # t.max(1) will return largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                embedded_actions = self.embed_actions(actions)
+                embedded_actions, action_type = self.embed_actions(actions)
                 Q, normalized_action_embedding = self.policy_network(state=state.to(self.device),
                                                                      instruction=instruction.to(self.device),
-                                                                     actions=[embedded_actions],
+                                                                     actions=([embedded_actions], [action_type]),
                                                                      hidden_state=hidden_state.to(self.device))
                 action_idx = Q.argmax(1).item()
                 # hidden_state += hidden_state.view(*self.hidden_state.size())
         else:
             action_idx = random.randint(0, len(actions) - 1)
-            embedded_actions = self.embed_actions(actions)
-            normalized_action_embedding = self.policy_network.project_action_embedding([embedded_actions])
+            embedded_actions, action_type = self.embed_actions(actions)
+            normalized_action_embedding = self.policy_network.project_action_embedding([embedded_actions],
+                                                                                       [action_type])
 
         action = actions[action_idx]
         # Workaround to isintance(self.policy_network, FlatQnet) that return False for a weird reason
@@ -117,6 +133,7 @@ class DQNAgent:
         return action, hidden_state
 
     def udpate_policy_net(self, batch_size=None):
+        time_record = [time.time()]
         batch_size = batch_size if batch_size is not None else self.batch_size
         if batch_size > len(self.replay_buffer):
             return
@@ -126,13 +143,16 @@ class DQNAgent:
         transitions = self.replay_buffer.sample(batch_size)
         transitions = Transition(*zip(*transitions))
 
-        goals = torch.cat([g.goal_embedding for g in transitions.goal]).to(self.device)
+        goals = torch.cat([g.update_embedding(self.language_model) for g in transitions.goal]).to(self.device)
+        # goals = torch.cat([g.goal_embedding for g in transitions.goal]).to(self.device)
 
         # states = zip(*transitions.state)
         states = torch.cat(transitions.state).to(self.device)
 
         actions = [[a] for a in transitions.action]
+        time_record.append(time.time())
         embedded_actions = self.embed_actions(actions)
+        time_record.append(time.time())
 
         next_states, next_av_actions = zip(*transitions.next_state)
         next_states = torch.cat(next_states).to(self.device)
@@ -141,13 +161,16 @@ class DQNAgent:
         rewards = torch.tensor(transitions.reward).to(self.device)
         hidden_states = torch.cat(transitions.hidden_state).to(self.device)
 
+        time_record.append(time.time())
         Q_sa, normalized_action_embedding = self.policy_network(state=states,
                                                                 instruction=goals,
                                                                 actions=embedded_actions,
-                                                                hidden_state=hidden_states)
+                                                                hidden_state=hidden_states.detach())
+        time_record.append(time.time())
         next_hidden_states = normalized_action_embedding.squeeze()
 
         next_av_actions_embedded = self.embed_actions([a for a, mask in zip(next_av_actions, done) if not mask])
+        time_record.append(time.time())
         maxQ = torch.zeros(batch_size, device=self.device)
         with torch.no_grad():
             Q_target_net, _ = self.target_network(state=next_states[~done],
@@ -157,11 +180,19 @@ class DQNAgent:
         maxQ[~done] = Q_target_net.max(1).values.squeeze()
 
         expected_value = rewards + self.discount_factor * maxQ
-        loss = self.loss(expected_value.detach(), Q_sa.squeeze())
+        # loss = self.loss(expected_value.detach(), Q_sa.squeeze())
+        loss = torch.nn.functional.smooth_l1_loss(expected_value.detach(), Q_sa.squeeze())
 
-        loss.backward(retain_graph=True)
+        loss.backward()
         clip_grad_norm_(self.policy_network.parameters(), 1)
+        time_record.append(time.time())
+
         self.optimizer.step()
+        time_record.append(time.time())
+
+        self.update_counter += 1
+
+        print([j - i for i, j in zip(time_record[:-1], time_record[1:])])
 
     def update_target_net(self):
         self.target_network.load_state_dict(self.policy_network.state_dict())

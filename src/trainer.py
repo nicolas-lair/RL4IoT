@@ -9,8 +9,6 @@ from architecture.dqn import FlatQnet
 from architecture.language_model import LanguageModel
 from architecture.utils import flatten
 
-torch.autograd.set_detect_anomaly(True)
-
 if __name__ == "__main__":
     env = IoTEnv4ML(params=params['env_params'])
     oracle = Oracle(env=env)
@@ -40,9 +38,11 @@ if __name__ == "__main__":
             if not done:
                 assert isinstance(next_available_actions, list)
 
-                agent.store_transitions(goal=target_goal, state=state, action=action,
-                                        next_state=(next_state, next_available_actions), done=done, reward=reward,
-                                        hidden_state=hidden_state)
+                # Do not store transition with random goals
+                if len(target_goal.goal_string) > 0:
+                    agent.store_transitions(goal=target_goal, state=state, action=action,
+                                            next_state=(next_state, next_available_actions), done=done, reward=reward,
+                                            hidden_state=hidden_state)
                 state = next_state
                 available_actions = next_available_actions
 

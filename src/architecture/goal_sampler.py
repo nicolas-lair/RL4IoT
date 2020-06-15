@@ -24,6 +24,7 @@ class Goal:
 
     def update_embedding(self, language_model):
         self.goal_embedding = language_model(self.goal_string).view(1, -1)
+        return self.goal_embedding
 
     @classmethod
     def create_random_goal(cls, goal_embedding_size):
@@ -44,6 +45,7 @@ class GoalSampler:
 
     def _update_discovered_goals(self, goal_string, iter):
         if isinstance(goal_string, str):
+            assert len(goal_string) > 0, 'goal string should be a non empty string'
             new_goal = Goal(goal_string=goal_string, episode_discovery=iter, id=len(self.discovered_goals),
                             language_model=self.language_model)
             self.discovered_goals.update({goal_string: new_goal})
