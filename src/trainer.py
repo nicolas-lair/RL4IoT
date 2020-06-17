@@ -4,50 +4,72 @@ import tqdm
 from config import params
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
+from simulator.Action import RootAction
 from architecture.dqnagent import DQNAgent
 from architecture.dqn import FlatQnet
 from architecture.language_model import LanguageModel
 from architecture.utils import flatten
+from architecture.goal_sampler import Goal
 
-if __name__ == "__main__":
-    env = IoTEnv4ML(params=params['env_params'])
-    oracle = Oracle(env=env)
-    language_model = LanguageModel(**params['language_model_params'])
-    agent = DQNAgent(FlatQnet, language_model=language_model, params=params)
 
-    num_episodes = 50
-    deep_action_space_embedding_size = params['model_params']['action_embedding_size']
-    for i in tqdm.trange(num_episodes):
-        # Initialize the environment and state + flatten
-        (state, available_actions) = env.reset()
-        # TODO change to use Modualr archi
+def run_episode(agent, env, target_goal, train=True):
+    hidden_state = torch.zeros(1, deep_action_space_embedding_size).cuda()
+    state, available_actions = env.get_state_and_action()
+
+    action = RootAction(children=available_actions, embedding=hidden_state.clone())
+    done = False
+    while not done:
+        previous_action = action
+        previous_hidden_state = hidden_state
+        state, available_actions = env.get_state_and_action()
+        # TODO change to use Modular archi
         flatten_state = flatten(state)
         state = torch.stack(list(flatten_state.values())).mean(0, keepdim=True).float()
 
-        hidden_state = torch.zeros(1, deep_action_space_embedding_size)
-        target_goal = agent.sample_goal()
-        running_episode = True
-
-        done = False
-        while not done:
-            action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
-                                                       actions=available_actions, hidden_state=hidden_state)
-            (next_state, next_available_actions), reward, done, info = env.step(action=action)
-            # TODO change to use Modualr archi
-            next_state = torch.stack(list(flatten(next_state).values())).mean(0, keepdim=True).float()
-            if not done:
-                assert isinstance(next_available_actions, list)
-
+        action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
+                                                   actions=available_actions, hidden_state=hidden_state)
+        (next_state, next_available_actions), reward, done, info = env.step(action=action)
+        # TODO change to use Modular archi
+        next_state = torch.stack(list(flatten(next_state).values())).mean(0, keepdim=True).float()
+        if not done:
+            if train:
                 # Do not store transition with random goals
                 if len(target_goal.goal_string) > 0:
                     agent.store_transitions(goal=target_goal, state=state, action=action,
                                             next_state=(next_state, next_available_actions), done=done, reward=reward,
-                                            hidden_state=hidden_state)
-                state = next_state
-                available_actions = next_available_actions
-
+                                            hidden_state=previous_hidden_state, previous_action=previous_action)
+        if train:
             agent.udpate_policy_net()
 
+    return state, action, next_state, previous_hidden_state, previous_action
+
+
+if __name__ == "__main__":
+    env = IoTEnv4ML(params=params['env_params'])
+    test_env = IoTEnv4ML(params=params['env_params'])
+
+    oracle = Oracle(env=env)
+    language_model = LanguageModel(**params['language_model_params'])
+    agent = DQNAgent(FlatQnet, language_model=language_model, params=params)
+
+    num_episodes = 6000
+    deep_action_space_embedding_size = params['model_params']['action_embedding_size']
+
+    (state, available_actions) = env.reset()
+    for i in tqdm.trange(num_episodes):
+        if params['episode_reset']:
+            # Initialize the environment and state + flatten
+            env.reset()
+        else:
+            raise NotImplementedError
+        # TODO go to root action but no global reset
+        target_goal = agent.sample_goal()
+        final_state, final_action, final_next_state, ante_final_hidden_state, ante_final_action = run_episode(
+            agent=agent, env=env,
+            target_goal=target_goal,
+            train=True)
+
+        # TODO refactoring to let the goal sampler ask to the oracle
         achieved_goals_str = oracle.get_achieved_instruction(env.previous_user_state, env.user_state)
 
         agent.goal_sampler.update([target_goal], achieved_goals_str, iter=i)
@@ -57,13 +79,28 @@ if __name__ == "__main__":
 
         agent.store_final_transitions(achieved_goals=achieved_goals,
                                       failed_goals=failed_goals,
-                                      state=state,
-                                      action=action,
-                                      next_state=(next_state, []),
-                                      hidden_state=hidden_state
+                                      state=final_state,
+                                      action=final_action,
+                                      next_state=(final_next_state, []),
+                                      hidden_state=ante_final_hidden_state,
+                                      previous_action=ante_final_action
                                       )
 
         if i % params['target_update_frequence'] == 0:
             agent.update_target_net()
+
+        if i > 0 and i % params['test_frequence'] == 0:
+            print("%" * 5 + f"Test after {i} episodes" + "%" * 5)
+            for test_instruction in oracle.instructions:
+                rewards = 0
+                for _ in range(20):
+                    test_env.reset()
+                    test_goal = Goal(goal_string=test_instruction, language_model=language_model)
+                    run_episode(agent=agent, env=test_env, target_goal=test_goal, train=False)
+                    rewards += int(
+                        oracle.was_achieved(test_env.previous_user_state, test_env.user_state, test_instruction))
+                print(test_instruction, rewards / 20)
+
+        agent.test()
 
     print('Complete')

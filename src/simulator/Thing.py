@@ -1,3 +1,5 @@
+import random
+
 from Items import *
 
 from gym import spaces
@@ -8,7 +10,7 @@ from TreeView import DescriptionNode
 
 
 class Thing(DescriptionNode):
-    def __init__(self, name, description, is_visible=True):
+    def __init__(self, name, description, instruction, is_visible=True):
         """
         Init a generic Thing object as a Node of the environment. The super function that instantiates subclass should
         be called after the definition of the channels. The channels are indeed the children of the node.
@@ -17,7 +19,8 @@ class Thing(DescriptionNode):
         :param is_visible:
         """
         super().__init__(name=name, description=description, children=self.get_action_channels())
-        self.initial_value = {'name': name, 'is_visible': is_visible}
+        self.initial_value = {'name': name, 'is_visible': is_visible, 'description': description}
+        self.instruction = instruction
         self.is_visible = is_visible
 
         self.observation_space = None
@@ -120,6 +123,7 @@ class LightBulb(Thing):
     """
 
     def __init__(self, name="lightbulb", description='This is a light bulb', is_visible=True):
+        self.name = name
         self.color = Channel(
             name='color',
             description="This channel supports full color control with hue, saturation and brightness values",
@@ -134,7 +138,18 @@ class LightBulb(Thing):
             value=50
         )
 
-        super().__init__(name=name, description=description, is_visible=is_visible)
+        self.instruction = {
+            'color_change': ["You changed the color of {name} to {color}"],
+            'turn_on': [f"You turned on the {self.name}"],
+            'turn_off': [f"You turned off the {self.name}"],
+            'increase_lum': [f"You increased the luminosity of {self.name}"],
+            'decrease_lum': [f"You decreased the luminosity of {self.name}"],
+            'lum_change': ["The luminosity of {name} is now {level}"],
+            'warmer_color': [f"You made the light of {self.name} warmer"],
+            'colder_color': [f"You made the light of {self.name} colder"],
+        }
+
+        super().__init__(name=name, description=description, is_visible=is_visible, instruction=self.instruction)
         # # TODO decide if use or not : maybe not
         # self.alert = Channel(
         #     name='alert',
@@ -151,32 +166,34 @@ class LightBulb(Thing):
         previous_color = get_color_name_from_hsb(h, s, b)
         next_color = get_color_name_from_hsb(new_h, new_s, new_b)
         if previous_color != next_color:
-            achieved_instructions.append(f"You changed the color of {self.name} to {next_color}")
+            achieved_instructions.append(
+                random.choice(self.instruction['color_change']).format(name=self.name, color=next_color))
         if b == 0 and new_b > 0:
-            achieved_instructions.append(f"You turned on the {self.name}")
+            achieved_instructions.append(random.choice(self.instruction['turn_on']))
         if b > 0 and new_b == 0:
-            achieved_instructions.append(f"You turned off the {self.name}")
+            achieved_instructions.append(random.choice(self.instruction['turn_off']))
 
         ### INCREASE_DECREASE_STEP is a threshold for the oracle to detect a change
         if new_b >= INCREASE_DECREASE_STEP + b:
-            achieved_instructions.append(f"You increased the luminosity of {self.name}")
+            achieved_instructions.append(random.choice(self.instruction['increase_lum']))
         if new_b + INCREASE_DECREASE_STEP <= b:
-            achieved_instructions.append(f"You decreased the luminosity of {self.name}")
+            achieved_instructions.append(random.choice(self.instruction['decrease_lum']))
 
         b_lvl = percent_to_level(b)
         new_b_lvl = percent_to_level(new_b)
         # Increase the brightness using set Percent
         if b_lvl != new_b_lvl:
-            achieved_instructions.append(f"The luminosity of {self.name} is now {new_b_lvl}")
+            achieved_instructions.append(
+                random.choice(self.instruction['lum_change']).format(name=self.name, level=new_b_lvl))
 
         previous_color_temperature = previous_state["color_temperature"]["state"][0]
         next_color_temperature = next_state["color_temperature"]["state"][0]
         # Check color_temperature change
         ### INCREASE_DECREASE_STEP is like a threshold for the oracle to detect a change
         if next_color_temperature >= INCREASE_DECREASE_STEP + previous_color_temperature:
-            achieved_instructions.append(f"You made the light of {self.name} warmer")
+            achieved_instructions.append(random.choice(self.instruction['warmer_color']))
         if next_color_temperature + INCREASE_DECREASE_STEP <= previous_color_temperature:
-            achieved_instructions.append(f"You made the light of {self.name} colder")
+            achieved_instructions.append(random.choice(self.instruction['colder_color']))
 
         return achieved_instructions
 
@@ -188,11 +205,17 @@ class PlugSwitch(Thing):
 
     def __init__(self, name="plug switch", description='This is a switch that controls multiple switch',
                  is_visible=True):
+        self.name = name
         self.switch_binary = Channel(name="switch_binary",
                                      description="Switch the power on and off.",
                                      item=SwitchItem(turnOn=True, turnOff=True),
                                      )
-        super().__init__(name=name, description=description, is_visible=is_visible)
+
+        self.instruction = {
+            'turn_on': [f"You turned on the {self.name}"],
+            'turn_off': [f"You turned off the {self.name}"],
+        }
+        super().__init__(name=name, description=description, is_visible=is_visible, instruction=self.instruction)
 
         # Ignore both channel
         # self.alarm = Channel(
@@ -218,9 +241,9 @@ class PlugSwitch(Thing):
         previous_state = previous_state["switch_binary"]["state"][0]
         next_state = next_state["switch_binary"]["state"][0]
         if previous_state and not next_state:
-            achieved_instructions.append(f"You turned off the {self.name}")
+            achieved_instructions.append(random.choice(self.instruction['turn_off']))
         if not previous_state and next_state:
-            achieved_instructions.append(f"You turned on the {self.name}")
+            achieved_instructions.append(random.choice(self.instruction['turn_on']))
         return achieved_instructions
 
 

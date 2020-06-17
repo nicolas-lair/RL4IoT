@@ -9,27 +9,37 @@ import torch
 
 
 class Goal:
-    def __init__(self, goal_string, episode_discovery, id, target_counter=0, reached_counter=0, goal_embedding=None,
-                 language_model=None):
-        self.iter_discovery = episode_discovery
-        self.id = id
+    def __init__(self, goal_string, goal_embedding=None, language_model=None):
         self.goal_embedding = None
         self.goal_string = goal_string
-        self.target_counter = target_counter
-        self.reached_counter = reached_counter
         if goal_embedding is not None:
             self.goal_embedding = goal_embedding
         elif language_model is not None:
-            self.update_embedding(language_model)
+            self.compute_embedding(language_model)
+        else:
+            raise NotImplementedError
 
-    def update_embedding(self, language_model):
+        # Added for compatibility, useless
+        self.target_counter = 0
+        self.reached_counter = 0
+
+    def compute_embedding(self, language_model):
         self.goal_embedding = language_model(self.goal_string).view(1, -1)
         return self.goal_embedding
 
     @classmethod
     def create_random_goal(cls, goal_embedding_size):
-        return cls('', episode_discovery=0, id=-1,
-                   goal_embedding=torch.rand(goal_embedding_size).view(1, -1))  # TODO check size
+        return cls('', goal_embedding=torch.rand(goal_embedding_size).view(1, -1))
+
+
+class TrainGoal(Goal):
+    def __init__(self, goal_string, episode_discovery, id, target_counter=0, reached_counter=0, goal_embedding=None,
+                 language_model=None):
+        super().__init__(goal_string=goal_string, goal_embedding=goal_embedding, language_model=language_model)
+        self.iter_discovery = episode_discovery
+        self.id = id
+        self.target_counter = target_counter
+        self.reached_counter = reached_counter
 
 
 class GoalSampler:
@@ -46,8 +56,8 @@ class GoalSampler:
     def _update_discovered_goals(self, goal_string, iter):
         if isinstance(goal_string, str):
             assert len(goal_string) > 0, 'goal string should be a non empty string'
-            new_goal = Goal(goal_string=goal_string, episode_discovery=iter, id=len(self.discovered_goals),
-                            language_model=self.language_model)
+            new_goal = TrainGoal(goal_string=goal_string, episode_discovery=iter, id=len(self.discovered_goals),
+                                 language_model=self.language_model)
             self.discovered_goals.update({goal_string: new_goal})
         elif isinstance(goal_string, list):
             for g in goal_string:
@@ -78,7 +88,7 @@ class GoalSampler:
 
     def update_embedding(self):
         for g in self.discovered_goals.values():
-            g.update_embedding(self.language_model)
+            g.compute_embedding(self.language_model)
 
     def sample_goal(self, strategy='random'):
         if len(self.discovered_goals) == 0:

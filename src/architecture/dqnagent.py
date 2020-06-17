@@ -45,13 +45,11 @@ class DQNAgent:
     def store_transitions(self, **kwargs):
         self.replay_buffer.store(**kwargs)
 
-    def store_final_transitions(self, achieved_goals, failed_goals, state, action, next_state, hidden_state):
+    def store_final_transitions(self, achieved_goals, failed_goals, **kwargs):
         for g in achieved_goals:
-            self.store_transitions(goal=g, state=state, action=action, next_state=next_state, done=True, reward=1,
-                                   hidden_state=hidden_state)
+            self.store_transitions(goal=g, done=True, reward=1, **kwargs)
         for g in failed_goals:
-            self.store_transitions(goal=g, state=state, action=action, next_state=next_state, done=True, reward=0,
-                                   hidden_state=hidden_state)
+            self.store_transitions(goal=g, done=True, reward=0, **kwargs)
 
     def sample_goal(self, strategy=None):
         return self.goal_sampler.sample_goal(strategy=strategy)
@@ -128,7 +126,11 @@ class DQNAgent:
         # Workaround to isintance(self.policy_network, FlatQnet) that return False for a weird reason
         if self.policy_network._get_name() == 'FlatQnet':
             hidden_state = hidden_state.to(self.device)
-            hidden_state += normalized_action_embedding.squeeze()[action_idx]  # TODO Check
+            # hidden_state += normalized_action_embedding.squeeze()[action_idx]  # TODO Check
+            hidden_state = normalized_action_embedding[:, action_idx]
+            pass
+        else:
+            pass
 
         return action, hidden_state
 
@@ -143,7 +145,7 @@ class DQNAgent:
         transitions = self.replay_buffer.sample(batch_size)
         transitions = Transition(*zip(*transitions))
 
-        goals = torch.cat([g.update_embedding(self.language_model) for g in transitions.goal]).to(self.device)
+        goals = torch.cat([g.compute_embedding(self.language_model) for g in transitions.goal]).to(self.device)
         # goals = torch.cat([g.goal_embedding for g in transitions.goal]).to(self.device)
 
         # states = zip(*transitions.state)
@@ -161,11 +163,15 @@ class DQNAgent:
         rewards = torch.tensor(transitions.reward).to(self.device)
         hidden_states = torch.cat(transitions.hidden_state).to(self.device)
 
+        previous_action = [[a] for a in transitions.previous_action]
+        embedded_previous_actions = self.embed_actions(previous_action)
+        projected_previous_actions = self.policy_network.project_action_embedding(*embedded_previous_actions).squeeze()
+
         time_record.append(time.time())
         Q_sa, normalized_action_embedding = self.policy_network(state=states,
                                                                 instruction=goals,
                                                                 actions=embedded_actions,
-                                                                hidden_state=hidden_states.detach())
+                                                                hidden_state=projected_previous_actions)
         time_record.append(time.time())
         next_hidden_states = normalized_action_embedding.squeeze()
 
@@ -183,7 +189,12 @@ class DQNAgent:
         # loss = self.loss(expected_value.detach(), Q_sa.squeeze())
         loss = torch.nn.functional.smooth_l1_loss(expected_value.detach(), Q_sa.squeeze())
 
+        time_record.append(time.time())
         loss.backward()
+
+        time_record.append(time.time())
+
+        # Takes time to clip
         clip_grad_norm_(self.policy_network.parameters(), 1)
         time_record.append(time.time())
 
@@ -192,7 +203,10 @@ class DQNAgent:
 
         self.update_counter += 1
 
-        print([j - i for i, j in zip(time_record[:-1], time_record[1:])])
+        # print([j - i for i, j in zip(time_record[:-1], time_record[1:])])
 
     def update_target_net(self):
         self.target_network.load_state_dict(self.policy_network.state_dict())
+
+    def test(self):
+        pass

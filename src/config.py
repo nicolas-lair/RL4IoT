@@ -30,10 +30,10 @@ params = {
         'state_embedding': state_embedding_size,  # TODO
         'action_embedding_size': action_embedding,  # TODO
         'raw_action_size': {
-            'action_description_embedding': description_embedding,
-            'action_standard_embedding': len(ACTION_SPACE),
-            'color': len(color_list),
-            'level': len(percent_level)
+            'description_node': description_embedding,
+            'openHAB_action': len(ACTION_SPACE),
+            'color_params': len(color_list),
+            'level_params': len(percent_level)
         },
         'net_params': {
             'hidden1_out': 512,
@@ -69,4 +69,6 @@ params = {
     },
     'target_update_frequence': 10,
     'device': device,
+    'episode_reset': True,
+    'test_frequence': 50
 }

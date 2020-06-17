@@ -1,22 +1,24 @@
 import numpy as np
+import gym
 from gym import spaces
 from sklearn.preprocessing import OneHotEncoder
 
 from simulator.utils import color_list, percent_level, level_to_percent, color_to_hsb
-from TreeView import NoDescriptionNode
+from TreeView import NoDescriptionNode, Node
 
+gym.logger.set_level(40)
 ACTION_SPACE = {
     'turnOn': spaces.Discrete(2),
     'turnOff': spaces.Discrete(2),
     'increase': spaces.Discrete(2),
     'decrease': spaces.Discrete(2),
-    'setPercent': spaces.Box(low=0, high=100, shape=(1,), dtype=float),
-    'setHSB': spaces.Box(low=np.array([0, 0, 0]), high=np.array([360, 100, 100]), dtype=float),
+    'setPercent': spaces.Box(low=0, high=100, shape=(1,), dtype=np.float32),
+    'setHSB': spaces.Box(low=np.array([0, 0, 0]), high=np.array([360, 100, 100]), dtype=np.float32),
     'OpenClose': spaces.Discrete(2),
     'Open': spaces.Discrete(2),
     'Close': spaces.Discrete(2),
-    'setLocation': spaces.Box(low=np.array([-90, -180, -1000]), high=np.array([90, 180, 10000], dtype=float)),
-    'setValue': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=type),
+    'setLocation': spaces.Box(low=np.array([-90, -180, -1000]), high=np.array([90, 180, 10000], dtype=np.float32)),
+    'setValue': spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float64),
     'setQuantity': None,
     'PlayPause': spaces.Discrete(2),
     'play': spaces.Discrete(2),
@@ -40,6 +42,11 @@ color_embedder.fit(np.array(color_list).reshape(-1, 1))
 
 percent_embedder = OneHotEncoder(sparse=False)
 percent_embedder.fit(np.array(percent_level).reshape(-1, 1))
+
+
+class RootAction(Node):
+    def __init__(self, children, embedding):
+        super().__init__(name='root_action', node_type='root', children=children, node_embedding=embedding)
 
 
 class OpenHABAction(NoDescriptionNode):

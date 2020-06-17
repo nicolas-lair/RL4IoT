@@ -116,6 +116,8 @@ class IoTEnv4ML(gym.Wrapper):
 
         self.state = None
         self.previous_state = None
+        self.available_actions = None
+        self.previous_available_actions = None
 
         # # Compute node embedding
         # things_list = self.get_thing_list()
@@ -147,17 +149,19 @@ class IoTEnv4ML(gym.Wrapper):
     # TODO Normalize the ouput of step
     def step(self, action):
         assert isinstance(action, Node), 'ERROR : action should be a Node'
+        self.previous_available_actions = self.available_actions
         if isinstance(action, ExecAction):
             super().step(self.running_action)
             self.previous_state = self.state
             self.state = self.preprocess_raw_observation(self.user_state)
+            self.available_actions = self.get_thing_list()
             done = True
-            return (self.state, self.get_thing_list()), None, done, None
+            return (self.state, self.available_actions), None, done, None
         else:
             self.save_running_action(action)
-            available_actions = action.get_children_nodes()
-            assert available_actions is not None
-            return (self.state, available_actions), 0, False, None
+            self.available_actions = action.get_children_nodes()
+            assert self.available_actions is not None
+            return (self.state, self.available_actions), 0, False, None
 
     def save_running_action(self, action):
         if isinstance(action, Thing):
@@ -180,15 +184,14 @@ class IoTEnv4ML(gym.Wrapper):
             node.embed_node_description(self.description_embedder.get_description_embedding)
 
         self.state = self.preprocess_raw_observation(raw_state)
-        self.previous_state = self.state
+        self.previous_state = None
+        self.available_actions = self.get_thing_list()
+        self.previous_available_actions = None
         self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
-        thing_list = self.get_thing_list()
-        return self.state, thing_list
+        return self.state, self.available_actions
 
-
-class IoTEnvTreeLike(gym.ObservationWrapper):
-    def __init__(self, env):
-        super().__init__(env=env)
+    def get_state_and_action(self):
+        return self.state, self.available_actions
 
 
 if __name__ == "__main__":
