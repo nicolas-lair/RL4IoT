@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
+import random
 
 import numpy as np
 from gym import spaces
@@ -36,7 +38,8 @@ class AbstractItem(ABC):
         assert type in ITEM_TYPE, 'Wrong item type'
         self.type = type
         # Filter to keep only valid and active methods for the items
-        self.methods = [m for m, b in methods.items() if (b and m in ACTION_SPACE.keys())]
+        action_space = ACTION_SPACE.keys()
+        self.methods = [meth for meth, bool_flag in methods.items() if (meth in action_space and bool_flag)]
 
         self.observation_space = None
         self.action_space = spaces.Dict({k: ACTION_SPACE[k] for k in self.methods})
@@ -68,12 +71,11 @@ class AbstractItem(ABC):
 class ColorItem(AbstractItem):
     def __init__(self, turnOn=False, turnOff=False, increase=False, decrease=False, setPercent=False, setHSB=False):
         super().__init__(type="color", methods=locals())
-        self.hue = 0
-        self.saturation = 0
-        self.brightness = 0
+        self.hue = None
+        self.saturation = None
+        self.brightness = None
 
         self.observation_space = spaces.Box(low=np.array([0, 0, 0]), high=np.array([360, 100, 100]), dtype=float)
-
         self.attr_error_message = "h, s, b should be positive int, h <=360, s <=100, b<=100"
 
     def get_state(self):
@@ -81,6 +83,20 @@ class ColorItem(AbstractItem):
 
     def set_state(self, value):
         self.set_attribute(['hue', 'saturation', 'brightness'], value)
+
+    def initialize_value(self, init):
+        if init == 'default':
+            self.hue = 0
+            self.saturation = 0
+            self.brightness = 0
+        elif init == 'random':
+            self.hue = random.randint(0, 360)
+            self.saturation = random.randint(0, 100)
+            self.brightness = random.randint(0, 100)
+        elif isinstance(init, Iterable):
+            self.set_state(init)
+        else:
+            raise NotImplementedError
 
     @check_method_availability
     def turnOn(self):
@@ -108,10 +124,9 @@ class ColorItem(AbstractItem):
 
 
 class ContactItem(AbstractItem):
-    def __init__(self, OpenClose=False, Open=False, Close=False):
+    def __init__(self, OpenClose=False, Open=False, Close=False, init='default'):
         super().__init__(type="contact", methods=locals())
-        self.state = 0
-
+        self.state = None
         self.observation_space = spaces.Discrete(2)
         self.attr_error_message = "onoff should be 0 or 1 (boolean)"
 
@@ -119,7 +134,17 @@ class ContactItem(AbstractItem):
         return [self.state]
 
     def set_state(self, value):
-        self.set_attribute('onoff', value)
+        self.set_attribute('state', value)
+
+    def initialize_value(self, init):
+        if init == 'default':
+            self.state = 0
+        elif init == 'random':
+            self.state = random.randint(0, 1)
+        elif init in [0, 1, True, False]:
+            self.set_state(init)
+        else:
+            raise NotImplementedError
 
     @check_method_availability
     def OpenClose(self):
@@ -135,10 +160,9 @@ class ContactItem(AbstractItem):
 
 
 class DimmerItem(AbstractItem):
-    def __init__(self, turnOn=False, turnOff=False, increase=False, decrease=False, setPercent=False):
+    def __init__(self, turnOn=False, turnOff=False, increase=False, decrease=False, setPercent=False, init='default'):
         super().__init__(type="dimmer", methods=locals())
-        self.percent = 0
-
+        self.percent = None
         self.observation_space = spaces.Box(low=0, high=100, shape=(1,), dtype=float)
         self.attr_error_message = "Percent should be an int between 0 and 100"
 
@@ -147,6 +171,16 @@ class DimmerItem(AbstractItem):
 
     def set_state(self, value):
         self.set_attribute(['percent'], [value])
+
+    def initialize_value(self, init):
+        if init == 'default':
+            self.percent = 0
+        elif init == 'random':
+            self.percent = random.randint(0, 100)
+        elif init in range(0, 101):
+            self.set_state(init)
+        else:
+            raise NotImplementedError
 
     @check_method_availability
     def turnOn(self):
@@ -170,17 +204,30 @@ class DimmerItem(AbstractItem):
 
 
 class LocationItem(AbstractItem):
-    def __init__(self, setLocation=False):
+    def __init__(self, setLocation=False, init='default'):
         super().__init__(type="location", methods=locals())
         self.latitude = None
         self.longitude = None
         self.altitude = None
-
         self.observation_space = spaces.Box(low=np.array([-90, -180, -1000]),
                                             high=np.array([90, 180, 10000], dtype=float))
         self.attr_error_message = "longitude should be a float between -90 and 90, " \
                                   "latitude should be float between -180 and 180" \
                                   "and altitude should float between -1000 and 10000"
+
+    def initialize_value(self, init):
+        if init == 'default':
+            self.latitude = 0
+            self.longitude = 0
+            self.altitude = 0
+        elif init == 'random':
+            self.latitude = random.uniform(-90, 90)
+            self.longitude = random.uniform(-180, 180)
+            self.altitude = random.uniform(-1000, 10000)
+        elif isinstance(init, Iterable):
+            self.set_state(init)
+        else:
+            raise NotImplementedError
 
     def get_state(self):
         return [self.latitude, self.longitude, self.altitude]
@@ -194,14 +241,24 @@ class LocationItem(AbstractItem):
 
 
 class NumberItem(AbstractItem):
-    def __init__(self, setValue=False, setQuantity=False, type=float):
+    def __init__(self, setValue=False, setQuantity=False, type=float, init='default'):
         methods = locals().copy()
         del methods['type']
         super().__init__(type="number", methods=methods)
-        self.value = 0
+        self.value = None
 
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=type)
         self.attr_error_message = "value should a int or float"
+
+    def initialize_value(self, init):
+        if init == 'default':
+            self.value = 0
+        elif init == 'random':
+            self.value = random.uniform(-10000000, 10000000)
+        elif isinstance(init, float):
+            self.set_state(init)
+        else:
+            raise NotImplementedError
 
     def get_state(self):
         return [self.value]
@@ -220,12 +277,21 @@ class NumberItem(AbstractItem):
 
 
 class PlayerItem(AbstractItem):  # TODO Check user_state of players
-    def __init__(self, PlayPause=False, next=False, previous=False, rewind=False, fastforward=False):
+    def __init__(self, PlayPause=False, next=False, previous=False, rewind=False, fastforward=False, init='default'):
         super().__init__(type="player", methods=locals())
-        self.playpause = False
-
+        self.playpause = None
         self.observation_space = spaces.Discrete(2)
         self.attr_error_message = "playpause should be 0 or 1 (boolean)"
+
+    def initialize_value(self, init):
+        if init == 'default':
+            self.playpause = False
+        elif init == 'random':
+            self.playpause = bool(random.randint(0, 1))
+        elif init in [0, 1, True, False]:
+            self.set_state(init)
+        else:
+            raise NotImplementedError
 
     def get_state(self):
         return [self.playpause]
@@ -264,12 +330,21 @@ class PlayerItem(AbstractItem):  # TODO Check user_state of players
 
 class RollerShutterItem(AbstractItem):
 
-    def __init__(self, up=False, down=False, stop=False, move=False, setPercent=False):
+    def __init__(self, up=False, down=False, stop=False, move=False, setPercent=False, init='default'):
         super().__init__(type="rollershutter", methods=locals())
-        self.percent = 0
-
+        self.percent = None
         self.observation_space = spaces.Box(low=0, high=100, shape=(1,), dtype=float)
         self.attr_error_message = "Percent should be an int between 0 and 100"
+
+    def initialize_value(self, init):
+        if init == 'default':
+            self.percent = 0
+        elif init == 'random':
+            self.percent = random.randint(0, 100)
+        elif init in range(0, 101):
+            self.set_state(init)
+        else:
+            raise NotImplementedError
 
     def get_state(self):
         return [self.percent]
@@ -299,13 +374,23 @@ class RollerShutterItem(AbstractItem):
 
 
 class StringItem(AbstractItem):
-    def __init__(self, setString=False):
+    def __init__(self, setString=False, init='default'):
         super().__init__(type="string", methods=locals())
-        self.string = ""
+        self.string = None
 
         self.observation_space = None
         self.action_space = None
         self.attr_error_message = "String should be of type string"
+
+    def initialize_value(self, init):
+        if init == 'default':
+            self.string = ""
+        elif init == 'random':
+            raise NotImplementedError
+        elif isinstance(init, str):
+            self.set_state(init)
+        else:
+            raise NotImplementedError
 
     def get_state(self):
         return [self.string]
@@ -321,12 +406,21 @@ class StringItem(AbstractItem):
 
 class SwitchItem(AbstractItem):
 
-    def __init__(self, turnOnOff=False, turnOn=False, turnOff=False):
+    def __init__(self, turnOnOff=False, turnOn=False, turnOff=False, init='default'):
         super().__init__(type="switch", methods=locals())
-        self.onoff = 0
-
+        self.onoff = None
         self.observation_space = spaces.Discrete(2)
         self.attr_error_message = "onoff should be 0 or 1 (boolean)"
+
+    def initialize_value(self, init):
+        if init == 'default':
+            self.onoff = 0
+        elif init == 'random':
+            self.onoff = random.randint(0, 1)
+        elif init in [0, 1, True, False]:
+            self.set_state(init)
+        else:
+            raise NotImplementedError
 
     def get_state(self):
         return [self.onoff]

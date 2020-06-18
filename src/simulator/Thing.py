@@ -1,5 +1,3 @@
-import random
-
 from Items import *
 
 from gym import spaces
@@ -10,26 +8,26 @@ from TreeView import DescriptionNode
 
 
 class Thing(DescriptionNode):
-    def __init__(self, name, description, instruction, is_visible=True):
+    def __init__(self, name, description, is_visible, init_type, init_params):
         """
         Init a generic Thing object as a Node of the environment. The super function that instantiates subclass should
         be called after the definition of the channels. The channels are indeed the children of the node.
-        :param name:
-        :param description:
-        :param is_visible:
+        :param name: string
+        :param description: string
+        :param is_visible: boolean
+        :param init_type: 'default', 'random', 'custom'
+        :param init_params: if init_type is custom, dict {key: value} where key are channels name and value are channels
+        init value
         """
         super().__init__(name=name, description=description, children=self.get_action_channels())
-        self.initial_value = {'name': name, 'is_visible': is_visible, 'description': description}
-        self.instruction = instruction
-        self.is_visible = is_visible
+        self.observation_space, self.action_space = self.build_observation_and_action_space()
+        self._channels = self.get_channels()
+        self.initial_values = {'is_visible': is_visible, 'init_type': init_type, 'init_params': init_params}
+        # self.description_embedding = None
+        # self.item_type = None
 
-        self.observation_space = None
-        self.action_space = None
-
-        self.description_embedding = None
-        self.item_type = None
-
-        self._channels = None
+        self.is_visible = None
+        self.init(**self.initial_values)
 
     def update_visibility(self, visibility):
         self.is_visible = visibility
@@ -39,7 +37,9 @@ class Thing(DescriptionNode):
         Initialize the list of _channels of the Thing object
         :return: list of Channel objects
         """
-        if self._channels is None:
+        try:
+            return self._channels
+        except AttributeError:
             self._channels = [x for x in vars(self).values() if isinstance(x, Channel)]
         return self._channels
 
@@ -52,27 +52,26 @@ class Thing(DescriptionNode):
         channels_name = [chn.name for chn in channels]
 
         channels_observation_space = [chn.get_observation_space() for chn in channels]
-        self.observation_space = spaces.Dict(dict(zip(channels_name, channels_observation_space)))
+        observation_space = spaces.Dict(dict(zip(channels_name, channels_observation_space)))
 
         channels_action_space = [chn.get_action_space() for chn in channels]
-        self.action_space = spaces.Dict(dict(zip(channels_name, channels_action_space)))
+        action_space = spaces.Dict(dict(zip(channels_name, channels_action_space)))
+        return observation_space, action_space
 
-    def _build_description_and_item_type(self):
-        self.description = dict()
-        self.item_type = dict()
-        channels = self.get_channels()
-        for c in channels:
-            self.description[c.name] = c.description
-            self.item_type[c.name] = c.item.type
+    # def _build_description_and_item_type(self):
+    #     self.description = dict()
+    #     self.item_type = dict()
+    #     channels = self.get_channels()
+    #     for c in channels:
+    #         self.description[c.name] = c.description
+    #         self.item_type[c.name] = c.item.type
 
     def get_observation_space(self):
-        if self.observation_space is None:
-            self.build_observation_and_action_space()
         return self.observation_space
 
     def get_action_space(self):
-        if self.action_space is None:
-            self.build_observation_and_action_space()
+        # if self.action_space is None:
+        #     self.build_observation_and_action_space()
         return self.action_space
 
     def _get_state(self):
@@ -109,8 +108,23 @@ class Thing(DescriptionNode):
         channel = getattr(self, channel)
         channel.do_action(action, params)
 
+    def init(self, is_visible, init_type, init_params=None):
+        if init_params is None:
+            init_params = dict()
+        self.is_visible = is_visible
+
+        if init_type in ['default', 'random']:
+            init_param = lambda x: init_type
+        elif init_type == 'custom':
+            init_param = lambda x: init_params[x]
+        else:
+            raise NotImplementedError('init_type should be one of {default, random, custom}')
+
+        for c in self._channels:
+            c.init(init_param(c.name))
+
     def reset(self):
-        self.__init__(**self.initial_value)
+        self.init(**self.initial_values)
 
     # TODO Collect all possible actions from object
     def get_state_change(self, previous_state, next_state):
@@ -122,7 +136,10 @@ class LightBulb(Thing):
     Thing type 0210 (https://www.openhab.org/addons/bindings/hue/)
     """
 
-    def __init__(self, name="lightbulb", description='This is a light bulb', is_visible=True):
+    def __init__(self, name="lightbulb", description='This is a light bulb', init_type='default', init_params=None,
+                 is_visible=True):
+        if init_params is None:
+            init_params = dict()
         self.name = name
         self.color = Channel(
             name='color',
@@ -135,7 +152,6 @@ class LightBulb(Thing):
             name='color_temperature',
             description='This channel supports adjusting the color temperature from cold (0%) to warm (100%)',
             item=DimmerItem(increase=True, decrease=True, setPercent=True),
-            value=50
         )
 
         self.instruction = {
@@ -149,7 +165,8 @@ class LightBulb(Thing):
             'colder_color': [f"You made the light of {self.name} colder"],
         }
 
-        super().__init__(name=name, description=description, is_visible=is_visible, instruction=self.instruction)
+        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
+                         is_visible=is_visible)
         # # TODO decide if use or not : maybe not
         # self.alert = Channel(
         #     name='alert',
@@ -204,7 +221,7 @@ class PlugSwitch(Thing):
     """
 
     def __init__(self, name="plug switch", description='This is a switch that controls multiple switch',
-                 is_visible=True):
+                 init_type='default', init_params=None, is_visible=True):
         self.name = name
         self.switch_binary = Channel(name="switch_binary",
                                      description="Switch the power on and off.",
@@ -215,7 +232,8 @@ class PlugSwitch(Thing):
             'turn_on': [f"You turned on the {self.name}"],
             'turn_off': [f"You turned off the {self.name}"],
         }
-        super().__init__(name=name, description=description, is_visible=is_visible, instruction=self.instruction)
+        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
+                         is_visible=is_visible)
 
         # Ignore both channel
         # self.alarm = Channel(
@@ -254,24 +272,24 @@ class LGTV(Thing):
     See also PanasonicTV and SamsungTV
     """
 
-    def __init__(self, name="LGTV", description='This is TV of the brand LG', power=1, mute=0, is_visible=True):
+    def __init__(self, name, description, init_type='default', init_params=None, is_visible=True):
         self.power = Channel(
             name='power',
             description="Current power setting. TV can only be powered off, not on.",
             item=SwitchItem(turnOff=True),
-            value=power
         )
 
         self.mute = Channel(
             name="mute",
             description="Current mute setting.",
-            item=SwitchItem(turnOnOff=True),
-            value=mute
+            item=SwitchItem(turnOnOff=True)
         )
 
         self.volume = Channel(
             name="volume",
-            description="Current volume setting. Setting and reporting absolute percent values only works when using internal speakers. When connected to an external amp, the volume should be controlled using increase and decrease commands.",
+            description="Current volume setting. Setting and reporting absolute percent values only works when using "
+                        "internal speakers. When connected to an external amp, the volume should be controlled using "
+                        "increase and decrease commands.",
             item=DimmerItem(increase=True, decrease=True, setPercent=True)
         )
 
@@ -307,8 +325,8 @@ class LGTV(Thing):
             item=StringItem(setString=True)
         )
 
-        super().__init__(name=name, description=description, is_visible=is_visible)
-        self.initial_value.update({'power': power, 'mute': mute})
+        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
+                         is_visible=is_visible)
 
         # Ignore this for now
         # self.rcButton = Channel(
@@ -327,7 +345,7 @@ class Speaker(Thing):
     maybe compare with Sonos or check STR-1080 for multiple zone compatibility
     """
 
-    def __init__(self, name="speaker", description="This is a speaker", is_visible=True):
+    def __init__(self, name, description, init_type='default', init_params=None, is_visible=True):
         self.power = Channel(
             name="power",
             description="Main power on/off",
@@ -351,7 +369,8 @@ class Speaker(Thing):
             item=SwitchItem(turnOnOff=True)
         )
 
-        super().__init__(name=name, description=description, is_visible=is_visible)
+        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
+                         is_visible=is_visible)
 
         # TODO check what is sound Field, for now disable
         # self.soundField = Channel(
@@ -368,8 +387,7 @@ class Speaker(Thing):
 #
 
 class Chromecast(Thing):
-    def __init__(self, name="Chromecast", description='This is a Chromecast that allows streaming videos on the TV',
-                 is_visible=True):
+    def __init__(self, name, description, init_type='default', init_params=None, is_visible=True):
         self.control = Channel(
             name='control',
             description="Player control; currently only supports play/pause and does not correctly update, if the state changes on the device itself",
@@ -441,7 +459,8 @@ class Chromecast(Thing):
             write=False
         )
 
-        super().__init__(name=name, description=description, is_visible=is_visible)
+        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
+                         is_visible=is_visible)
 
         # TODO See what to to with available metadata: Not necessary maybe?
 
@@ -452,7 +471,7 @@ if __name__ == "__main__":
         'light': LightBulb(),
         'TV': LGTV(),
         'speaker': Speaker(),
-        'chromecast': Chromecast()
+        'chromecast': Chromecast(),
     }
 
     for k, v in Env.items():

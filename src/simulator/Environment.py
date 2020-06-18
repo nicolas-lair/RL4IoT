@@ -5,36 +5,58 @@ from sklearn.preprocessing import OneHotEncoder
 
 import gym
 from Items import ITEM_TYPE
-from Thing import Thing, PlugSwitch, LightBulb
+from Thing import Thing, PlugSwitch, LightBulb, LGTV, Speaker, Chromecast
 from Channel import Channel
 from description_embedder import Description_embedder
 from Action import ExecAction, OpenHABAction, Params
 from TreeView import Node
 
+obj_dict = {
+    'plug': PlugSwitch,
+    'lightbulb': LightBulb,
+    'tv': LGTV,
+    'speaker': Speaker,
+    'chromecast': Chromecast
+}
+
 
 class IoTEnv(gym.Env):
-    def __init__(self):
+    def __init__(self, obj_params):
         super().__init__()
         # Define object in the environment
-        self.plug = PlugSwitch()
-        self.lightbulb = LightBulb()
+
+        self._things_lookup_table = {}
+        for key, (obj_type, obj_params) in obj_params.items():
+            self._things_lookup_table[key] = obj_dict[obj_type](name=key, **obj_params)
+
+        # self.plug = PlugSwitch(obj_params['plug1'])
+        # self.lightbulb = LightBulb(obj_params['lightbulb1'])
 
         # Connect objects and set
         # self.plug.connect_thing(self.lightbulb)
 
         # Compute observation_space
-        self.observation_space = gym.spaces.Dict({
-            "plug": self.plug.get_observation_space(),
-            "lightbulb": self.lightbulb.get_observation_space(),
-        })
 
-        # Compute action_space
-        self.action_space = gym.spaces.Dict({
-            "plug": self.plug.get_action_space(),
-            "lightbulb": self.lightbulb.get_action_space()
-        })
+        self.observation_space = gym.spaces.Dict(
+            {k: v.get_observation_space() for k, v in self._things_lookup_table.items()}
+        )
 
-        self._things_lookup_table = self._build_things_lookup_table()
+        self.action_space = gym.spaces.Dict(
+            {k: v.get_action_space() for k, v in self._things_lookup_table.items()}
+        )
+
+        # self.observation_space = gym.spaces.Dict({
+        #     "plug": self.plug.get_observation_space(),
+        #     "lightbulb": self.lightbulb.get_observation_space(),
+        # })
+        #
+        # # Compute action_space
+        # self.action_space = gym.spaces.Dict({
+        #     "plug": self.plug.get_action_space(),
+        #     "lightbulb": self.lightbulb.get_action_space()
+        # })
+
+        # self._things_lookup_table = self._build_things_lookup_table()
         self.previous_user_state = None
         self.user_state = self.build_state()
 
@@ -44,8 +66,8 @@ class IoTEnv(gym.Env):
     def get_thing(self, name):
         return self._things_lookup_table[name]
 
-    def _build_things_lookup_table(self):
-        return {x.name: x for x in vars(self).values() if isinstance(x, Thing)}
+    # def _build_things_lookup_table(self):
+    #     return {x.name: x for x in vars(self).values() if isinstance(x, Thing)}
 
     def step(self, action):
         """
@@ -103,8 +125,8 @@ class IoTEnv(gym.Env):
 
 
 class IoTEnv4ML(gym.Wrapper):
-    def __init__(self, params, env=IoTEnv()):
-        super().__init__(env=env)
+    def __init__(self, params, env_class=IoTEnv):
+        super().__init__(env=env_class(params['thing_params']))
         self.description_embedder = Description_embedder(**params['description_embedder_params'])
         self.item_type_embedder = OneHotEncoder(sparse=False)
         self.item_type_embedder.fit(np.array(ITEM_TYPE).reshape(-1, 1))
@@ -195,8 +217,8 @@ class IoTEnv4ML(gym.Wrapper):
 
 
 if __name__ == "__main__":
-    env = IoTEnv4ML()
-    initial_state = env.reset()
-
     env2 = IoTEnv()
     initial_state2 = env2.reset()
+
+    env = IoTEnv4ML(env_class=IoTEnv, params={})
+    initial_state = env.reset()

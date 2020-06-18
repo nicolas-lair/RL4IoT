@@ -23,6 +23,15 @@ params = {
             'dimension': description_embedding,
             'reduction': 'mean',
             'authorize_cache': True
+        },
+        'thing_params': {
+            'plug1':
+                ('plug',
+                 {'description': 'This is a plug', 'is_visible': True, 'init_type': 'default', 'init_params': {}}),
+            'lightbulb1':
+                ('lightbulb',
+                 {'description': 'This is a light bulb', 'is_visible': True, 'init_type': 'default',
+                  'init_params': {}})
         }
     },
     'model_params': {

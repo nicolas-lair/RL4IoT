@@ -5,14 +5,14 @@ from TreeView import DescriptionNode
 
 
 class Channel(DescriptionNode):
-    def __init__(self, name, description, item, value=None, read=True, write=True):
+    def __init__(self, name, description, item, read=True, write=True):
 
         self.item = item
         super().__init__(name=name, description=description, children=[OpenHABAction(m) for m in self.item.methods])
 
-        self.initial_value = value
-        if value is not None:
-            self.item.set_state(value)
+        # self.initial_value = value
+        # if value is not None:
+        #     self.item.set_state(value)
 
         self.read = read
         self.write = write
@@ -20,8 +20,8 @@ class Channel(DescriptionNode):
     def get_state(self):
         return self.item.get_state()
 
-    def set_state(self, value):
-        return self.item.set_state(value)
+    # def set_state(self, value):
+    #     return self.item.set_state(value)
 
     def get_observation_space(self):
         return self.item.observation_space
@@ -41,3 +41,6 @@ class Channel(DescriptionNode):
 
     def get_state_change(self):
         pass
+
+    def init(self, init_param):
+        self.item.initialize_value(init_param)
