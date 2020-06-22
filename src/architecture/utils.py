@@ -31,11 +31,11 @@ def flatten(d):
     return out
 
 
-def dict_to_cuda(d, device):
+def dict_to_device(d, device):
     out = {}
     for key, val in d.items():
         if isinstance(val, dict):
-            out[key] = dict_to_cuda(val, device)
+            out[key] = dict_to_device(val, device)
         elif isinstance(val, torch.Tensor):
             out[key] = val.to(device)
         else:

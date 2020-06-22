@@ -15,7 +15,7 @@ state_embedding_size = state_encoding_size + description_embedding + len(ITEM_TY
 action_embedding = 67
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
+# device = 'cpu'
 params = {
     'env_params': {
         'state_encoding_size': state_encoding_size,
@@ -26,10 +26,10 @@ params = {
             'authorize_cache': True
         },
         'thing_params': {
-            'plug1':
+            'first plug':
                 ('plug',
                  {'description': 'This is a plug', 'is_visible': True, 'init_type': 'random', 'init_params': {}}),
-            'lightbulb1':
+            'first light bulb':
                 ('lightbulb',
                  {'description': 'This is a light bulb', 'is_visible': True, 'init_type': 'random',
                   'init_params': {}})
@@ -77,9 +77,13 @@ params = {
         'vocab_size': 500,
         'device': device
     },
-    'target_update_frequence': 10,
+    'dqn_architecture': NoAttentionFlatQnet,
+    'n_episode': 12000,
+    'target_update_frequence': 100,
     'device': device,
     'episode_reset': True,
     'test_frequence': 100,
-    'dqn_architecture': NoAttentionFlatQnet
+    'n_iter_test': 30,
+    'verbose': True
 }
+

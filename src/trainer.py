@@ -1,5 +1,9 @@
+from datetime import datetime
+
+import yaml
 import torch
 import tqdm
+import joblib
 
 from config import params
 from simulator.Environment import IoTEnv4ML
@@ -11,7 +15,7 @@ from architecture.goal_sampler import Goal
 
 
 def run_episode(agent, env, target_goal, train=True):
-    hidden_state = torch.zeros(1, deep_action_space_embedding_size).cuda()
+    hidden_state = torch.zeros(1, deep_action_space_embedding_size).to(agent.device)
     state, available_actions = env.get_state_and_action()
 
     action = RootAction(children=available_actions, embedding=hidden_state.clone())
@@ -39,7 +43,28 @@ def run_episode(agent, env, target_goal, train=True):
     return state, action, next_state, previous_hidden_state, previous_action
 
 
+def test_agent(agent, test_env, oracle, verbose=True):
+    reward_table = dict()
+    for thing, test_instruction in oracle.instructions.items():
+        reward_table[thing] = dict()
+        for instruction in test_instruction:
+            current_rewards = 0
+            for _ in range(params['n_iter_test']):
+                test_env.reset()
+                test_goal = Goal(goal_string=instruction, language_model=agent.language_model)
+                run_episode(agent=agent, env=test_env, target_goal=test_goal, train=False)
+                current_rewards += int(
+                    oracle.was_achieved(test_env.previous_user_state, test_env.user_state, instruction))
+            reward_table[thing][instruction] = current_rewards / params['n_iter_test']
+    if verbose:
+        print("\n" + "%" * 5 + f"Test after {i} episodes" + "%" * 5)
+        print(yaml.dump(reward_table))
+    return reward_table
+
+
 if __name__ == "__main__":
+
+    test_record = {}
     env = IoTEnv4ML(params=params['env_params'])
     test_env = IoTEnv4ML(params=params['env_params'])
 
@@ -47,11 +72,11 @@ if __name__ == "__main__":
     language_model = LanguageModel(**params['language_model_params'])
     agent = DQNAgent(params['dqn_architecture'], language_model=language_model, params=params)
 
-    num_episodes = 6000
+    num_episodes = params['n_episode']
     deep_action_space_embedding_size = params['model_params']['action_embedding_size']
 
     (state, available_actions) = env.reset()
-    for i in tqdm.trange(num_episodes):
+    for i in tqdm.trange(num_episodes, disable=(not params['verbose'])):
         if params['episode_reset']:
             # Initialize the environment and state + flatten
             env.reset()
@@ -85,23 +110,10 @@ if __name__ == "__main__":
             agent.update_target_net()
 
         if i > 0 and i % params['test_frequence'] == 0:
-            print("%" * 5 + f"Test after {i} episodes" + "%" * 5)
-            reward_table = dict()
-            for thing, test_instruction in oracle.instructions.items():
-                reward_table[thing] = dict()
-                for instruction in test_instruction:
-                    current_rewards = 0
-                    for _ in range(20):
-                        test_env.reset()
-                        test_goal = Goal(goal_string=instruction, language_model=language_model)
-                        run_episode(agent=agent, env=test_env, target_goal=test_goal, train=False)
-                        current_rewards += int(
-                            oracle.was_achieved(test_env.previous_user_state, test_env.user_state, instruction))
-                    reward_table[thing][instruction] = current_rewards / 20
-            import yaml
+            test_record[i] = test_agent(agent=agent, test_env=test_env, oracle=oracle, verbose=params['verbose'])
 
-            print(yaml.dump(reward_table))
-
-        agent.test()
-
+    test_record[num_episodes] = test_agent(agent=agent, test_env=test_env, oracle=oracle, verbose=params['verbose'])
+    joblib.dump(test_record, f'../results/test_record_{str(datetime.now(tz=None))}')
+    # joblib.dump(test_record, f'test_record_{str(datetime.now(tz=None))}')
+    joblib.dump(params, f'../results/simulation_param_{str(datetime.now(tz=None))}')
     print('Complete')

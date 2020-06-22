@@ -8,16 +8,18 @@ from dqn import NoAttentionFlatQnet
 from torch.nn.utils import clip_grad_norm_
 from goal_sampler import GoalSampler
 from replay_buffer import ReplayBuffer, Transition
-from utils import dict_to_cuda
+from architecture.utils import dict_to_device
 
 
 class DQNAgent:
-    def __init__(self, model, language_model, params, device='cuda' if torch.cuda.is_available() else 'cpu'):
+    def __init__(self, model, language_model, params):
+        self.device = params['device']
+
         self.policy_network = model(**params['model_params'])
-        self.policy_network.to(device)
+        self.policy_network.to(self.device)
 
         self.target_network = model(**params['model_params'])
-        self.target_network.to(device)
+        self.target_network.to(self.device)
         self.target_network.load_state_dict(self.policy_network.state_dict())
 
         self.target_network.eval()
@@ -27,8 +29,8 @@ class DQNAgent:
 
         self.goal_sampler = GoalSampler(language_model=language_model, **params['goal_sampler_params'])
 
-        self.language_model = language_model.to(device)
-        self.language_model.device = device
+        self.language_model = language_model.to(self.device)
+        self.language_model.device = self.device
 
         self.replay_buffer = ReplayBuffer(**params['replay_buffer_params'])
 
@@ -38,7 +40,6 @@ class DQNAgent:
         self.optimizer = params['optimizer'](
             list(self.policy_network.parameters()) + list(self.language_model.parameters()),
             **params['optimizer_params'])
-        self.device = device
 
         self.update_counter = 0
 
@@ -113,7 +114,7 @@ class DQNAgent:
                 # found, so we pick action with the larger expected reward.
                 embedded_actions, action_type = self.embed_actions(actions)
 
-                Q, normalized_action_embedding = self.policy_network(state=dict_to_cuda(state, self.device),
+                Q, normalized_action_embedding = self.policy_network(state=dict_to_device(state, self.device),
                                                                      instruction=instruction.to(self.device),
                                                                      actions=([embedded_actions], [action_type]),
                                                                      hidden_state=hidden_state.to(self.device))
@@ -153,7 +154,7 @@ class DQNAgent:
 
         # states = zip(*transitions.state)
         # states = torch.cat(transitions.state).to(self.device)
-        states = [dict_to_cuda(d, self.device) for d in transitions.state]
+        states = [dict_to_device(d, self.device) for d in transitions.state]
 
         actions = [[a] for a in transitions.action]
         time_record.append(time.time())
@@ -162,7 +163,7 @@ class DQNAgent:
 
         next_states, next_av_actions = zip(*transitions.next_state)
         # next_states = torch.cat(next_states).to(self.device)
-        next_states = [dict_to_cuda(d, self.device) for d in next_states]
+        next_states = [dict_to_device(d, self.device) for d in next_states]
 
         done = torch.tensor(transitions.done)#.to(self.device)
         rewards = torch.tensor(transitions.reward).to(self.device)
@@ -212,6 +213,3 @@ class DQNAgent:
 
     def update_target_net(self):
         self.target_network.load_state_dict(self.policy_network.state_dict())
-
-    def test(self):
-        pass

@@ -102,7 +102,7 @@ class NoAttentionFlatQnet(nn.Module):
             projection_openhab = self.openhab_action_projector(actions)
             projection_color = self.color_projector(actions)
             projection_level = self.level_projector(actions)
-            projection = [torch.zeros(actions.size(0), actions.size(1), self.action_embedding_size).cuda(),
+            projection = [torch.zeros(actions.size(0), actions.size(1), self.action_embedding_size).to(actions.device),
                           projection_des, projection_openhab, projection_color, projection_level]
 
             p = torch.stack(projection, dim=-2)
