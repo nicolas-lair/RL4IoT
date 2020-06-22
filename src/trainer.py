@@ -6,9 +6,7 @@ from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
 from simulator.Action import RootAction
 from architecture.dqnagent import DQNAgent
-from architecture.dqn import FlatQnet
 from architecture.language_model import LanguageModel
-from architecture.utils import flatten
 from architecture.goal_sampler import Goal
 
 
@@ -23,14 +21,12 @@ def run_episode(agent, env, target_goal, train=True):
         previous_hidden_state = hidden_state
         state, available_actions = env.get_state_and_action()
         # TODO change to use Modular archi
-        flatten_state = flatten(state)
-        state = torch.stack(list(flatten_state.values())).mean(0, keepdim=True).float()
 
         action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
                                                    actions=available_actions, hidden_state=hidden_state)
         (next_state, next_available_actions), reward, done, info = env.step(action=action)
         # TODO change to use Modular archi
-        next_state = torch.stack(list(flatten(next_state).values())).mean(0, keepdim=True).float()
+        # next_state = torch.stack(list(flatten(next_state).values())).mean(0, keepdim=True).float()
         if not done:
             if train:
                 # Do not store transition with random goals
@@ -40,7 +36,6 @@ def run_episode(agent, env, target_goal, train=True):
                                             hidden_state=previous_hidden_state, previous_action=previous_action)
         if train:
             agent.udpate_policy_net()
-
     return state, action, next_state, previous_hidden_state, previous_action
 
 
@@ -50,7 +45,7 @@ if __name__ == "__main__":
 
     oracle = Oracle(env=env)
     language_model = LanguageModel(**params['language_model_params'])
-    agent = DQNAgent(FlatQnet, language_model=language_model, params=params)
+    agent = DQNAgent(params['dqn_architecture'], language_model=language_model, params=params)
 
     num_episodes = 6000
     deep_action_space_embedding_size = params['model_params']['action_embedding_size']
@@ -91,15 +86,21 @@ if __name__ == "__main__":
 
         if i > 0 and i % params['test_frequence'] == 0:
             print("%" * 5 + f"Test after {i} episodes" + "%" * 5)
-            for test_instruction in oracle.instructions:
-                rewards = 0
-                for _ in range(20):
-                    test_env.reset()
-                    test_goal = Goal(goal_string=test_instruction, language_model=language_model)
-                    run_episode(agent=agent, env=test_env, target_goal=test_goal, train=False)
-                    rewards += int(
-                        oracle.was_achieved(test_env.previous_user_state, test_env.user_state, test_instruction))
-                print(test_instruction, rewards / 20)
+            reward_table = dict()
+            for thing, test_instruction in oracle.instructions.items():
+                reward_table[thing] = dict()
+                for instruction in test_instruction:
+                    current_rewards = 0
+                    for _ in range(20):
+                        test_env.reset()
+                        test_goal = Goal(goal_string=instruction, language_model=language_model)
+                        run_episode(agent=agent, env=test_env, target_goal=test_goal, train=False)
+                        current_rewards += int(
+                            oracle.was_achieved(test_env.previous_user_state, test_env.user_state, instruction))
+                    reward_table[thing][instruction] = current_rewards / 20
+            import yaml
+
+            print(yaml.dump(reward_table))
 
         agent.test()
 

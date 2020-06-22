@@ -2,6 +2,8 @@ from itertools import chain
 
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder
+import torch
+
 import gym
 
 from Items import ITEM_TYPE
@@ -148,7 +150,7 @@ class IoTEnv4ML(gym.Wrapper):
         #     node.embed_node_description(self.description_embedder.get_description_embedding)
         # print(1)
 
-    def preprocess_raw_observation(self, observation):
+    def preprocess_raw_observation(self, observation, pytorch=True):
         new_obs = dict()
         for thing_name, thing in observation.items():
             thing_obs = dict()
@@ -156,7 +158,7 @@ class IoTEnv4ML(gym.Wrapper):
                 if channel['item_type'] == 'goal_string':
                     raise NotImplementedError
                 try:
-                    description_embedding = channel['embdedding']
+                    description_embedding = channel['embedding']
                 except KeyError:
                     description_embedding = self.description_embedder.get_description_embedding(channel['description'])
                 item_embedding = self.item_type_embedder.transform(
@@ -164,6 +166,8 @@ class IoTEnv4ML(gym.Wrapper):
                 state_embedding = np.zeros(self.state_embedding_size)
                 state_embedding[:len(channel['state'])] = channel['state']
                 channel_embedding = np.concatenate([description_embedding, item_embedding, state_embedding])
+                if pytorch:
+                    channel_embedding = torch.tensor(channel_embedding)
                 thing_obs[channel_name] = channel_embedding
             new_obs[thing_name] = thing_obs
         return new_obs

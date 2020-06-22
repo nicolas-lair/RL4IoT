@@ -17,11 +17,12 @@ class Oracle:
         return instruction in self.get_achieved_instruction(previous_state, next_state)
 
     def build_instruction_set(self):
-        instructions = set()
+        instructions = dict()
         for thing in self.env.get_thing_list():
             thing_instruction = itertools.chain.from_iterable(thing.instruction.values())
-            instructions = instructions.union({i.format(color=c, level=l, name=thing.name) for i, c, l in
-                                      itertools.product(thing_instruction, color_list, percent_level)})
+            instructions[thing.name] = {i.format(color=c, level=l, name=thing.name) for i, c, l in
+                                        itertools.product(thing_instruction, color_list, percent_level)}
+            instructions[thing.name] = sorted(instructions[thing.name])
 
             # instructions = list(itertools.chain.from_iterable(instructions))
             # instructions = [
