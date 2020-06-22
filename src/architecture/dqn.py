@@ -139,7 +139,7 @@ class NoAttentionFlatQnet(nn.Module):
         state = torch.stack([torch.stack(list(s.values())) for s in flatten_states])
         return state
 
-    def preprocess_state(self, state):
+    def preprocess_state(self, state, **kwargs):
         state = self._flatten_state(state)
         state = state.float().mean(1)
         # state = state.view(len(state), -1)
@@ -157,7 +157,7 @@ class NoAttentionFlatQnet(nn.Module):
         """
         with torch.autograd.set_detect_anomaly(False):
             embedded_actions = self.project_action_embedding(*actions)
-            state = self.preprocess_state(state)
+            state = self.preprocess_state(state, instruction=instruction)
 
             context = torch.cat([instruction, state, hidden_state], dim=1)
             context = context.unsqueeze(1).repeat_interleave(repeats=embedded_actions.size(1), dim=1)
@@ -166,17 +166,17 @@ class NoAttentionFlatQnet(nn.Module):
             return x, embedded_actions
 
 
-class AttentionFlatQNet(NoAttentionFlatQnet):
+class AttentionFlatQnet(NoAttentionFlatQnet):
     def __init__(self, instruction_embedding, state_embedding, action_embedding_size, net_params, raw_action_size):
         super().__init__(instruction_embedding, state_embedding, action_embedding_size, net_params, raw_action_size)
         self.type = 'AttentionFlatQnet'
 
         self.state_attention_layer = nn.Linear(instruction_embedding, state_embedding)
 
-    def preprocess_state(self, state, instruction):
-        attention_vector = self.state_attention_layer(instruction)
+    def preprocess_state(self, state, **kwargs):
+        attention_vector = self.state_attention_layer(kwargs['instruction'])
         state = self._flatten_state(state)
-        state = (attention_vector * state).float().mean(1)
+        state = (attention_vector.unsqueeze(1) * state).float().mean(1)
         return state
 
 

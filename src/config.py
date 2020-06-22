@@ -6,7 +6,7 @@ import torchtext
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, percent_level
-from architecture.dqn import NoAttentionFlatQnet, AttentionFlatQNet
+from architecture.dqn import NoAttentionFlatQnet, AttentionFlatQnet
 
 instruction_embedding = 100
 description_embedding = 100
@@ -77,8 +77,8 @@ params = {
         'vocab_size': 500,
         'device': device
     },
-    'dqn_architecture': NoAttentionFlatQnet,
-    'n_episode': 12000,
+    'dqn_architecture': AttentionFlatQnet,
+    'n_episode': 20000,
     'target_update_frequence': 100,
     'device': device,
     'episode_reset': True,
