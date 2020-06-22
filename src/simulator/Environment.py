@@ -2,8 +2,8 @@ from itertools import chain
 
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder
-
 import gym
+
 from Items import ITEM_TYPE
 from Thing import Thing, PlugSwitch, LightBulb, LGTV, Speaker, Chromecast
 from Channel import Channel
