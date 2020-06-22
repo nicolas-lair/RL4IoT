@@ -4,11 +4,11 @@ import time
 import torch
 import numpy as np
 
-from dqn import FlatQnet
+from dqn import NoAttentionFlatQnet
 from torch.nn.utils import clip_grad_norm_
 from goal_sampler import GoalSampler
 from replay_buffer import ReplayBuffer, Transition
-from utils import flatten
+from utils import dict_to_cuda
 
 
 class DQNAgent:
@@ -67,7 +67,9 @@ class DQNAgent:
         #     a.node_embedding = self.language_model(a.description)
         # else:
         #     raise NotImplementedError
-        embedding = torch.tensor(a.get_node_embedding())
+        embedding = a.get_node_embedding()
+        if not isinstance(embedding, torch.Tensor):
+            embedding = torch.tensor(embedding)
         embedding = embedding.view(1, -1)
         return embedding.float().to(self.device), a.node_type
 
@@ -110,7 +112,8 @@ class DQNAgent:
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
                 embedded_actions, action_type = self.embed_actions(actions)
-                Q, normalized_action_embedding = self.policy_network(state=state.to(self.device),
+
+                Q, normalized_action_embedding = self.policy_network(state=dict_to_cuda(state, self.device),
                                                                      instruction=instruction.to(self.device),
                                                                      actions=([embedded_actions], [action_type]),
                                                                      hidden_state=hidden_state.to(self.device))
@@ -123,8 +126,8 @@ class DQNAgent:
                                                                                        [action_type])
 
         action = actions[action_idx]
-        # Workaround to isintance(self.policy_network, FlatQnet) that return False for a weird reason
-        if self.policy_network._get_name() == 'FlatQnet':
+        # Workaround to isintance(self.policy_network, NoAttentionFlatQnet) that return False for a weird reason
+        if self.policy_network._get_name() == 'NoAttentionFlatQnet':
             hidden_state = hidden_state.to(self.device)
             # hidden_state += normalized_action_embedding.squeeze()[action_idx]  # TODO Check
             hidden_state = normalized_action_embedding[:, action_idx]
@@ -149,7 +152,8 @@ class DQNAgent:
         # goals = torch.cat([g.goal_embedding for g in transitions.goal]).to(self.device)
 
         # states = zip(*transitions.state)
-        states = torch.cat(transitions.state).to(self.device)
+        # states = torch.cat(transitions.state).to(self.device)
+        states = [dict_to_cuda(d, self.device) for d in transitions.state]
 
         actions = [[a] for a in transitions.action]
         time_record.append(time.time())
@@ -157,9 +161,10 @@ class DQNAgent:
         time_record.append(time.time())
 
         next_states, next_av_actions = zip(*transitions.next_state)
-        next_states = torch.cat(next_states).to(self.device)
+        # next_states = torch.cat(next_states).to(self.device)
+        next_states = [dict_to_cuda(d, self.device) for d in next_states]
 
-        done = torch.tensor(transitions.done).to(self.device)
+        done = torch.tensor(transitions.done)#.to(self.device)
         rewards = torch.tensor(transitions.reward).to(self.device)
         hidden_states = torch.cat(transitions.hidden_state).to(self.device)
 
@@ -179,7 +184,7 @@ class DQNAgent:
         time_record.append(time.time())
         maxQ = torch.zeros(batch_size, device=self.device)
         with torch.no_grad():
-            Q_target_net, _ = self.target_network(state=next_states[~done],
+            Q_target_net, _ = self.target_network(state=[s for s, flag in zip(next_states, done.numpy()) if not flag],
                                                   instruction=goals[~done],
                                                   actions=next_av_actions_embedded,
                                                   hidden_state=next_hidden_states[~done])

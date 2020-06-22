@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import torch.nn.utils.rnn as rnn_utils
 
 from instruction_pointer_network import InstructedPointerNetwork
+from architecture.utils import flatten
 
 
 class MyModule(nn.Module):
@@ -15,10 +16,10 @@ class MyModule(nn.Module):
         super().__init__()
 
 
-class FlatQnet(nn.Module):
+class NoAttentionFlatQnet(nn.Module):
     def __init__(self, instruction_embedding, state_embedding, action_embedding_size, net_params, raw_action_size):
         super().__init__()
-        self.type = 'FlatQnet'
+        self.type = 'NoAttentionFlatQnet'
         self.in_features = instruction_embedding + state_embedding + 2 * action_embedding_size
 
         self.action_embedding_size = action_embedding_size
@@ -64,12 +65,6 @@ class FlatQnet(nn.Module):
             'color_params': self.color_projector,
             'level_params': self.level_projector
         }
-        # for k, v in self.action_embedding_layers.items():
-        #     if k == '':
-        #         pass
-        #     else:
-        #         for param in v.parameters():
-        #             param.requires_grad = False
 
         self.q_network = nn.Sequential(
             nn.Linear(in_features=self.in_features, out_features=net_params['hidden1_out']),
@@ -79,23 +74,6 @@ class FlatQnet(nn.Module):
             nn.Linear(in_features=net_params['hidden2_out'], out_features=1),
             nn.Tanh()
         )
-
-    def _project_one_action(self, action):
-        with torch.autograd.set_detect_anomaly(False):
-            s = action.size(1)
-            projection = []
-            for k, m in self.action_embedding_layers.items():
-                if (k == s):
-                    projection.append(m(action))
-                else:
-                    pass
-                    # projection.append(m(torch.rand(1, m.in_features).to(action.device)))
-            return torch.stack(projection, dim=0).sum(dim=0, keepdim=False)
-        # return ((s == self.raw_action_size['action_description_embedding']) * self.description_embedding_projector(
-        #     action) +
-        #         (s == self.raw_action_size['action_standard_embedding']) * self.openhab_action_projector(action) +
-        #         (s == self.raw_action_size['color']) * self.color_projector(action) +
-        #         (s == self.raw_action_size['level']) * self.level_projector(action))
 
     def project_action_embedding(self, actions, action_type):
         """
@@ -117,8 +95,7 @@ class FlatQnet(nn.Module):
                     -1).detach()
 
                 actions = [torch.cat([F.pad(a, pad=(0, self.raw_action_size - a.size(1), 0, 0)) for a in seq], dim=0)
-                           for
-                           seq in actions]
+                           for seq in actions]
                 actions = rnn_utils.pad_sequence(actions, batch_first=True).detach()
 
             projection_des = self.description_embedding_projector(actions)
@@ -127,9 +104,7 @@ class FlatQnet(nn.Module):
             projection_level = self.level_projector(actions)
             projection = [torch.zeros(actions.size(0), actions.size(1), self.action_embedding_size).cuda(),
                           projection_des, projection_openhab, projection_color, projection_level]
-            # projection = []
-            # for v in self.action_embedding_layers.values():
-            #     projection.append(v(actions))
+
             p = torch.stack(projection, dim=-2)
             embedded_actions = (action_type_mask.to(p.device) * p).sum(dim=-2, keepdim=False)
 
@@ -157,6 +132,18 @@ class FlatQnet(nn.Module):
             # embedded_actions = rnn_utils.pad_sequence(embedded_actions, batch_first=True)
 
             return embedded_actions
+    def _flatten_state(self, state):
+        if isinstance(state, dict):
+            state = [state]
+        flatten_states = [flatten(s) for s in state]
+        state = torch.stack([torch.stack(list(s.values())) for s in flatten_states])
+        return state
+
+    def preprocess_state(self, state):
+        state = self._flatten_state(state)
+        state = state.float().mean(1)
+        # state = state.view(len(state), -1)
+        return state
 
     def forward(self, instruction, state, actions, hidden_state):
         """
@@ -170,12 +157,27 @@ class FlatQnet(nn.Module):
         """
         with torch.autograd.set_detect_anomaly(False):
             embedded_actions = self.project_action_embedding(*actions)
+            state = self.preprocess_state(state)
 
             context = torch.cat([instruction, state, hidden_state], dim=1)
             context = context.unsqueeze(1).repeat_interleave(repeats=embedded_actions.size(1), dim=1)
             x = torch.cat([context, embedded_actions], dim=2)
             x = self.q_network(x)
             return x, embedded_actions
+
+
+class AttentionFlatQNet(NoAttentionFlatQnet):
+    def __init__(self, instruction_embedding, state_embedding, action_embedding_size, net_params, raw_action_size):
+        super().__init__(instruction_embedding, state_embedding, action_embedding_size, net_params, raw_action_size)
+        self.type = 'AttentionFlatQnet'
+
+        self.state_attention_layer = nn.Linear(instruction_embedding, state_embedding)
+
+    def preprocess_state(self, state, instruction):
+        attention_vector = self.state_attention_layer(instruction)
+        state = self._flatten_state(state)
+        state = (attention_vector * state).float().mean(1)
+        return state
 
 
 class DeepSetActionCritic(nn.Module):

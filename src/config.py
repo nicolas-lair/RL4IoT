@@ -6,6 +6,7 @@ import torchtext
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, percent_level
+from architecture.dqn import NoAttentionFlatQnet, AttentionFlatQNet
 
 instruction_embedding = 100
 description_embedding = 100
@@ -27,10 +28,10 @@ params = {
         'thing_params': {
             'plug1':
                 ('plug',
-                 {'description': 'This is a plug', 'is_visible': True, 'init_type': 'default', 'init_params': {}}),
+                 {'description': 'This is a plug', 'is_visible': True, 'init_type': 'random', 'init_params': {}}),
             'lightbulb1':
                 ('lightbulb',
-                 {'description': 'This is a light bulb', 'is_visible': True, 'init_type': 'default',
+                 {'description': 'This is a light bulb', 'is_visible': True, 'init_type': 'random',
                   'init_params': {}})
         }
     },
@@ -79,5 +80,6 @@ params = {
     'target_update_frequence': 10,
     'device': device,
     'episode_reset': True,
-    'test_frequence': 50
+    'test_frequence': 100,
+    'dqn_architecture': NoAttentionFlatQnet
 }
