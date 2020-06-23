@@ -70,10 +70,10 @@ params = {
     'optimizer_params': {},
     'language_model_params': {
         'type': 'lstm',
-        'embedding_size': 100,
+        'embedding_size': instruction_embedding,
         'linear1_out': 256,
         'out_features': instruction_embedding,
-        'vocab': torchtext.vocab.GloVe(name='6B', dim=100),
+        'vocab': torchtext.vocab.GloVe(name='6B', dim=instruction_embedding),
         'vocab_size': 500,
         'device': device
     },
@@ -87,3 +87,16 @@ params = {
     'verbose': True
 }
 
+
+def save_config(config):
+    def aux(d, out):
+        for k, v in d.items():
+            if isinstance(v, dict):
+                aux(v, out)
+            elif isinstance(v, (str, int, bool)):
+                out[k] = v
+            else:
+                out[k] = str(v)
+    out = {}
+    aux(config, out)
+    return out
