@@ -5,7 +5,7 @@ import torch
 import tqdm
 import joblib
 
-from config import params
+from config import params, save_config
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
 from simulator.Action import RootAction
@@ -44,6 +44,7 @@ def run_episode(agent, env, target_goal, train=True):
 
 
 def test_agent(agent, test_env, oracle, verbose=True):
+    print()
     reward_table = dict()
     for thing, test_instruction in oracle.instructions.items():
         reward_table[thing] = dict()
@@ -63,6 +64,7 @@ def test_agent(agent, test_env, oracle, verbose=True):
 
 
 if __name__ == "__main__":
+    print(yaml.dump(params))
 
     test_record = {}
     env = IoTEnv4ML(params=params['env_params'])
@@ -113,7 +115,8 @@ if __name__ == "__main__":
             test_record[i] = test_agent(agent=agent, test_env=test_env, oracle=oracle, verbose=params['verbose'])
 
     test_record[num_episodes] = test_agent(agent=agent, test_env=test_env, oracle=oracle, verbose=params['verbose'])
-    end_time = str(datetime.now(tz=None))
+
+    end_time = str(datetime.now(tz=None)).split('.')[0]
     joblib.dump(test_record, f'../results/test_record_{end_time}.jbl')
-    joblib.dump(params, f'../results/simulation_param_{end_time}.jbl')
+    joblib.dump(save_config(params), f'../results/simulation_param_{end_time}.jbl')
     print(f'Completed at {end_time}')
