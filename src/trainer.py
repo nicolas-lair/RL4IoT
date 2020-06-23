@@ -113,7 +113,7 @@ if __name__ == "__main__":
             test_record[i] = test_agent(agent=agent, test_env=test_env, oracle=oracle, verbose=params['verbose'])
 
     test_record[num_episodes] = test_agent(agent=agent, test_env=test_env, oracle=oracle, verbose=params['verbose'])
-    joblib.dump(test_record, f'../results/test_record_{str(datetime.now(tz=None))}')
-    # joblib.dump(test_record, f'test_record_{str(datetime.now(tz=None))}')
-    joblib.dump(params, f'../results/simulation_param_{str(datetime.now(tz=None))}')
-    print('Complete')
+    end_time = str(datetime.now(tz=None))
+    joblib.dump(test_record, f'../results/test_record_{end_time}.jbl')
+    joblib.dump(params, f'../results/simulation_param_{end_time}.jbl')
+    print(f'Completed at {end_time}')
