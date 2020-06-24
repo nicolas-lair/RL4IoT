@@ -84,7 +84,7 @@ class LanguageModel(nn.Module):
             elif self.type == 'lstm':
                 output, (h, c) = self.lstm(s)
                 # out = h
-                out = F.tanh(h)
+                out = torch.tanh(h)
             else:
                 raise NotImplementedError('Language policy_network type should be linear or LSTM')
             return out
