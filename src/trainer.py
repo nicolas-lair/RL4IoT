@@ -64,7 +64,9 @@ def test_agent(agent, test_env, oracle, verbose=True):
 
 
 if __name__ == "__main__":
-    print(yaml.dump(params))
+    if params['verbose']:
+
+        print(yaml.dump(save_config(params)))
 
     test_record = {}
     env = IoTEnv4ML(params=params['env_params'])
