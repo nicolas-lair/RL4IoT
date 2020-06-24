@@ -123,18 +123,17 @@ class DQNAgent:
         else:
             action_idx = random.randint(0, len(actions) - 1)
             embedded_actions, action_type = self.embed_actions(actions)
-            normalized_action_embedding = self.policy_network.project_action_embedding([embedded_actions],
-                                                                                       [action_type])
+            normalized_action_embedding = self.policy_network.action_projector([embedded_actions],
+                                                                               [action_type])
 
         action = actions[action_idx]
         # Workaround to isintance(self.policy_network, NoAttentionFlatQnet) that return False for a weird reason
-        if self.policy_network._get_name() == 'NoAttentionFlatQnet':
+        if self.policy_network._get_name() in ['NoAttentionFlatQnet', 'AttentionFlatQnet', 'DeepSetQnet']:
             hidden_state = hidden_state.to(self.device)
             # hidden_state += normalized_action_embedding.squeeze()[action_idx]  # TODO Check
             hidden_state = normalized_action_embedding[:, action_idx]
-            pass
         else:
-            pass
+            raise NotImplementedError
 
         return action, hidden_state
 
@@ -165,13 +164,13 @@ class DQNAgent:
         # next_states = torch.cat(next_states).to(self.device)
         next_states = [dict_to_device(d, self.device) for d in next_states]
 
-        done = torch.tensor(transitions.done)#.to(self.device)
+        done = torch.tensor(transitions.done)  # .to(self.device)
         rewards = torch.tensor(transitions.reward).to(self.device)
         hidden_states = torch.cat(transitions.hidden_state).to(self.device)
 
         previous_action = [[a] for a in transitions.previous_action]
         embedded_previous_actions = self.embed_actions(previous_action)
-        projected_previous_actions = self.policy_network.project_action_embedding(*embedded_previous_actions).squeeze()
+        projected_previous_actions = self.policy_network.action_projector(*embedded_previous_actions).squeeze()
 
         time_record.append(time.time())
         Q_sa, normalized_action_embedding = self.policy_network(state=states,

@@ -6,8 +6,9 @@ import torchtext
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, percent_level
-from architecture.dqn import NoAttentionFlatQnet, AttentionFlatQnet
+from architecture.dqn import NoAttentionFlatQnet, AttentionFlatQnet, DeepSetQnet
 
+word_embedding_size = 100
 instruction_embedding = 100
 description_embedding = 100
 state_encoding_size = 3  # size of the vector in which is encoded the value of a channel
@@ -46,8 +47,16 @@ params = {
             'level_params': len(percent_level)
         },
         'net_params': {
-            'hidden1_out': 512,
-            'hidden2_out': 256,
+            'q_network': {
+                'hidden1_out': 512,
+                'hidden2_out': 256
+            },
+            # Scaler layer for DeepSet models
+            'scaler_layer': {
+                'hidden1_out': 256,
+                'latent_out': 512
+
+            },
         }
     },
     'goal_sampler_params': {
@@ -70,10 +79,10 @@ params = {
     'optimizer_params': {},
     'language_model_params': {
         'type': 'lstm',
-        'embedding_size': instruction_embedding,
+        'embedding_size': word_embedding_size,
         'linear1_out': 256,
         'out_features': instruction_embedding,
-        'vocab': torchtext.vocab.GloVe(name='6B', dim=instruction_embedding),
+        'vocab': torchtext.vocab.GloVe(name='6B', dim=word_embedding_size),
         'vocab_size': 500,
         'device': device
     },
@@ -97,6 +106,7 @@ def save_config(config):
                 out[k] = v
             else:
                 out[k] = str(v)
+
     out = {}
     aux(config, out)
     return out
