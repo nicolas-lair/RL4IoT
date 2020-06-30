@@ -170,7 +170,7 @@ class AttentionFlatQnet(NoAttentionFlatQnet):
 class DeepSetQnet(nn.Module):
     def __init__(self, instruction_embedding, state_embedding, action_embedding_size, net_params, raw_action_size):
         super().__init__()
-        self.in_features = instruction_embedding + net_params['scaler_layer']['latent_out'] + action_embedding_size
+        self.in_features = net_params['scaler_layer']['latent_out'] + action_embedding_size
 
         self.action_projector = ActionProjector(in_features=max(raw_action_size.values()),
                                                 out_features=action_embedding_size)
@@ -179,19 +179,13 @@ class DeepSetQnet(nn.Module):
             nn.Sigmoid()
         )
         self.scaler_layer = nn.Sequential(
-            nn.Linear(state_embedding, net_params['scaler_layer']['hidden1_out']),
+            nn.Linear(state_embedding+action_embedding_size, net_params['scaler_layer']['hidden1_out']),
             nn.ReLU(),
             nn.Linear(net_params['scaler_layer']['hidden1_out'], net_params['scaler_layer']['latent_out']),
             nn.ReLU()
         )
 
         self.q_network = BasicQnet(self.in_features, qnet_params=net_params['q_network'])
-
-        self.in_features = 512 + instruction_embedding + 2 * action_embedding_size
-        self.state_attention_layer = nn.Sequential(nn.Linear(instruction_embedding, state_embedding),
-                                                   nn.Sigmoid())
-        super().__init__(instruction_embedding, 512, action_embedding_size, net_params, raw_action_size)
-        self.type = 'DeepSetQnet'
 
     def forward(self, instruction, state, actions, hidden_state):
         """
@@ -204,25 +198,40 @@ class DeepSetQnet(nn.Module):
         :return: torch tensor of size (BATCH_SIZE, longest_sequence, 1), hidden_state (actions here)
         """
         with torch.autograd.set_detect_anomaly(False):
-            embedded_actions = self.project_action_embedding(*actions)
+            embedded_actions = self.action_projector(*actions)
 
-            flatten_state = flatten_state(state).float()
-            hidden_state = hidden_state.unsqueeze(1).repeat_interleave(repeats=flatten_state.size(1), dim=1)
-            full_state = torch.cat([flatten_state, hidden_state])
+            flat_state = flatten_state(state).float()
+            hidden_state = hidden_state.unsqueeze(1).repeat_interleave(repeats=flat_state.size(1), dim=1)
+            full_state = torch.cat([flat_state, hidden_state], dim=2)
             attention_vector = self.state_attention_layer(instruction)
             full_state = attention_vector.unsqueeze(1) * full_state
             full_state = self.scaler_layer(full_state).mean(1, keepdim=True)
 
-            full_state = full_state.repeat_interleave(repeats=flatten_state.size(1), dim=1)
+            full_state = full_state.repeat_interleave(repeats=embedded_actions.size(1), dim=1)
             x = torch.cat([full_state, embedded_actions], dim=2)
             x = self.q_network(x)
             return x, embedded_actions
 
 
-class DoubleDeepSetQnet(DeepSetQnet):
+class DoubleDeepSetQnet(nn.Module):
     def __init__(self, instruction_embedding, state_embedding, action_embedding_size, net_params, raw_action_size):
-        super().__init__(instruction_embedding, state_embedding, action_embedding_size, net_params, raw_action_size)
-        self.type = 'DeepSetQnet'
+        super().__init__()
+        self.in_features = net_params['scaler_layer']['latent_out'] + action_embedding_size
+
+        self.action_projector = ActionProjector(in_features=max(raw_action_size.values()),
+                                                out_features=action_embedding_size)
+        self.state_attention_layer = nn.Sequential(
+            nn.Linear(instruction_embedding, state_embedding + action_embedding_size),
+            nn.Sigmoid()
+        )
+        self.scaler_layer = nn.Sequential(
+            nn.Linear(state_embedding+action_embedding_size, net_params['scaler_layer']['hidden1_out']),
+            nn.ReLU(),
+            nn.Linear(net_params['scaler_layer']['hidden1_out'], net_params['scaler_layer']['latent_out']),
+            nn.ReLU()
+        )
+
+        self.q_network = BasicQnet(self.in_features, qnet_params=net_params['q_network'])
 
 
 class DeepSetActionCritic(nn.Module):

@@ -4,7 +4,7 @@ from gym import spaces
 from sklearn.preprocessing import OneHotEncoder
 
 from simulator.utils import color_list, percent_level, level_to_percent, color_to_hsb
-from TreeView import NoDescriptionNode, Node
+from simulator.TreeView import NoDescriptionNode, Node
 
 gym.logger.set_level(40)
 ACTION_SPACE = {

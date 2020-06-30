@@ -6,33 +6,25 @@ import torch
 
 import gym
 
-from Items import ITEM_TYPE
-from Thing import Thing, PlugSwitch, LightBulb, LGTV, Speaker, Chromecast
-from Channel import Channel
-from description_embedder import Description_embedder
-from Action import ExecAction, OpenHABAction, Params
-from TreeView import Node
-
-obj_dict = {
-    'plug': PlugSwitch,
-    'lightbulb': LightBulb,
-    'tv': LGTV,
-    'speaker': Speaker,
-    'chromecast': Chromecast
-}
+from simulator.Items import ITEM_TYPE
+from simulator.Thing import Thing, PlugSwitch, LightBulb, LGTV, Speaker, Chromecast
+from simulator.Channel import Channel
+from simulator.description_embedder import Description_embedder
+from simulator.Action import ExecAction, OpenHABAction, Params
+from simulator.TreeView import Node
 
 
 class IoTEnv(gym.Env):
-    def __init__(self, obj_params):
+    def __init__(self, obj_list):
         super().__init__()
         # Define object in the environment
 
         self._things_lookup_table = {}
-        for key, (obj_type, obj_params) in obj_params.items():
-            self._things_lookup_table[key] = obj_dict[obj_type](name=key, **obj_params)
+        for obj in obj_list:
+            self._things_lookup_table[obj.Params['name']] = obj.Class(**obj.Params)
 
-        # self.plug = PlugSwitch(obj_params['plug1'])
-        # self.lightbulb = LightBulb(obj_params['lightbulb1'])
+        # self.plug = PlugSwitch(obj_list['plug1'])
+        # self.lightbulb = LightBulb(obj_list['lightbulb1'])
 
         # Connect objects and set
         # self.plug.connect_thing(self.lightbulb)

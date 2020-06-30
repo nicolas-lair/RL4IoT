@@ -1,5 +1,5 @@
 from datetime import datetime
-
+import logging
 import yaml
 import torch
 import tqdm
@@ -12,7 +12,6 @@ from simulator.Action import RootAction
 from architecture.dqnagent import DQNAgent
 from architecture.language_model import LanguageModel
 from architecture.goal_sampler import Goal
-
 
 def run_episode(agent, env, target_goal, train=True):
     hidden_state = torch.zeros(1, deep_action_space_embedding_size).to(agent.device)

@@ -5,7 +5,7 @@ import random
 import numpy as np
 from gym import spaces
 
-from Action import ACTION_SPACE
+from simulator.Action import ACTION_SPACE
 
 
 class MethodUnavailableError(Exception):

@@ -1,7 +1,7 @@
 from collections.abc import Iterable
-from Action import OpenHABAction
 
-from TreeView import DescriptionNode
+from simulator.Action import OpenHABAction
+from simulator.TreeView import DescriptionNode
 
 
 class Channel(DescriptionNode):

@@ -3,11 +3,11 @@ import time
 
 import torch
 import numpy as np
-
-from dqn import NoAttentionFlatQnet
 from torch.nn.utils import clip_grad_norm_
-from goal_sampler import GoalSampler
-from replay_buffer import ReplayBuffer, Transition
+
+from architecture.dqn import NoAttentionFlatQnet, AttentionFlatQnet, DeepSetQnet
+from architecture.goal_sampler import GoalSampler
+from architecture.replay_buffer import ReplayBuffer, Transition
 from architecture.utils import dict_to_device
 
 
@@ -128,7 +128,7 @@ class DQNAgent:
 
         action = actions[action_idx]
         # Workaround to isintance(self.policy_network, NoAttentionFlatQnet) that return False for a weird reason
-        if self.policy_network._get_name() in ['NoAttentionFlatQnet', 'AttentionFlatQnet', 'DeepSetQnet']:
+        if isinstance(self.policy_network, (NoAttentionFlatQnet, AttentionFlatQnet, DeepSetQnet)):
             hidden_state = hidden_state.to(self.device)
             # hidden_state += normalized_action_embedding.squeeze()[action_idx]  # TODO Check
             hidden_state = normalized_action_embedding[:, action_idx]

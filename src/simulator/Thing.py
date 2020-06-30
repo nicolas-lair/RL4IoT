@@ -2,9 +2,9 @@ from Items import *
 
 from gym import spaces
 
-from Channel import Channel
+from simulator.Channel import Channel
 from simulator.utils import get_color_name_from_hsb, percent_to_level
-from TreeView import DescriptionNode
+from simulator.TreeView import DescriptionNode
 
 
 class Thing(DescriptionNode):
