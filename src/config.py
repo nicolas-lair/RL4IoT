@@ -1,16 +1,40 @@
 import os
+import glob
+import logging
 from datetime import datetime
 from collections import namedtuple
-import torch
-import torch.nn as nn
-from torch import optim
 
+import joblib
+import torch
 import torchtext
+from torch import optim
+import torch.nn as nn
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, percent_level
 from architecture.dqn import NoAttentionFlatQnet, AttentionFlatQnet, DeepSetQnet
 from simulator.Thing import PlugSwitch, LightBulb
+
+ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
+
+
+def prepare_simulation(simulation_name):
+    if simulation_name == '':
+        base_path = '../results/simulation_'
+    else:
+        base_path = f'../results/simulation_{simulation_name}_'
+
+    l = glob.glob(base_path + '*')
+    l = [name.split('_')[-1] for name in l if name.split('_')[-1].isdigit()]
+    if l:
+        sim_id = max([int(id) for id in l]) + 1
+        # sim_id = max([int(name.split('_')[-1]) for name in l]) + 1
+    else:
+        sim_id = 0
+    path_dir = base_path + f'{sim_id}/'
+    os.mkdir(path_dir)
+    return path_dir
+
 
 word_embedding_size = 100
 instruction_embedding = 100
@@ -22,7 +46,8 @@ action_embedding = 67
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 # device = 'cpu'
 
-ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
+simulation_name = ''
+path_dir = prepare_simulation(simulation_name)
 
 params = dict(
     env_params=dict(
@@ -89,7 +114,7 @@ params = dict(
     batch_size=128,
     loss=nn.functional.smooth_l1_loss,
     optimizer=optim.Adam,
-    optimizer_params={},
+    optimizer_params=dict(),  # TODO optimize
     language_model_params=dict(
         type='lstm',
         embedding_size=word_embedding_size,
@@ -99,28 +124,40 @@ params = dict(
         vocab_size=500,
         device=device
     ),
+    logger=dict(
+        level=logging.INFO,
+        console=True,
+        log_file=True,
+    ),
     dqn_architecture=DeepSetQnet,
     n_episode=20000,
     target_update_frequence=100,
     device=device,
     episode_reset=True,
-    test_frequence=100,
+    test_frequence=10,
     n_iter_test=30,
-    verbose=True
+    tqdm=False,
+    save_directory=path_dir,
 
 )
 
 
-def save_config(config):
+def format_config(config):
     def aux(d, out):
         for k, v in d.items():
             if isinstance(v, dict):
-                aux(v, out)
+                out[k] = aux(v, {})
             elif isinstance(v, (str, int, bool)):
                 out[k] = v
             else:
                 out[k] = str(v)
+        return out
 
     out = {}
     aux(config, out)
     return out
+
+
+def save_config(config, file_name='simulation_params.jbl'):
+    out = format_config(config)
+    joblib.dump(out, os.path.join(out["save_directory"], file_name))

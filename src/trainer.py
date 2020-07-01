@@ -1,17 +1,23 @@
+import os
 from datetime import datetime
-import logging
+
+from pprint import pformat
 import yaml
 import torch
 import tqdm
 import joblib
 
-from config import params, save_config
+from src.logger import rootLogger, format_user_state_log
+from src.config import params, save_config, format_config
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
 from simulator.Action import RootAction
 from architecture.dqnagent import DQNAgent
 from architecture.language_model import LanguageModel
 from architecture.goal_sampler import Goal
+
+logger = rootLogger.getChild(__name__)
+
 
 def run_episode(agent, env, target_goal, train=True):
     hidden_state = torch.zeros(1, deep_action_space_embedding_size).to(agent.device)
@@ -23,10 +29,13 @@ def run_episode(agent, env, target_goal, train=True):
         previous_action = action
         previous_hidden_state = hidden_state
         state, available_actions = env.get_state_and_action()
-        # TODO change to use Modular archi
 
         action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
                                                    actions=available_actions, hidden_state=hidden_state)
+        logger.debug(f'State: \n {format_user_state_log(env.user_state)}')
+        logger.debug(available_actions)
+        logger.debug(action)
+
         (next_state, next_available_actions), reward, done, info = env.step(action=action)
         # TODO change to use Modular archi
         # next_state = torch.stack(list(flatten(next_state).values())).mean(0, keepdim=True).float()
@@ -38,12 +47,14 @@ def run_episode(agent, env, target_goal, train=True):
                                             next_state=(next_state, next_available_actions), done=done, reward=reward,
                                             hidden_state=previous_hidden_state, previous_action=previous_action)
         if train:
+            logger.debug('Update of policy net')
             agent.udpate_policy_net()
+            logger.debug('done')
     return state, action, next_state, previous_hidden_state, previous_action
 
 
-def test_agent(agent, test_env, oracle, verbose=True):
-    print()
+def test_agent(agent, test_env, oracle):
+    logger.info('Testing agent')
     reward_table = dict()
     for thing, test_instruction in oracle.instructions.items():
         reward_table[thing] = dict()
@@ -56,16 +67,22 @@ def test_agent(agent, test_env, oracle, verbose=True):
                 current_rewards += int(
                     oracle.was_achieved(test_env.previous_user_state, test_env.user_state, instruction))
             reward_table[thing][instruction] = current_rewards / params['n_iter_test']
-    if verbose:
-        print("\n" + "%" * 5 + f"Test after {i} episodes" + "%" * 5)
-        print(yaml.dump(reward_table))
+
+    logger.info("%" * 5 + f"Test after {i} episodes" + "%" * 5 + "\n" + yaml.dump(reward_table))
     return reward_table
 
 
-if __name__ == "__main__":
-    if params['verbose']:
+def save_records():
+    # Test record
+    joblib.dump(test_record, os.path.join(params['save_directory'], 'test_record.jbl'))
 
-        print(yaml.dump(save_config(params)))
+    # Goal sampler
+    agent.goal_sampler.save_records(os.path.join(params['save_directory'], 'goal_sampler_record.jbl'))
+
+
+if __name__ == "__main__":
+    save_config(params)
+    logger.info(f'Simulation params:\n {pformat(format_config(params))}')
 
     test_record = {}
     env = IoTEnv4ML(params=params['env_params'])
@@ -78,8 +95,9 @@ if __name__ == "__main__":
     num_episodes = params['n_episode']
     deep_action_space_embedding_size = params['model_params']['action_embedding_size']
 
-    (state, available_actions) = env.reset()
-    for i in tqdm.trange(num_episodes, disable=(not params['verbose'])):
+    # (state, available_actions) = env.reset()
+    for i in range(num_episodes):
+        logger.info('%' * 5 + f' Episode {i} ' + '%' * 5)
         if params['episode_reset']:
             # Initialize the environment and state + flatten
             env.reset()
@@ -87,6 +105,8 @@ if __name__ == "__main__":
             raise NotImplementedError
         # TODO go to root action but no global reset
         target_goal = agent.sample_goal()
+        logger.info(f'Targeted goal: {target_goal.goal_string}')
+
         final_state, final_action, final_next_state, ante_final_hidden_state, ante_final_action = run_episode(
             agent=agent, env=env,
             target_goal=target_goal,
@@ -110,14 +130,18 @@ if __name__ == "__main__":
                                       )
 
         if i % params['target_update_frequence'] == 0:
+            logger.debug('Update of target net')
             agent.update_target_net()
+            logger.debug('done')
 
         if i > 0 and i % params['test_frequence'] == 0:
-            test_record[i] = test_agent(agent=agent, test_env=test_env, oracle=oracle, verbose=params['verbose'])
+            test_record[i] = test_agent(agent=agent, test_env=test_env, oracle=oracle)
 
-    test_record[num_episodes] = test_agent(agent=agent, test_env=test_env, oracle=oracle, verbose=params['verbose'])
+        if i > 0 and i % 10 * params['test_frequence'] == 0:
+            save_records()
+
+    test_record[num_episodes] = test_agent(agent=agent, test_env=test_env, oracle=oracle)
+    save_records()
 
     end_time = str(datetime.now(tz=None)).split('.')[0]
-    joblib.dump(test_record, f'../results/test_record_{end_time}.jbl')
-    joblib.dump(save_config(params), f'../results/simulation_param_{end_time}.jbl')
     print(f'Completed at {end_time}')
