@@ -1,5 +1,4 @@
 import random
-import time
 
 import torch
 import numpy as np
@@ -12,6 +11,7 @@ from architecture.replay_buffer import ReplayBuffer, Transition
 from architecture.utils import dict_to_device
 
 logger = rootLogger.getChild(__name__)
+logger.setLevel(10)
 
 
 class DQNAgent:
@@ -170,7 +170,7 @@ class DQNAgent:
                                                                 instruction=goals,
                                                                 actions=embedded_actions,
                                                                 hidden_state=projected_previous_actions)
-        logger.debug(f'Done: {Q_sa}')
+        logger.debug(f'Done: {Q_sa.squeeze()}')
         next_hidden_states = normalized_action_embedding.squeeze()
 
         next_states, next_av_actions = zip(*transitions.next_state)
