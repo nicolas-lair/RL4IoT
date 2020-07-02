@@ -112,7 +112,7 @@ def generate_params():
         replay_buffer_params=dict(
             max_size=10000,
         ),
-        discount_factor=0.999,
+        discount_factor=0.9,
         batch_size=128,
         loss=nn.functional.smooth_l1_loss,
         optimizer=optim.Adam,
