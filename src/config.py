@@ -46,10 +46,13 @@ def generate_params():
     state_embedding_size = state_encoding_size + description_embedding + len(ITEM_TYPE)
     action_embedding = 67
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
     # device = 'cpu'
 
+    qnet = AttentionFlatQnet
+    simulation_name = str(qnet)
     path_dir = prepare_simulation(simulation_name)
+
     params = dict(
         simulation_name=simulation_name,
         env_params=dict(
