@@ -1,29 +1,43 @@
 import os
 import logging
 from pprint import pformat
-import yaml
-from config import params
 
 FORMATTER = logging.Formatter("{asctime} {levelname:5} {lineno:4}:{filename:20} {message}", style='{')
 
+rootLogger = logging.getLogger('root')
 
-def create_logger(name, level, console=True, log_file=True, log_path=None):
-    assert isinstance(name, str)
+
+def set_logger_handler(logger, level, console=True, log_file=True, log_path=None):
     assert level in [logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL]
     assert isinstance(console, bool)
     assert isinstance(log_file, bool)
-    logger = logging.getLogger(name)
     logger.setLevel(level)
     if log_file:
         assert isinstance(log_path, str)
-        fileHandler = logging.FileHandler(os.path.join(log_path, "log.log"))
-        fileHandler.setFormatter(FORMATTER)
-        logger.addHandler(fileHandler)
+        add_handler(logger, log_path, type='file')
     if console:
-        consoleHandler = logging.StreamHandler()
-        consoleHandler.setFormatter(FORMATTER)
-        logger.addHandler(consoleHandler)
+        add_handler(logger, log_path, type='stream')
     return logger
+
+
+def add_handler(logger, log_path, type='stream'):
+    if type == 'stream':
+        handler = logging.StreamHandler()
+    elif type == 'file':
+        handler = logging.FileHandler(os.path.join(log_path, "log.log"))
+    else:
+        raise NotImplementedError
+    handler.setFormatter(FORMATTER)
+    logger.addHandler(handler)
+
+
+def update_log_file_path(logger, log_path):
+    for handler in logger.handlers:
+        if isinstance(handler, logging.FileHandler):
+            handler.close()
+            logger.removeHandler(handler)
+    add_handler(logger, log_path, type='file')
+
 
 def format_user_state_log(d):
     def aux(d):
@@ -38,7 +52,5 @@ def format_user_state_log(d):
     u = d.copy()
     aux(u)
     return pformat(u)
-
-rootLogger = create_logger(name='root', **params['logger'], log_path=params['save_directory'])
 
 # rootLogger.info('hello')
