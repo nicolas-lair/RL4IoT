@@ -5,10 +5,13 @@ import torch
 import numpy as np
 from torch.nn.utils import clip_grad_norm_
 
+from src.logger import rootLogger
 from architecture.dqn import NoAttentionFlatQnet, AttentionFlatQnet, DeepSetQnet
 from architecture.goal_sampler import GoalSampler
 from architecture.replay_buffer import ReplayBuffer, Transition
 from architecture.utils import dict_to_device
+
+logger = rootLogger.getChild(__name__)
 
 
 class DQNAgent:
@@ -123,7 +126,6 @@ class DQNAgent:
                                                                                [action_type])
 
         action = actions[action_idx]
-        # Workaround to isintance(self.policy_network, NoAttentionFlatQnet) that return False for a weird reason
         if isinstance(self.policy_network, (NoAttentionFlatQnet, AttentionFlatQnet, DeepSetQnet)):
             hidden_state = hidden_state.to(self.device)
             # hidden_state += normalized_action_embedding.squeeze()[action_idx]  # TODO Check
@@ -134,7 +136,6 @@ class DQNAgent:
         return action, hidden_state
 
     def udpate_policy_net(self, batch_size=None):
-        time_record = [time.time()]
         batch_size = batch_size if batch_size is not None else self.batch_size
         if batch_size > len(self.replay_buffer):
             return
@@ -144,40 +145,42 @@ class DQNAgent:
         transitions = self.replay_buffer.sample(batch_size)
         transitions = Transition(*zip(*transitions))
 
+        logger.debug('Computing goal embeddings for update')
         goals = torch.cat([g.compute_embedding(self.language_model) for g in transitions.goal]).to(self.device)
-        # goals = torch.cat([g.goal_embedding for g in transitions.goal]).to(self.device)
 
-        # states = zip(*transitions.state)
-        # states = torch.cat(transitions.state).to(self.device)
         states = [dict_to_device(d, self.device) for d in transitions.state]
 
         actions = [[a] for a in transitions.action]
-        time_record.append(time.time())
+
+        logger.debug('Embedding actions')
         embedded_actions = self.embed_actions(actions)
-        time_record.append(time.time())
 
-        next_states, next_av_actions = zip(*transitions.next_state)
-        # next_states = torch.cat(next_states).to(self.device)
-        next_states = [dict_to_device(d, self.device) for d in next_states]
-
-        done = torch.tensor(transitions.done)  # .to(self.device)
         rewards = torch.tensor(transitions.reward).to(self.device)
         hidden_states = torch.cat(transitions.hidden_state).to(self.device)
 
         previous_action = [[a] for a in transitions.previous_action]
-        embedded_previous_actions = self.embed_actions(previous_action)
-        projected_previous_actions = self.policy_network.action_projector(*embedded_previous_actions).squeeze()
+        logger.debug('Embedding previous action')
+        embedded_previous_action = self.embed_actions(previous_action)
 
-        time_record.append(time.time())
+        logger.debug('Projecting previous action in a command subspace')
+        projected_previous_actions = self.policy_network.action_projector(*embedded_previous_action).squeeze()
+
+        logger.debug('Computing Q(s,a)')
         Q_sa, normalized_action_embedding = self.policy_network(state=states,
                                                                 instruction=goals,
                                                                 actions=embedded_actions,
                                                                 hidden_state=projected_previous_actions)
-        time_record.append(time.time())
+        logger.debug(f'Done: {Q_sa}')
         next_hidden_states = normalized_action_embedding.squeeze()
 
+        next_states, next_av_actions = zip(*transitions.next_state)
+        next_states = [dict_to_device(d, self.device) for d in next_states]
+        done = torch.tensor(transitions.done)  # .to(self.device)
+
+        logger.debug('Embedding next available actions')
         next_av_actions_embedded = self.embed_actions([a for a, mask in zip(next_av_actions, done) if not mask])
-        time_record.append(time.time())
+
+        logger.debug('Computing max(Q(s`, a)) over a')
         maxQ = torch.zeros(batch_size, device=self.device)
         with torch.no_grad():
             Q_target_net, _ = self.target_network(state=[s for s, flag in zip(next_states, done.numpy()) if not flag],
@@ -185,26 +188,25 @@ class DQNAgent:
                                                   actions=next_av_actions_embedded,
                                                   hidden_state=next_hidden_states[~done])
         maxQ[~done] = Q_target_net.max(1).values.squeeze()
+        logger.debug(f'Done: {maxQ}')
 
+        logger.debug('Computing loss')
         expected_value = rewards + self.discount_factor * maxQ
         # loss = self.loss(expected_value.detach(), Q_sa.squeeze())
         loss = torch.nn.functional.smooth_l1_loss(expected_value.detach(), Q_sa.squeeze())
+        logger.debug(f'Done: {loss}')
 
-        time_record.append(time.time())
+        logger.debug('Backward pass')
         loss.backward()
 
-        time_record.append(time.time())
-
+        logger.debug('Clipping gradient norm')
         # Takes time to clip
         clip_grad_norm_(self.policy_network.parameters(), 1)
-        time_record.append(time.time())
 
+        logger.debug('Optimising step')
         self.optimizer.step()
-        time_record.append(time.time())
 
         self.update_counter += 1
-
-        # print([j - i for i, j in zip(time_record[:-1], time_record[1:])])
 
     def update_target_net(self):
         self.target_network.load_state_dict(self.policy_network.state_dict())
