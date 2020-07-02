@@ -24,8 +24,8 @@ class DQNAgent:
 
         self.target_network.eval()
 
-        self.steps = 0
         self.exploration_params = params['exploration_params']
+        self.exploration_threshold = self.exploration_params['start_eps']
 
         self.goal_sampler = GoalSampler(language_model=language_model, **params['goal_sampler_params'])
 
@@ -103,11 +103,7 @@ class DQNAgent:
         :return:
         """
         sample = random.random()
-        eps_threshold = self.exploration_params['min_eps'] + (
-                self.exploration_params['start_eps'] - self.exploration_params['min_eps']) * np.exp(
-            -1. * self.steps / self.exploration_params['eps_decay'])
-        self.steps += 1
-        if sample > eps_threshold:
+        if sample > self.exploration_threshold:
             with torch.no_grad():
                 # t.max(1) will return largest column value of each row.
                 # second column on max result is index of where max element was
@@ -212,3 +208,8 @@ class DQNAgent:
 
     def update_target_net(self):
         self.target_network.load_state_dict(self.policy_network.state_dict())
+
+    def update_exploration_function(self, iter):
+        self.exploration_threshold = self.exploration_params['min_eps'] + (
+                self.exploration_params['start_eps'] - self.exploration_params['min_eps']) * np.exp(
+            -1. * iter / self.exploration_params['eps_decay'])

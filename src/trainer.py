@@ -46,10 +46,6 @@ def run_episode(agent, env, target_goal, train=True):
                     agent.store_transitions(goal=target_goal, state=state, action=action,
                                             next_state=(next_state, next_available_actions), done=done, reward=reward,
                                             hidden_state=previous_hidden_state, previous_action=previous_action)
-        if train:
-            logger.debug('Update of policy net')
-            agent.udpate_policy_net()
-            logger.debug('done')
     return state, action, next_state, previous_hidden_state, previous_action
 
 
@@ -128,6 +124,12 @@ if __name__ == "__main__":
                                       hidden_state=ante_final_hidden_state,
                                       previous_action=ante_final_action
                                       )
+
+        logger.debug('Update of policy net')
+        agent.udpate_policy_net()
+        logger.debug('done')
+
+        agent.update_exploration_function(iter=i+1)
 
         if i % params['target_update_frequence'] == 0:
             logger.debug('Update of target net')
