@@ -50,7 +50,7 @@ def generate_params():
     # device = 'cpu'
 
     qnet = AttentionFlatQnet
-    simulation_name = str(qnet)
+    simulation_name = str(qnet).split("'")[-2].split('.')[-1]
     path_dir = prepare_simulation(simulation_name)
 
     params = dict(
