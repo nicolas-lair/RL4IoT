@@ -21,7 +21,7 @@ if __name__ == "__main__":
     new_state, _, _, _ = env.step(action)
     print(new_state)
 
-    achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    achieved_instruction = oracle.get_state_change(previous_state=current_state, next_state=new_state)
     print(achieved_instruction)
 
     goal_sampler.update(target_goals=[], reached_goals_str=achieved_instruction, iter=1)
@@ -40,7 +40,7 @@ if __name__ == "__main__":
     new_state, _, _, _ = env.step(action)
     print(new_state)
 
-    achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    achieved_instruction = oracle.get_state_change(previous_state=current_state, next_state=new_state)
     print(achieved_instruction)
 
     goal_sampler._update_discovered_goals(achieved_instruction, iter=2)
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     new_state, _, _, _ = env.step(action)
     print(new_state)
 
-    achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    achieved_instruction = oracle.get_state_change(previous_state=current_state, next_state=new_state)
     print(achieved_instruction)
 
     goal_sampler._update_discovered_goals(achieved_instruction, iter=2)
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     new_state, _, _, _ = env.step(action)
     print(new_state)
 
-    achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    achieved_instruction = oracle.get_state_change(previous_state=current_state, next_state=new_state)
     print(achieved_instruction)
 
     goal_sampler._update_discovered_goals(achieved_instruction, iter=2)

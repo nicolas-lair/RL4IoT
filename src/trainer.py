@@ -54,7 +54,7 @@ def run_episode(agent, env, target_goal, train=True):
 def test_agent(agent, test_env, oracle):
     logger.info('Testing agent')
     reward_table = dict()
-    for thing, test_instruction in oracle.instructions.items():
+    for thing, test_instruction in oracle.str_instructions.items():
         reward_table[thing] = dict()
         for instruction in test_instruction:
             current_rewards = 0
@@ -115,7 +115,7 @@ if __name__ == "__main__":
                 train=True)
 
             # TODO refactoring to let the goal sampler ask to the oracle
-            achieved_goals_str = oracle.get_achieved_instruction(env.previous_user_state, env.user_state)
+            achieved_goals_str = oracle.get_state_change(env.previous_user_state, env.user_state)
 
             agent.goal_sampler.update([target_goal], achieved_goals_str, iter=i)
 

@@ -3,8 +3,9 @@ from Items import *
 from gym import spaces
 
 from simulator.Channel import Channel
-from simulator.utils import get_color_name_from_hsb, percent_to_level
+from simulator.utils import get_color_name_from_hsb, percent_to_level, color_list, percent_level
 from simulator.TreeView import DescriptionNode
+from simulator.instructions import StateDescription
 
 
 class Thing(DescriptionNode):
@@ -155,18 +156,25 @@ class LightBulb(Thing):
         )
 
         self.instruction = {
-            'color_change': ["You changed the color of {name} to {color}"],
-            'turn_on': [f"You turned on the {self.name}"],
-            'turn_off': [f"You turned off the {self.name}"],
-            'increase_lum': [f"You increased the luminosity of {self.name}"],
-            'decrease_lum': [f"You decreased the luminosity of {self.name}"],
-            'lum_change': ["The luminosity of {name} is now {level}"],
-            'warmer_color': [f"You made the light of {self.name} warmer"],
-            'colder_color': [f"You made the light of {self.name} colder"],
+            # 'color_change': StateDescription(sentences=["You changed the color of {name} to {color}"]),
+            'turn_on': StateDescription(sentences=[f"You turned on the {self.name}"]),
+            'turn_off': StateDescription(sentences=[f"You turned off the {self.name}"]),
+            'increase_lum': StateDescription(sentences=[f"You increased the luminosity of {self.name}"]),
+            'decrease_lum': StateDescription(sentences=[f"You decreased the luminosity of {self.name}"]),
+            # 'lum_change': StateDescription(sentences=["The luminosity of {name} is now {level}"]),
+            'warmer_color': StateDescription(sentences=[f"You made the light of {self.name} warmer"]),
+            'colder_color': StateDescription(sentences=[f"You made the light of {self.name} colder"]),
         }
 
-        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
-                         is_visible=is_visible)
+        for color in color_list:
+            self.instruction[f'{color}_color'] = StateDescription(
+                sentences=[f"You changed the color of {self.name} to {color}"])
+        for level in percent_level:
+            self.instruction[f'lum_level_{level}'] = StateDescription(
+                sentences=[f"The luminosity of {self.name} is now {level}"]),
+
+            super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
+                             is_visible=is_visible)
         # # TODO decide if use or not : maybe not
         # self.alert = Channel(
         #     name='alert',
@@ -174,21 +182,48 @@ class LightBulb(Thing):
         #     item=StringItem()
         # )
 
+    def get_state_description(self, current_state):
+        matching_instructions = []
+
+        # COlOR
+        h, s, b = current_state["color"]["state"]
+        color = get_color_name_from_hsb(h, s, b)
+        matching_instructions.append(self.instruction[f'{color}_color'])
+
+        # ON / OFF
+        if b == 0:
+            matching_instructions.append(self.instruction['turn_off'])
+        else:
+            matching_instructions.append(self.instruction['turn_on'])
+
+        # BRIGHTNESS LVL
+        brightness_lvl = percent_to_level(b)
+        matching_instructions.append(self.instruction[f'lum_level_{brightness_lvl}'])
+
+        # # COLOR TEMPERATURE LVL
+        # color_temperature = current_state["color_temperature"]["state"][0]
+
+        return matching_instructions
+
     def get_state_change(self, previous_state, next_state):
-        achieved_instructions = []
+        previous_matching_descriptions = self.get_state_description(previous_state)
+        next_matching_descriptions = self.get_state_description(next_state)
+        descriptions_change = set(next_matching_descriptions).difference(set(previous_matching_descriptions))
+
+        achieved_instructions = [d.get_random_instruction() for d in descriptions_change]
 
         # Check color channel change
         h, s, b = previous_state["color"]["state"]
         new_h, new_s, new_b = next_state["color"]["state"]
-        previous_color = get_color_name_from_hsb(h, s, b)
-        next_color = get_color_name_from_hsb(new_h, new_s, new_b)
-        if previous_color != next_color:
-            achieved_instructions.append(
-                random.choice(self.instruction['color_change']).format(name=self.name, color=next_color))
-        if b == 0 and new_b > 0:
-            achieved_instructions.append(random.choice(self.instruction['turn_on']))
-        if b > 0 and new_b == 0:
-            achieved_instructions.append(random.choice(self.instruction['turn_off']))
+        # previous_color = get_color_name_from_hsb(h, s, b)
+        # next_color = get_color_name_from_hsb(new_h, new_s, new_b)
+        # if previous_color != next_color:
+        #     achieved_instructions.append(
+        #         random.choice(self.instruction['color_change']).format(name=self.name, color=next_color))
+        # if b == 0 and new_b > 0:
+        #     achieved_instructions.append(random.choice(self.instruction['turn_on']))
+        # if b > 0 and new_b == 0:
+        #     achieved_instructions.append(random.choice(self.instruction['turn_off']))
 
         ### INCREASE_DECREASE_STEP is a threshold for the oracle to detect a change
         if new_b >= INCREASE_DECREASE_STEP + b:
@@ -196,12 +231,12 @@ class LightBulb(Thing):
         if new_b + INCREASE_DECREASE_STEP <= b:
             achieved_instructions.append(random.choice(self.instruction['decrease_lum']))
 
-        b_lvl = percent_to_level(b)
-        new_b_lvl = percent_to_level(new_b)
-        # Increase the brightness using set Percent
-        if b_lvl != new_b_lvl:
-            achieved_instructions.append(
-                random.choice(self.instruction['lum_change']).format(name=self.name, level=new_b_lvl))
+        # b_lvl = percent_to_level(b)
+        # new_b_lvl = percent_to_level(new_b)
+        # # Increase the brightness using set Percent
+        # if b_lvl != new_b_lvl:
+        #     achieved_instructions.append(
+        #         random.choice(self.instruction['lum_change']).format(name=self.name, level=new_b_lvl))
 
         previous_color_temperature = previous_state["color_temperature"]["state"][0]
         next_color_temperature = next_state["color_temperature"]["state"][0]

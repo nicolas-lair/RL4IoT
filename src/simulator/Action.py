@@ -44,10 +44,13 @@ percent_embedder = OneHotEncoder(sparse=False)
 percent_embedder.fit(np.array(percent_level).reshape(-1, 1))
 
 
-class RootAction(Node):
+class RootAction(NoDescriptionNode):
     def __init__(self, children, embedding):
         super().__init__(name='root_action', node_type='root', children=children, node_embedding=embedding)
 
+class DoNothing(NoDescriptionNode):
+    def __init__(self):
+        super().__init__()
 
 class OpenHABAction(NoDescriptionNode):
     def __init__(self, name):
