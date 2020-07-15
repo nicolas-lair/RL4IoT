@@ -11,7 +11,7 @@ from architecture.replay_buffer import ReplayBuffer, Transition
 from architecture.utils import dict_to_device
 
 logger = rootLogger.getChild(__name__)
-logger.setLevel(10)
+# logger.setLevel(10)
 
 
 class DQNAgent:

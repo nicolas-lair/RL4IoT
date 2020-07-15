@@ -38,18 +38,17 @@ def prepare_simulation(simulation_name):
 
 
 def generate_params():
-    simulation_name = 'simbatch'
     word_embedding_size = 100
     instruction_embedding = 100
     description_embedding = 100
     state_encoding_size = 3  # size of the vector in which is encoded the value of a channel
     state_embedding_size = state_encoding_size + description_embedding + len(ITEM_TYPE)
-    action_embedding = 67
+    action_embedding = 50
 
     device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
     # device = 'cpu'
 
-    qnet = AttentionFlatQnet
+    qnet = NoAttentionFlatQnet
     simulation_name = str(qnet).split("'")[-2].split('.')[-1]
     path_dir = prepare_simulation(simulation_name)
 
