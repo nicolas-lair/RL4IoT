@@ -60,6 +60,9 @@ def test_agent(agent, test_env, oracle):
             current_rewards = 0
             for _ in range(params['n_iter_test']):
                 test_env.reset()
+                while oracle.is_achieved(state=test_env.user_state, instruction=instruction):
+                    test_env.reset()
+
                 test_goal = Goal(goal_string=instruction, language_model=agent.language_model)
                 run_episode(agent=agent, env=test_env, target_goal=test_goal, train=False)
                 current_rewards += int(
@@ -108,6 +111,8 @@ if __name__ == "__main__":
             # TODO go to root action but no global reset
             target_goal = agent.sample_goal()
             logger.info(f'Targeted goal: {target_goal.goal_string}')
+            while oracle.is_achieved(state=env.user_state, instruction=target_goal.goal_string):
+                env.reset()
 
             final_state, final_action, final_next_state, ante_final_hidden_state, ante_final_action = run_episode(
                 agent=agent, env=env,

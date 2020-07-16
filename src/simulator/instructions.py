@@ -19,6 +19,10 @@ class StateDescription:
                 break
         return equal
 
+    # Needed to be used in set
+    def __hash__(self):
+        return hash(*self.sentences)
+
 
 if __name__ == '__main__':
     i1 = StateDescription(['Hello', 'Hi'])

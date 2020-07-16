@@ -127,8 +127,15 @@ class Thing(DescriptionNode):
     def reset(self):
         self.init(**self.initial_values)
 
-    # TODO Collect all possible actions from object
     def get_state_change(self, previous_state, next_state):
+        previous_matching_descriptions = self.get_state_description(previous_state)
+        next_matching_descriptions = self.get_state_description(next_state)
+        descriptions_change = set(next_matching_descriptions).difference(set(previous_matching_descriptions))
+
+        achieved_instructions = [d.get_random_instruction() for d in descriptions_change]
+        return achieved_instructions
+
+    def get_state_description(self, state):
         raise NotImplementedError
 
 
@@ -168,12 +175,14 @@ class LightBulb(Thing):
 
         for color in color_list:
             self.instruction[f'{color}_color'] = StateDescription(
-                sentences=[f"You changed the color of {self.name} to {color}"])
+                sentences=[f"You changed the color of {self.name} to {color}"]
+            )
         for level in percent_level:
             self.instruction[f'lum_level_{level}'] = StateDescription(
-                sentences=[f"The luminosity of {self.name} is now {level}"]),
+                sentences=[f"The luminosity of {self.name} is now {level}"]
+            )
 
-            super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
+        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
                              is_visible=is_visible)
         # # TODO decide if use or not : maybe not
         # self.alert = Channel(
@@ -206,12 +215,9 @@ class LightBulb(Thing):
         return matching_instructions
 
     def get_state_change(self, previous_state, next_state):
-        previous_matching_descriptions = self.get_state_description(previous_state)
-        next_matching_descriptions = self.get_state_description(next_state)
-        descriptions_change = set(next_matching_descriptions).difference(set(previous_matching_descriptions))
+        achieved_descriptions = super().get_state_change(previous_state, next_state)
 
-        achieved_instructions = [d.get_random_instruction() for d in descriptions_change]
-
+        achieved_state_transition = []
         # Check color channel change
         h, s, b = previous_state["color"]["state"]
         new_h, new_s, new_b = next_state["color"]["state"]
@@ -227,9 +233,9 @@ class LightBulb(Thing):
 
         ### INCREASE_DECREASE_STEP is a threshold for the oracle to detect a change
         if new_b >= INCREASE_DECREASE_STEP + b:
-            achieved_instructions.append(random.choice(self.instruction['increase_lum']))
+            achieved_state_transition.append(self.instruction['increase_lum'])
         if new_b + INCREASE_DECREASE_STEP <= b:
-            achieved_instructions.append(random.choice(self.instruction['decrease_lum']))
+            achieved_state_transition.append(self.instruction['decrease_lum'])
 
         # b_lvl = percent_to_level(b)
         # new_b_lvl = percent_to_level(new_b)
@@ -243,11 +249,13 @@ class LightBulb(Thing):
         # Check color_temperature change
         ### INCREASE_DECREASE_STEP is like a threshold for the oracle to detect a change
         if next_color_temperature >= INCREASE_DECREASE_STEP + previous_color_temperature:
-            achieved_instructions.append(random.choice(self.instruction['warmer_color']))
+            achieved_state_transition.append(self.instruction['warmer_color'])
         if next_color_temperature + INCREASE_DECREASE_STEP <= previous_color_temperature:
-            achieved_instructions.append(random.choice(self.instruction['colder_color']))
+            achieved_state_transition.append(self.instruction['colder_color'])
 
-        return achieved_instructions
+        achieved_str_instructions = achieved_descriptions + [i.get_random_instruction() for i in
+                                                             achieved_state_transition]
+        return achieved_str_instructions
 
 
 class PlugSwitch(Thing):
@@ -264,8 +272,8 @@ class PlugSwitch(Thing):
                                      )
 
         self.instruction = {
-            'turn_on': [f"You turned on the {self.name}"],
-            'turn_off': [f"You turned off the {self.name}"],
+            'turn_on': StateDescription(sentences=[f"You turned on the {self.name}"]),
+            'turn_off': StateDescription(sentences=[f"You turned off the {self.name}"]),
         }
         super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
                          is_visible=is_visible)
@@ -289,15 +297,19 @@ class PlugSwitch(Thing):
         assert channel == "switch_binary", f"Switch_binary is the only available channel, {channel} was called instead"
         super().do_action(channel, action, params)
 
+    def get_state_description(self, state):
+        matching_instructions = []
+
+        state = state["switch_binary"]["state"][0]
+        # ON / OFF
+        if state:
+            matching_instructions.append(self.instruction['turn_on'])
+        else:
+            matching_instructions.append(self.instruction['turn_off'])
+        return matching_instructions
+
     def get_state_change(self, previous_state, next_state):
-        achieved_instructions = []
-        previous_state = previous_state["switch_binary"]["state"][0]
-        next_state = next_state["switch_binary"]["state"][0]
-        if previous_state and not next_state:
-            achieved_instructions.append(random.choice(self.instruction['turn_off']))
-        if not previous_state and next_state:
-            achieved_instructions.append(random.choice(self.instruction['turn_on']))
-        return achieved_instructions
+        return super().get_state_change(previous_state, next_state)
 
 
 class LGTV(Thing):

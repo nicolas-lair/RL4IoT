@@ -29,6 +29,9 @@ class Oracle:
             current_descriptions.extend(thing.get_state_description(state[thing.name]))
         return current_descriptions
 
+    def is_achieved(self, state, instruction):
+        return instruction in sum([state_des.sentences for state_des in self.get_state_descriptions(state)], [])
+
     def was_achieved(self, previous_state, next_state, instruction):
         return instruction in self.get_state_change(previous_state, next_state)
 
