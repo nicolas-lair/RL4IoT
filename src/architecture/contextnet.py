@@ -20,6 +20,7 @@ class DeepSetStateNet(nn.Module):
         self.out_features = scaler_layer_params['latent_out']
 
     def forward(self, state, instruction, hidden_state=None):
+        # print(instruction.size())
         full_state = flatten_state(state).float()
         if hidden_state is not None:
             hidden_state = hidden_state.unsqueeze(1).repeat_interleave(repeats=full_state.size(1), dim=1)
@@ -27,7 +28,7 @@ class DeepSetStateNet(nn.Module):
         attention_vector = self.state_attention_layer(instruction)
         full_state = attention_vector.unsqueeze(1) * full_state
         full_state = self.scaler_layer(full_state).mean(1)
-        print(full_state.size())
+        # print(full_state.size())
         return full_state
 
 
