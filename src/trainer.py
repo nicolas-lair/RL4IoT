@@ -95,7 +95,7 @@ if __name__ == "__main__":
 
         oracle = Oracle(env=env)
         language_model = LanguageModel(**params['language_model_params'])
-        agent = DQNAgent(params['dqn_architecture'], language_model=language_model, params=params)
+        agent = DQNAgent(language_model=language_model, params=params)
 
         num_episodes = params['n_episode']
         deep_action_space_embedding_size = params['model_params']['action_embedding_size']

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.nn.utils.rnn as rnn_utils
 
 from architecture.instruction_pointer_network import InstructedPointerNetwork
-from architecture.utils import flatten
+from architecture.utils import flatten_state
 
 
 class BasicQnet(nn.Module):
@@ -111,106 +111,92 @@ class ActionProjector(nn.Module):
             return embedded_actions
 
 
-def flatten_state(state):
-    if isinstance(state, dict):
-        state = [state]
-    flatten_states = [flatten(s) for s in state]
-    state = torch.stack([torch.stack(list(s.values())) for s in flatten_states])
-    return state
-
-
-class NoAttentionFlatQnet(nn.Module):
-    def __init__(self, instruction_embedding, state_embedding, action_embedding_size, net_params, raw_action_size):
+class DeepSetStateNet(nn.Module):
+    def __init__(self, instruction_embedding, state_embedding, scaler_layer_params, hidden_state_size=0):
         super().__init__()
-        self.in_features = instruction_embedding + state_embedding + 2 * action_embedding_size
-        self.q_network = BasicQnet(self.in_features, qnet_params=net_params['q_network'])
-        self.action_projector = ActionProjector(in_features=max(raw_action_size.values()),
-                                                out_features=action_embedding_size)
-
-    def preprocess_state(self, state, **kwargs):
-        state = flatten_state(state)
-        state = state.float().mean(1)
-        # state = state.view(len(state), -1)
-        return state
-
-    def forward(self, instruction, state, actions, hidden_state):
-        """
-
-        :param instruction: torch tensor (BATCH_SIZE, INSTRUCTION_EMBEDDING)
-        :param state: torch tensor (BATCH_SIZE, STATE_EMBEDDING)
-        :param hidden_state: torch.tensor(BATCH_SIZE, ACTION_EMBEDDING)
-                    string can be "action_with_description" or "action_without_description"
-        :param actions: tuple containing actions pre-embedding and action type
-        :return: torch tensor of size (BATCH_SIZE, longest_sequence, 1), hidden_state (actions here)
-        """
-        with torch.autograd.set_detect_anomaly(False):
-            embedded_actions = self.action_projector(*actions)
-            state = self.preprocess_state(state, instruction=instruction)
-
-            context = torch.cat([instruction, state, hidden_state], dim=1)
-            context = context.unsqueeze(1).repeat_interleave(repeats=embedded_actions.size(1), dim=1)
-            x = torch.cat([context, embedded_actions], dim=2)
-            x = self.q_network(x)
-            return x, embedded_actions
-
-
-class AttentionFlatQnet(NoAttentionFlatQnet):
-    def __init__(self, instruction_embedding, state_embedding, action_embedding_size, net_params, raw_action_size):
-        super().__init__(instruction_embedding, state_embedding, action_embedding_size, net_params, raw_action_size)
-        self.state_attention_layer = nn.Sequential(nn.Linear(instruction_embedding, state_embedding),
-                                                   nn.Sigmoid())
-
-    def preprocess_state(self, state, **kwargs):
-        attention_vector = self.state_attention_layer(kwargs['instruction'])
-        state = flatten_state(state)
-        state = (attention_vector.unsqueeze(1) * state).float().mean(1)
-        return state
-
-
-class DeepSetQnet(nn.Module):
-    def __init__(self, instruction_embedding, state_embedding, action_embedding_size, net_params, raw_action_size):
-        super().__init__()
-        self.in_features = net_params['scaler_layer']['latent_out'] + action_embedding_size
-
-        self.action_projector = ActionProjector(in_features=max(raw_action_size.values()),
-                                                out_features=action_embedding_size)
         self.state_attention_layer = nn.Sequential(
-            nn.Linear(instruction_embedding, state_embedding + action_embedding_size),
+            nn.Linear(instruction_embedding, state_embedding + hidden_state_size),
             nn.Sigmoid()
         )
         self.scaler_layer = nn.Sequential(
-            nn.Linear(state_embedding+action_embedding_size, net_params['scaler_layer']['hidden1_out']),
+            nn.Linear(state_embedding + hidden_state_size, scaler_layer_params['hidden1_out']),
             nn.ReLU(),
-            nn.Linear(net_params['scaler_layer']['hidden1_out'], net_params['scaler_layer']['latent_out']),
+            nn.Linear(scaler_layer_params['hidden1_out'], scaler_layer_params['latent_out']),
             nn.ReLU()
         )
+        self.out_features = scaler_layer_params['latent_out']
 
-        self.q_network = BasicQnet(self.in_features, qnet_params=net_params['q_network'])
+    def forward(self, state, instruction, hidden_state=None):
+        full_state = flatten_state(state).float()
+        if hidden_state is not None:
+            hidden_state = hidden_state.unsqueeze(1).repeat_interleave(repeats=full_state.size(1), dim=1)
+            full_state = torch.cat([full_state, hidden_state], dim=2)
+        attention_vector = self.state_attention_layer(instruction)
+        full_state = attention_vector.unsqueeze(1) * full_state
+        full_state = self.scaler_layer(full_state).mean(1, keepdim=True)
+        return full_state
+
+
+class FlatStateNet(nn.Module):
+    def __init__(self, instruction_embedding, state_embedding, hidden_state_size=0):
+        super().__init__()
+        self.out_features = instruction_embedding + state_embedding + hidden_state_size
+
+    def forward(self, state, instruction, hidden_state=None):
+        """
+
+        :param state: dict
+        :param instruction: torch tensor
+        :param hidden_state: torch tensor
+        :return: torch tensor of size (batch_size, 1, self.out_features)
+        """
+        state = flatten_state(state)
+        state = state.float().mean(1)
+        # state = state.view(len(state), -1)
+        context = [instruction, state]
+        if hidden_state is not None:
+            context.append(hidden_state)
+        context_tensor = torch.cat(context, dim=1).unsqueeze(1)
+        return context_tensor
+
+
+class AttentionFlatState(nn.Module):
+    def __init__(self, instruction_embedding, state_embedding, hidden_state_size=0):
+        super().__init__()
+        self.state_attention_layer = nn.Sequential(nn.Linear(instruction_embedding, state_embedding),
+                                                   nn.Sigmoid())
+        self.out_features = instruction_embedding + state_embedding + hidden_state_size
+
+    def forward(self, state, instruction, hidden_state=None):
+        attention_vector = self.state_attention_layer(instruction)
+        state = flatten_state(state)
+        state = (attention_vector.unsqueeze(1) * state).float().mean(1)
+        context = [instruction, state]
+        if hidden_state is not None:
+            context.append(hidden_state)
+        context_tensor = torch.cat(context, dim=1).unsqueeze(1)
+        return context_tensor.unsqueeze(1)
+
+
+class FullNet(nn.Module):
+    def __init__(self, context_model, action_embedding_size, net_params, raw_action_size):
+        super().__init__()
+
+        self.action_projector = ActionProjector(in_features=max(raw_action_size.values()),
+                                                out_features=action_embedding_size)
+
+        self.context_net = context_model(**net_params['context_net'])
+
+        self.qnet_in_features = self.context_net.out_features + action_embedding_size
+        self.q_network = BasicQnet(self.qnet_in_features, qnet_params=net_params['q_network'])
 
     def forward(self, instruction, state, actions, hidden_state):
-        """
-
-        :param instruction: torch tensor (BATCH_SIZE, INSTRUCTION_EMBEDDING)
-        :param state: torch tensor (BATCH_SIZE, STATE_EMBEDDING)
-        :param hidden_state: torch.tensor(BATCH_SIZE, ACTION_EMBEDDING)
-                    string can be "action_with_description" or "action_without_description"
-        :param actions: tuple containing actions pre-embedding and action type
-        :return: torch tensor of size (BATCH_SIZE, longest_sequence, 1), hidden_state (actions here)
-        """
-        with torch.autograd.set_detect_anomaly(False):
-            embedded_actions = self.action_projector(*actions)
-
-            flat_state = flatten_state(state).float()
-            hidden_state = hidden_state.unsqueeze(1).repeat_interleave(repeats=flat_state.size(1), dim=1)
-            full_state = torch.cat([flat_state, hidden_state], dim=2)
-            attention_vector = self.state_attention_layer(instruction)
-            full_state = attention_vector.unsqueeze(1) * full_state
-            full_state = self.scaler_layer(full_state).mean(1, keepdim=True)
-
-            full_state = full_state.repeat_interleave(repeats=embedded_actions.size(1), dim=1)
-            x = torch.cat([full_state, embedded_actions], dim=2)
-            x = self.q_network(x)
-            return x, embedded_actions
+        embedded_actions = self.action_projector(*actions)
+        context = self.context_net(state=state, instruction=instruction, hidden_state=hidden_state)
+        context = context.repeat_interleave(repeats=embedded_actions.size(1), dim=1)
+        x = torch.cat([context, embedded_actions], dim=2)
+        x = self.q_network(x)
+        return x, embedded_actions
 
 
 class DoubleDeepSetQnet(nn.Module):
@@ -225,7 +211,7 @@ class DoubleDeepSetQnet(nn.Module):
             nn.Sigmoid()
         )
         self.scaler_layer = nn.Sequential(
-            nn.Linear(state_embedding+action_embedding_size, net_params['scaler_layer']['hidden1_out']),
+            nn.Linear(state_embedding + action_embedding_size, net_params['scaler_layer']['hidden1_out']),
             nn.ReLU(),
             nn.Linear(net_params['scaler_layer']['hidden1_out'], net_params['scaler_layer']['latent_out']),
             nn.ReLU()

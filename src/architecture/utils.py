@@ -48,3 +48,11 @@ if __name__ == "__main__":
         t = torch.rand(random.randint(1, 10))
         b = differentiable_or(t)
         assert b == (t.max() > 0.5)
+
+
+def flatten_state(state):
+    if isinstance(state, dict):
+        state = [state]
+    flatten_states = [flatten(s) for s in state]
+    state = torch.stack([torch.stack(list(s.values())) for s in flatten_states])
+    return state

@@ -13,7 +13,7 @@ from src.logger import update_log_file_path
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, percent_level
-from architecture.dqn import NoAttentionFlatQnet, AttentionFlatQnet, DeepSetQnet
+from architecture.dqn import DeepSetStateNet, AttentionFlatState, FlatStateNet
 from simulator.Thing import PlugSwitch, LightBulb
 
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
@@ -48,10 +48,22 @@ def generate_params():
     device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
     # device = 'cpu'
 
-    qnet = NoAttentionFlatQnet
-    simulation_name = str(qnet).split("'")[-2].split('.')[-1]
+    context_archi = FlatStateNet
+    simulation_name = str(context_archi).split("'")[-2].split('.')[-1]
     path_dir = prepare_simulation(simulation_name)
 
+    # Build context net parameters
+    context_net_params = dict(instruction_embedding=instruction_embedding,
+                              state_embedding=state_embedding_size,
+                              hidden_state_size=action_embedding)
+    if simulation_name == 'DeepSetStateNet':
+        context_net_params.update(scaler_layer_params=dict(hidden1_out=256, latent_out=512))
+    elif simulation_name in ['FlatStateNet', 'AttentionFlatState']:
+        pass
+    else:
+        raise NotImplementedError
+
+    # Instantiate the param dict
     params = dict(
         simulation_name=simulation_name,
         env_params=dict(
@@ -80,8 +92,7 @@ def generate_params():
             ],
         ),
         model_params=dict(
-            instruction_embedding=instruction_embedding,
-            state_embedding=state_embedding_size,  # TODO
+            context_model=context_archi,
             action_embedding_size=action_embedding,  # TODO
             raw_action_size=dict(
                 description_node=description_embedding,
@@ -94,12 +105,7 @@ def generate_params():
                     hidden1_out=512,
                     hidden2_out=256
                 ),
-                # Scaler layer for DeepSet models
-                scaler_layer=dict(
-                    hidden1_out=256,
-                    latent_out=512
-
-                ),
+                context_net=context_net_params,
             )
         ),
         goal_sampler_params=dict(
@@ -133,16 +139,18 @@ def generate_params():
             console=True,
             log_file=True,
         ),
-        dqn_architecture=DeepSetQnet,
-        n_episode=10000,
+        # dqn_architecture=context_archi,
+        n_episode=3000,
         target_update_frequence=100,
         device=device,
         episode_reset=True,
-        test_frequence=100,
-        n_iter_test=30,
+        test_frequence=50,
+        n_iter_test=15,
         tqdm=False,
         save_directory=path_dir,
+
     )
+
     return params
 
 

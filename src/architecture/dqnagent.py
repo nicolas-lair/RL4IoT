@@ -5,23 +5,27 @@ import numpy as np
 from torch.nn.utils import clip_grad_norm_
 
 from src.logger import rootLogger
-from architecture.dqn import NoAttentionFlatQnet, AttentionFlatQnet, DeepSetQnet
+from architecture.dqn import FlatStateNet, AttentionFlatState, DeepSetStateNet
 from architecture.goal_sampler import GoalSampler
 from architecture.replay_buffer import ReplayBuffer, Transition
 from architecture.utils import dict_to_device
+from architecture.dqn import FullNet
 
 logger = rootLogger.getChild(__name__)
+
+
 # logger.setLevel(10)
 
 
 class DQNAgent:
-    def __init__(self, model, language_model, params):
+    def __init__(self, language_model, params):
         self.device = params['device']
 
-        self.policy_network = model(**params['model_params'])
+        # self.policy_network = model(**params['model_params'])
+        self.policy_network = FullNet(**params['model_params'])
         self.policy_network.to(self.device)
 
-        self.target_network = model(**params['model_params'])
+        self.target_network = FullNet(**params['model_params'])
         self.target_network.to(self.device)
         self.target_network.load_state_dict(self.policy_network.state_dict())
 
@@ -126,7 +130,7 @@ class DQNAgent:
                                                                                [action_type])
 
         action = actions[action_idx]
-        if isinstance(self.policy_network, (NoAttentionFlatQnet, AttentionFlatQnet, DeepSetQnet)):
+        if isinstance(self.policy_network.context_net, (FlatStateNet, AttentionFlatState, DeepSetStateNet)):
             hidden_state = hidden_state.to(self.device)
             # hidden_state += normalized_action_embedding.squeeze()[action_idx]  # TODO Check
             hidden_state = normalized_action_embedding[:, action_idx]
