@@ -5,7 +5,7 @@ import numpy as np
 from torch.nn.utils import clip_grad_norm_
 
 from src.logger import rootLogger
-from architecture.dqn import FlatStateNet, AttentionFlatState, DeepSetStateNet
+from contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState
 from architecture.goal_sampler import GoalSampler
 from architecture.replay_buffer import ReplayBuffer, Transition
 from architecture.utils import dict_to_device

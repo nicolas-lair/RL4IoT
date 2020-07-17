@@ -13,7 +13,7 @@ from src.logger import update_log_file_path
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, percent_level
-from architecture.dqn import DeepSetStateNet, AttentionFlatState, FlatStateNet
+from contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState
 from simulator.Thing import PlugSwitch, LightBulb
 
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
@@ -48,7 +48,7 @@ def generate_params():
     device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
     # device = 'cpu'
 
-    context_archi = FlatStateNet
+    context_archi = DeepSetStateNet
     simulation_name = str(context_archi).split("'")[-2].split('.')[-1]
     path_dir = prepare_simulation(simulation_name)
 
