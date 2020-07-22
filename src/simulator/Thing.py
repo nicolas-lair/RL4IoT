@@ -1,7 +1,7 @@
-from Items import *
 
 from gym import spaces
 
+from simulator.Items import *
 from simulator.Channel import Channel
 from simulator.utils import get_color_name_from_hsb, percent_to_level, color_list, percent_level
 from simulator.TreeView import DescriptionNode
@@ -175,7 +175,7 @@ class LightBulb(Thing):
 
         for color in color_list:
             self.instruction[f'{color}_color'] = StateDescription(
-                sentences=[f"You changed the color of {self.name} to {color}"]
+                sentences=[f"You set the color of {self.name} to {color}"]
             )
         for level in percent_level:
             self.instruction[f'lum_level_{level}'] = StateDescription(

@@ -5,7 +5,7 @@ import numpy as np
 from torch.nn.utils import clip_grad_norm_
 
 from src.logger import rootLogger
-from contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState
+from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState
 from architecture.goal_sampler import GoalSampler
 from architecture.replay_buffer import ReplayBuffer, Transition
 from architecture.utils import dict_to_device
@@ -78,6 +78,7 @@ class DQNAgent:
         embedding = a.get_node_embedding()
         if not isinstance(embedding, torch.Tensor):
             embedding = torch.tensor(embedding)
+        logger.debug(f'View debuggin: {embedding.size()}')
         embedding = embedding.view(1, -1)
         return embedding.float().to(self.device), a.node_type
 
@@ -139,7 +140,7 @@ class DQNAgent:
 
         return action, hidden_state
 
-    def udpate_policy_net(self, batch_size=None):
+    def update_policy_net(self, batch_size=None):
         batch_size = batch_size if batch_size is not None else self.batch_size
         if batch_size > len(self.replay_buffer):
             return
@@ -167,6 +168,7 @@ class DQNAgent:
         embedded_previous_action = self.embed_actions(previous_action)
 
         logger.debug('Projecting previous action in a command subspace')
+        # TODO try detach the hidden state
         projected_previous_actions = self.policy_network.action_projector(*embedded_previous_action).squeeze()
 
         logger.debug('Computing Q(s,a)')

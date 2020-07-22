@@ -1,7 +1,7 @@
 import torch
 from torch import nn as nn
 
-from utils import flatten_state
+from architecture.utils import flatten_state
 
 
 class DeepSetStateNet(nn.Module):
@@ -27,6 +27,7 @@ class DeepSetStateNet(nn.Module):
             full_state = torch.cat([full_state, hidden_state], dim=2)
         attention_vector = self.state_attention_layer(instruction)
         full_state = attention_vector.unsqueeze(1) * full_state
+        # TODO change aggregation function
         full_state = self.scaler_layer(full_state).mean(1)
         # print(full_state.size())
         return full_state
@@ -47,7 +48,6 @@ class FlatStateNet(nn.Module):
         """
         state = flatten_state(state)
         state = state.float().mean(1)
-        # state = state.view(len(state), -1)
         context = [instruction, state]
         if hidden_state is not None:
             context.append(hidden_state)

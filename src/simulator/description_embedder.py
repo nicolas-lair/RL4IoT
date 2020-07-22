@@ -3,14 +3,14 @@ import torchtext as text
 
 
 class Description_embedder:
-    def __init__(self, embedding='glove', dimension=50, reduction='mean', authorize_cache=True):
+    def __init__(self, embedding, word_embedding_params, reduction='mean', authorize_cache=True):
         self.embedder = None
         self.authorize_cache = authorize_cache
         self.cached_embedded_description = dict()
         self.tokenizer = text.data.utils.get_tokenizer(tokenizer="spacy", language="en")
         self.lower_case = True
         if embedding == 'glove':
-            self.vocab = text.vocab.GloVe(name='6B', dim=str(dimension))
+            self.vocab = text.vocab.GloVe(**word_embedding_params)
         else:
             raise NotImplementedError
 

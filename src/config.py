@@ -13,7 +13,7 @@ from src.logger import update_log_file_path
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, percent_level
-from contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState
+from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState
 from simulator.Thing import PlugSwitch, LightBulb
 
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
@@ -37,7 +37,7 @@ def prepare_simulation(simulation_name):
     return path_dir
 
 
-def generate_params():
+def generate_params(save_path=True):
     word_embedding_size = 100
     instruction_embedding = 100
     description_embedding = 100
@@ -45,12 +45,16 @@ def generate_params():
     state_embedding_size = state_encoding_size + description_embedding + len(ITEM_TYPE)
     action_embedding = 50
 
+    vector_cache = '/home/nicolas/PycharmProjects/imagineIoT/.vector_cache'
     device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
     # device = 'cpu'
 
     context_archi = DeepSetStateNet
     simulation_name = str(context_archi).split("'")[-2].split('.')[-1]
-    path_dir = prepare_simulation(simulation_name)
+    if save_path:
+        path_dir = prepare_simulation(simulation_name)
+    else:
+        path_dir = None
 
     # Build context net parameters
     context_net_params = dict(instruction_embedding=instruction_embedding,
@@ -63,6 +67,9 @@ def generate_params():
     else:
         raise NotImplementedError
 
+    reward_net_params = context_net_params.copy()
+    reward_net_params['hidden_state_size'] = 0
+
     # Instantiate the param dict
     params = dict(
         simulation_name=simulation_name,
@@ -70,7 +77,11 @@ def generate_params():
             state_encoding_size=state_encoding_size,
             description_embedder_params=dict(
                 embedding='glove',
-                dimension=description_embedding,
+                word_embedding_params=dict(
+                    name='6B',
+                    dim=str(description_embedding),
+                    cache=vector_cache
+                ),
                 reduction='mean',
                 authorize_cache=True
             ),
@@ -108,6 +119,7 @@ def generate_params():
                 context_net=context_net_params,
             )
         ),
+        reward_model_params=reward_net_params,
         goal_sampler_params=dict(
             goal_sampling_stategy='random',
             oracle_strategy='exhaustive_feedback'
@@ -130,7 +142,9 @@ def generate_params():
             embedding_size=word_embedding_size,
             linear1_out=256,
             out_features=instruction_embedding,
-            vocab=torchtext.vocab.GloVe(name='6B', dim=word_embedding_size),
+            vocab=torchtext.vocab.GloVe(name='6B', dim=word_embedding_size,
+                                        cache=vector_cache
+                                        ),
             vocab_size=500,
             device=device
         ),
@@ -148,7 +162,6 @@ def generate_params():
         n_iter_test=15,
         tqdm=False,
         save_directory=path_dir,
-
     )
 
     return params
