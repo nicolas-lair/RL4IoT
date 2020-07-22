@@ -46,7 +46,7 @@ def generate_params(save_path=True):
     action_embedding = 50
 
     vector_cache = '/home/nicolas/PycharmProjects/imagineIoT/.vector_cache'
-    device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     # device = 'cpu'
 
     context_archi = DeepSetStateNet

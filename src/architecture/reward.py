@@ -2,7 +2,6 @@ import numpy as np
 import joblib
 import torch
 from torch import nn
-import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
 from architecture.utils import differentiable_or
@@ -30,7 +29,7 @@ class LearnedReward(nn.Module):
         instruction_embedding = self.language_model(instructions).view(len(instructions), -1)
         context = self.context_net(state=state, instruction=instruction_embedding)
         x = self.reward_layer(context)
-        reward = F.sigmoid(x)
+        reward = torch.sigmoid(x)
         # reward = differentiable_or(x.view(-1))
         return reward
 

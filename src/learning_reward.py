@@ -34,7 +34,7 @@ item_type_embedder.fit(np.array(ITEM_TYPE).reshape(-1, 1))
 from functools import partial
 
 transformer = partial(preprocess_raw_observation, description_embedder=description_embedder,
-                      item_type_embedder=item_type_embedder, raw_state_size=3, pytorch=True, device='cuda:1')
+                      item_type_embedder=item_type_embedder, raw_state_size=3, pytorch=True, device=params['device'])
 
 dts = StateDataset.from_files(state_path, raw_state_transformer=transformer)
 train_dts, test_dts = dts.split(train_test_ratio=0.7)
@@ -43,7 +43,7 @@ train_loader = DataLoader(train_dts, batch_size=5, shuffle=True)
 language_model = LanguageModel(**params['language_model_params'])
 reward = LearnedReward(context_model=params['model_params']['context_model'], language_model=language_model,
                        reward_params=params['reward_model_params'])
-reward.to('cuda:1')
+reward.to(params['device'])
 
 if __name__ == "__main__":
     for i, batch in enumerate(train_loader):
