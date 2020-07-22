@@ -118,6 +118,30 @@ class IoTEnv(gym.Env):
         raise NotImplementedError
 
 
+def preprocess_raw_observation(observation, description_embedder, item_type_embedder, raw_state_size, pytorch=True,
+                               device='cpu'):
+    new_obs = dict()
+    for thing_name, thing in observation.items():
+        thing_obs = dict()
+        for channel_name, channel in thing.items():
+            if channel['item_type'] == 'goal_string':
+                raise NotImplementedError
+            try:
+                description_embedding = channel['embedding']
+            except KeyError:
+                description_embedding = description_embedder.get_description_embedding(channel['description'])
+            item_embedding = item_type_embedder.transform(
+                np.array(channel['item_type']).reshape(-1, 1)).flatten()
+            state_embedding = np.zeros(raw_state_size)
+            state_embedding[:len(channel['state'])] = channel['state']
+            channel_embedding = np.concatenate([description_embedding, item_embedding, state_embedding])
+            if pytorch:
+                channel_embedding = torch.tensor(channel_embedding)
+            thing_obs[channel_name] = channel_embedding.to(device)
+        new_obs[thing_name] = thing_obs
+    return new_obs
+
+
 class IoTEnv4ML(gym.Wrapper):
     def __init__(self, params, env_class=IoTEnv):
         super().__init__(env=env_class(params['thing_params']))
@@ -127,8 +151,9 @@ class IoTEnv4ML(gym.Wrapper):
         self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
 
         self.state_embedding_size = params['state_encoding_size']
-        self.channel_embedding_size = params['description_embedder_params']['dimension'] + len(ITEM_TYPE) + params[
-            'state_encoding_size']
+        self.channel_embedding_size = int(params['description_embedder_params']['word_embedding_params']['dim']) + len(
+            ITEM_TYPE) + params[
+                                          'state_encoding_size']
 
         self.state = None
         self.previous_state = None
@@ -143,26 +168,11 @@ class IoTEnv4ML(gym.Wrapper):
         # print(1)
 
     def preprocess_raw_observation(self, observation, pytorch=True):
-        new_obs = dict()
-        for thing_name, thing in observation.items():
-            thing_obs = dict()
-            for channel_name, channel in thing.items():
-                if channel['item_type'] == 'goal_string':
-                    raise NotImplementedError
-                try:
-                    description_embedding = channel['embedding']
-                except KeyError:
-                    description_embedding = self.description_embedder.get_description_embedding(channel['description'])
-                item_embedding = self.item_type_embedder.transform(
-                    np.array(channel['item_type']).reshape(-1, 1)).flatten()
-                state_embedding = np.zeros(self.state_embedding_size)
-                state_embedding[:len(channel['state'])] = channel['state']
-                channel_embedding = np.concatenate([description_embedding, item_embedding, state_embedding])
-                if pytorch:
-                    channel_embedding = torch.tensor(channel_embedding)
-                thing_obs[channel_name] = channel_embedding
-            new_obs[thing_name] = thing_obs
-        return new_obs
+        return preprocess_raw_observation(observation=observation,
+                                          description_embedder=self.description_embedder,
+                                          item_type_embedder=self.item_type_embedder,
+                                          raw_state_size=self.state_embedding_size,
+                                          pytorch=pytorch)
 
     # TODO Normalize the ouput of step
     def step(self, action):
@@ -199,7 +209,7 @@ class IoTEnv4ML(gym.Wrapper):
         things_list = self.get_thing_list()
         description_node_iterator = chain.from_iterable([things_list] + [t.get_channels() for t in things_list])
         for node in description_node_iterator:
-            node.embed_node_description(self.description_embedder.get_description_embedding)
+            node.embed_node_description(embedder=self.description_embedder.get_description_embedding)
 
         self.state = self.preprocess_raw_observation(raw_state)
         self.previous_state = None

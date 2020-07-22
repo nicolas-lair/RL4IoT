@@ -43,6 +43,7 @@ def dict_to_device(d, device):
             raise NotImplementedError
     return out
 
+
 if __name__ == "__main__":
     for i in range(10000):
         t = torch.rand(random.randint(1, 10))
@@ -54,5 +55,13 @@ def flatten_state(state):
     if isinstance(state, dict):
         state = [state]
     flatten_states = [flatten(s) for s in state]
-    state = torch.stack([torch.stack(list(s.values())) for s in flatten_states])
+    flatten_states = [torch.stack(list(s.values())) for s in flatten_states]
+
+    # Case when using data loader state is already collated, we need to
+    # transpose the batch dimension and object dimension
+    if len(flatten_states) == 1 and flatten_states[0].ndim == 3:
+        state = flatten_states[0]
+        state = state.transpose(dim0=0, dim1=1)
+    else:
+        state = torch.stack(flatten_states)
     return state
