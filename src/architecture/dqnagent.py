@@ -28,6 +28,7 @@ class DQNAgent:
         self.target_network = FullNet(**params['model_params'])
         self.target_network.to(self.device)
         self.target_network.load_state_dict(self.policy_network.state_dict())
+        self.target_update_freq = params['target_update_frequence']
 
         self.target_network.eval()
 
@@ -151,7 +152,8 @@ class DQNAgent:
         transitions = Transition(*zip(*transitions))
 
         logger.debug('Computing goal embeddings for update')
-        goals = torch.cat([g.compute_embedding(self.language_model) for g in transitions.goal]).to(self.device)
+        # goals = torch.cat([g.compute_embedding(self.language_model) for g in transitions.goal]).to(self.device)
+        goals = self.language_model([g.goal_string for g in transitions.goal])
 
         states = [dict_to_device(d, self.device) for d in transitions.state]
 
@@ -217,7 +219,28 @@ class DQNAgent:
     def update_target_net(self):
         self.target_network.load_state_dict(self.policy_network.state_dict())
 
-    def update_exploration_function(self, iter):
+    def update_exploration_function(self, n):
+        """
+
+        :param n: episode number
+        :return:
+        """
         self.exploration_threshold = self.exploration_params['min_eps'] + (
                 self.exploration_params['start_eps'] - self.exploration_params['min_eps']) * np.exp(
-            -1. * iter / self.exploration_params['eps_decay'])
+            -1. * n / self.exploration_params['eps_decay'])
+
+    def update(self, n):
+        """
+
+        :param n: episode number
+        :return:
+        """
+        logger.debug('Update of policy net')
+        self.update_policy_net()
+        logger.debug('done')
+        self.goal_sampler.update_embedding()
+        self.update_exploration_function(n=n + 1)
+        if n % self.target_update_freq == 0:
+            logger.debug('Update of target net')
+            self.update_target_net()
+            logger.debug('done')

@@ -20,6 +20,8 @@ params = generate_params()
 set_logger_handler(rootLogger, **params['logger'], log_path=params['save_directory'])
 logger = rootLogger.getChild(__name__)
 
+logger.info('begin')
+
 
 def run_episode(agent, env, target_goal, train=True):
     hidden_state = torch.zeros(1, deep_action_space_embedding_size).to(agent.device)
@@ -101,8 +103,8 @@ if __name__ == "__main__":
         deep_action_space_embedding_size = params['model_params']['action_embedding_size']
 
         # (state, available_actions) = env.reset()
-        for i in range(num_episodes):
-            logger.info('%' * 5 + f' Episode {i} ' + '%' * 5)
+        for j in range(num_episodes):
+            logger.info('%' * 5 + f' Episode {j} ' + '%' * 5)
             if params['episode_reset']:
                 # Initialize the environment and state + flatten
                 env.reset()
@@ -122,7 +124,7 @@ if __name__ == "__main__":
             # TODO refactoring to let the goal sampler ask to the oracle
             achieved_goals_str = oracle.get_state_change(env.previous_user_state, env.user_state)
 
-            agent.goal_sampler.update([target_goal], achieved_goals_str, iter=i)
+            agent.goal_sampler.update([target_goal], achieved_goals_str, iter=j)
 
             failed_goals = agent.goal_sampler.get_failed_goals(achieved_goals_str=achieved_goals_str)
             achieved_goals = [agent.goal_sampler.discovered_goals[g] for g in achieved_goals_str]
@@ -136,21 +138,22 @@ if __name__ == "__main__":
                                           previous_action=ante_final_action
                                           )
 
-            logger.debug('Update of policy net')
-            agent.udpate_policy_net()
-            logger.debug('done')
+            agent.update(j)
+            # logger.debug('Update of policy net')
+            # agent.update_policy_net()
+            # logger.debug('done')
+            #
+            # agent.update_exploration_function(n=i + 1)
+            #
+            # if i % params['target_update_frequence'] == 0:
+            #     logger.debug('Update of target net')
+            #     agent.update_target_net()
+            #     logger.debug('done')
 
-            agent.update_exploration_function(iter=i + 1)
+            if j > 0 and j % params['test_frequence'] == 0:
+                test_record[j] = test_agent(agent=agent, test_env=test_env, oracle=oracle)
 
-            if i % params['target_update_frequence'] == 0:
-                logger.debug('Update of target net')
-                agent.update_target_net()
-                logger.debug('done')
-
-            if i > 0 and i % params['test_frequence'] == 0:
-                test_record[i] = test_agent(agent=agent, test_env=test_env, oracle=oracle)
-
-            if i > 0 and i % 10 * params['test_frequence'] == 0:
+            if j > 0 and j % 10 * params['test_frequence'] == 0:
                 save_records()
 
         test_record[num_episodes] = test_agent(agent=agent, test_env=test_env, oracle=oracle)
