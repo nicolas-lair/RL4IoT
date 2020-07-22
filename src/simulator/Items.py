@@ -92,7 +92,8 @@ class ColorItem(AbstractItem):
         elif init == 'random':
             self.hue = random.randint(0, 360)
             self.saturation = random.randint(0, 100)
-            self.brightness = random.randint(0, 100)
+            onoff = random.randint(0, 1)
+            self.brightness = onoff * random.randint(1, 100)
         elif isinstance(init, Iterable):
             self.set_state(init)
         else:

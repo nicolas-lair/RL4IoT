@@ -19,7 +19,7 @@ class Oracle:
             achieved_instruction.extend(thing.get_state_change(previous_state[thing.name], next_state[thing.name]))
         return achieved_instruction
 
-    def get_state_descriptions(self, state):
+    def get_state_descriptions(self, state, as_string=False):
         """
         :param state:
         :return: list of StateDescription object
@@ -27,6 +27,9 @@ class Oracle:
         current_descriptions = []
         for thing in self.env.get_thing_list():
             current_descriptions.extend(thing.get_state_description(state[thing.name]))
+
+        if as_string:
+            current_descriptions = sum([state_des.sentences for state_des in current_descriptions], [])
         return current_descriptions
 
     def is_achieved(self, state, instruction):
