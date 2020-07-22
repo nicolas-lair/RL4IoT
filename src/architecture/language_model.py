@@ -1,6 +1,7 @@
 from torch import nn
 import torch
 import torch.nn.functional as F
+import torch.nn.utils.rnn as rnn_utils
 
 from spacy.tokenizer import Tokenizer
 from spacy.lang.en import English
@@ -43,7 +44,7 @@ class LanguageModel(nn.Module):
             self.linear2 = nn.Linear(in_features=linear1_out, out_features=out_features)
         elif self.type == 'lstm':
             self.type = 'lstm'
-            self.lstm = nn.LSTM(input_size=embedding_size, hidden_size=out_features, bias=False, batch_first=True)
+            self.lstm = nn.LSTM(input_size=embedding_size, hidden_size=out_features, bias=False)
         else:
             raise NotImplementedError
 
@@ -60,7 +61,7 @@ class LanguageModel(nn.Module):
         if isinstance(sentence, str):
             tokens = self.tokenizer(sentence.lower())
             try:
-                return torch.LongTensor([[self.word_to_ix[t.text] for t in tokens]])
+                return torch.LongTensor([self.word_to_ix[t.text] for t in tokens])
             except KeyError as new_t:
                 self.add_tokens(new_t.args[0])
                 return self.prepare_sentence(sentence)
@@ -73,28 +74,46 @@ class LanguageModel(nn.Module):
     # TODO Compute forward pass in one pass : need to handle pad token
     def forward(self, sentence):
         if isinstance(sentence, str):
-            s = self.prepare_sentence(sentence)
-            s = self.embedding_layer(s.to(self.device))
-            if self.type == 'linear':
-                s = self.linear1(s)
-                s = F.relu(s)
-                s = self.linear2(s)
-                s = F.relu(s)
-                out = s.mean(dim=1, keepdim=True)
-            elif self.type == 'lstm':
-                output, (h, c) = self.lstm(s)
-                # out = h
-                out = torch.tanh(h)
-            else:
-                raise NotImplementedError('Language policy_network type should be linear or LSTM')
-            return out
-        elif isinstance(sentence, list):
-            out = []
-            for s in sentence:
-                out.append(self.forward(s))
-            return torch.cat(out, dim=0)
+            sentence = [sentence]
+
+        s = self.prepare_sentence(sentence)
+        s = rnn_utils.pad_sequence(s)
+        s = self.embedding_layer(s.to(self.device))
+        if self.type == 'linear':
+            s = self.linear1(s)
+            s = F.relu(s)
+            s = self.linear2(s)
+            s = F.relu(s)
+            out = s.mean(dim=1, keepdim=True)
+        elif self.type == 'lstm':
+            output, (h, c) = self.lstm(s)
+            out = torch.tanh(h).squeeze(0)
         else:
-            raise TypeError('Sentence should be passed as a string or list of string')
+            raise NotImplementedError('Language policy_network type should be linear or LSTM')
+        return out
+
+        # if isinstance(sentence, str):
+        #     s = self.embedding_layer(s.to(self.device))
+        #     if self.type == 'linear':
+        #         s = self.linear1(s)
+        #         s = F.relu(s)
+        #         s = self.linear2(s)
+        #         s = F.relu(s)
+        #         out = s.mean(dim=1, keepdim=True)
+        #     elif self.type == 'lstm':
+        #         output, (h, c) = self.lstm(s)
+        #         # out = h
+        #         out = torch.tanh(h)
+        #     else:
+        #         raise NotImplementedError('Language policy_network type should be linear or LSTM')
+        #     return out
+        # elif isinstance(sentence, list):
+        #     out = []
+        #     for s in sentence:
+        #         out.append(self.forward(s))
+        #     return torch.cat(out, dim=0)
+        # else:
+        #     raise TypeError('Sentence should be passed as a string or list of string')
 
 
 if __name__ == '__main__':
