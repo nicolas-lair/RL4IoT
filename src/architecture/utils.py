@@ -65,3 +65,13 @@ def flatten_state(state):
     else:
         state = torch.stack(flatten_states)
     return state
+
+
+def freeze_model(model):
+    for param in model.parameters():
+        param.requires_grad = False
+
+
+def unfreeze_model(model):
+    for param in model.parameters():
+        param.requires_grad = True

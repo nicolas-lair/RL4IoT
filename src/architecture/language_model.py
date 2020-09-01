@@ -6,6 +6,8 @@ import torch.nn.utils.rnn as rnn_utils
 from spacy.tokenizer import Tokenizer
 from spacy.lang.en import English
 
+from architecture.utils import freeze_model, unfreeze_model
+
 nlp = English()
 
 
@@ -22,6 +24,7 @@ class LanguageModel(nn.Module):
         :param vocab_size:
         """
         super().__init__()
+        self.frozen = False
         self.out_features = out_features
         self.word_to_ix = dict()
         self.type = type
@@ -92,28 +95,13 @@ class LanguageModel(nn.Module):
             raise NotImplementedError('Language policy_network type should be linear or LSTM')
         return out
 
-        # if isinstance(sentence, str):
-        #     s = self.embedding_layer(s.to(self.device))
-        #     if self.type == 'linear':
-        #         s = self.linear1(s)
-        #         s = F.relu(s)
-        #         s = self.linear2(s)
-        #         s = F.relu(s)
-        #         out = s.mean(dim=1, keepdim=True)
-        #     elif self.type == 'lstm':
-        #         output, (h, c) = self.lstm(s)
-        #         # out = h
-        #         out = torch.tanh(h)
-        #     else:
-        #         raise NotImplementedError('Language policy_network type should be linear or LSTM')
-        #     return out
-        # elif isinstance(sentence, list):
-        #     out = []
-        #     for s in sentence:
-        #         out.append(self.forward(s))
-        #     return torch.cat(out, dim=0)
-        # else:
-        #     raise TypeError('Sentence should be passed as a string or list of string')
+    def freeze(self):
+        freeze_model(self)
+        self.frozen = True
+
+    def unfreeze(self):
+        unfreeze_model(self)
+        self.frozen = False
 
 
 if __name__ == '__main__':
