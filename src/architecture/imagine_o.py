@@ -48,6 +48,21 @@ class RecurrentDifferentiableOR(nn.Module):
         _, (h, c) = self.lstm(proba_tensor.view(proba_tensor.size(0), proba_tensor.size(2), proba_tensor.size(1)))
         return h
 
+class DeepSetOR(nn.Module):
+    def __init__(self, hidden_size=256):
+        super().__init__()
+        self.name='deepset_or'
+        self.hidden = nn.Linear(in_features=1, out_features=hidden_size)
+        self.linear = nn.Linear(in_features=hidden_size, out_features=1)
+
+    def forward(self, proba_tensor):
+        x =self.hidden(proba_tensor)
+        x = F.relu(x)
+        x = self.linear(x)
+        x = F.sigmoid(x)
+        return x
+
+
 class DiffOR(nn.Module):
     def __init__(self, input_size=3, hidden_size=256):
         super().__init__()

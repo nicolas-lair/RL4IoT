@@ -5,7 +5,7 @@ from torch import nn
 from torch import optim
 import torch.nn.functional as F
 
-from utils import differentiable_or
+from architecture.utils import differentiable_or
 
 
 class RecurrentDifferentiableOR(nn.Module):
