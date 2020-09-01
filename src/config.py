@@ -38,9 +38,9 @@ def prepare_simulation(simulation_name):
 
 
 def generate_params(save_path=True):
-    word_embedding_size = 100
-    instruction_embedding = 100
-    description_embedding = 100
+    word_embedding_size = 50
+    instruction_embedding = 40
+    description_embedding = 50
     state_encoding_size = 3  # size of the vector in which is encoded the value of a channel
     state_embedding_size = state_encoding_size + description_embedding + len(ITEM_TYPE)
     action_embedding = 50
@@ -49,8 +49,8 @@ def generate_params(save_path=True):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     # device = 'cpu'
 
-    context_archi = DeepSetStateNet
-    simulation_name = str(context_archi).split("'")[-2].split('.')[-1]
+    policy_context_archi = DeepSetStateNet
+    simulation_name = str(policy_context_archi).split("'")[-2].split('.')[-1]
     if save_path:
         path_dir = prepare_simulation(simulation_name)
     else:
@@ -59,17 +59,30 @@ def generate_params(save_path=True):
     # Build context net parameters
     context_net_params = dict(instruction_embedding=instruction_embedding,
                               state_embedding=state_embedding_size,
-                              hidden_state_size=action_embedding)
+                              hidden_state_size=action_embedding,
+                              aggregate='mean')
     if simulation_name == 'DeepSetStateNet':
-        context_net_params.update(scaler_layer_params=dict(hidden1_out=256, latent_out=512))
+        scaler_layer_params = dict(hidden1_out=256, latent_out=512, last_activation='relu')
+        context_net_params.update(scaler_layer_params)
     elif simulation_name in ['FlatStateNet', 'AttentionFlatState']:
         pass
     else:
         raise NotImplementedError
 
-    reward_net_params = context_net_params.copy()
-    reward_net_params['hidden_state_size'] = 0
+    reward_net_params = dict(instruction_embedding=instruction_embedding,
+                             hidden_state_size=0,
+                             state_embedding=state_embedding_size + state_encoding_size,
+                             aggregate='mean')
+    if simulation_name == 'DeepSetStateNet':
+        reward_net_params.update(scaler_layer_params=dict(hidden1_out=256, latent_out=512, last_activation='relu'))
 
+    reward_fit_params = dict(
+        optimizer=optim.Adam,
+        loss=nn.BCELoss,
+        batch_size=128,
+        n_epoch=30,
+        sampler_params=dict(),
+    )
     # Instantiate the param dict
     params = dict(
         simulation_name=simulation_name,
@@ -103,7 +116,7 @@ def generate_params(save_path=True):
             ],
         ),
         model_params=dict(
-            context_model=context_archi,
+            context_model=policy_context_archi,
             action_embedding_size=action_embedding,  # TODO
             raw_action_size=dict(
                 description_node=description_embedding,
@@ -119,7 +132,8 @@ def generate_params(save_path=True):
                 context_net=context_net_params,
             )
         ),
-        reward_model_params=reward_net_params,
+        reward_params=dict(net_params=reward_net_params,
+                           fit_params=reward_fit_params),
         goal_sampler_params=dict(
             goal_sampling_stategy='random',
             oracle_strategy='exhaustive_feedback'
@@ -153,7 +167,7 @@ def generate_params(save_path=True):
             console=True,
             log_file=True,
         ),
-        # dqn_architecture=context_archi,
+        # dqn_architecture=policy_context_archi,
         n_episode=3000,
         target_update_frequence=100,
         device=device,

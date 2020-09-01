@@ -28,6 +28,7 @@ def run_episode(env):
         logger.debug(f'action: {action.name}')
         (_, available_actions), _, done, _ = env.step(action=action)
 
+
 def remove_key(state, key='embedding'):
     s = state.copy()
     if isinstance(s, dict):
@@ -41,19 +42,31 @@ def remove_key(state, key='embedding'):
                 s[k] = remove_key(v, key)
     return s
 
+
 def save_episodes():
-    joblib.dump(episodes_records, '../results/episodes_records.jbl')
-    joblib.dump(state_records, '../results/state_records.jbl')
+    joblib.dump(episodes_records, '../results/episodes_records4.jbl')
+    joblib.dump(state_records, '../results/state_records4.jbl')
 
 
 if __name__ == "__main__":
 
     env = IoTEnv4ML(params=params['env_params'])
     oracle = Oracle(env=env)
-    num_episodes = 1000
-    episodes_records = []
-    state_records = []
+    num_episodes = 100000
+
     instructions_set = set(sum([list(v) for v in oracle.str_instructions.values()], []))
+
+    pos_episodes = {i: [] for i in instructions_set}
+    neg_episodes = {i: [] for i in instructions_set}
+    pos_states = {i: [] for i in instructions_set}
+    neg_states = {i: [] for i in instructions_set}
+
+    def store_record(obj, pos_storage, neg_storage, achieved_set):
+        for i in achieved_set:
+            pos_storage[i].append(obj(instruction=i, reward=1))
+        for i in instructions_set.difference(achieved_set):
+            if random.random() < 0.25:
+                neg_storage[i].append(obj(instruction=i, reward=0))
 
     for i in range(num_episodes):
         logger.info('%' * 5 + f' Episode {i} ' + '%' * 5)
@@ -67,25 +80,26 @@ if __name__ == "__main__":
         logger.info(previous_state_descriptions)
         logger.info(state_descriptions)
 
-        for instruction in instructions_set:
-            previous_state = remove_key(env.previous_user_state)
-            state = remove_key(env.user_state)
-            episodes_records.append(
-                EpisodeRecord(initial_state=previous_state,
-                              final_state=state,
-                              instruction=instruction,
-                              reward=instruction in achieved_goals_str)
-            )
-            state_records += [
-                StateRecord(state=state,
-                            instruction=instruction,
-                            reward=instruction in state_descriptions),
-                StateRecord(state=previous_state,
-                            instruction=instruction,
-                            reward=instruction in previous_state_descriptions)
-            ]
+        previous_state = remove_key(env.previous_user_state)
+        state = remove_key(env.user_state)
 
-            if i > 0 and i % 5000 == 0:
-                save_episodes()
+        from functools import partial
 
+        store_record(obj=partial(EpisodeRecord, initial_state=previous_state, final_state=state),
+                     pos_storage=pos_episodes,
+                     neg_storage=neg_episodes, achieved_set=achieved_goals_str)
+
+        store_record(obj=partial(StateRecord, state=state), pos_storage=pos_states,
+                     neg_storage=neg_states, achieved_set=state_descriptions)
+
+        store_record(obj=partial(StateRecord, state=previous_state), pos_storage=pos_states,
+                     neg_storage=neg_states, achieved_set=previous_state_descriptions)
+
+        # if i > 0 and i % 5000 == 0:
+        #     episodes_records = (pos_episodes, neg_episodes)
+        #     state_records = (pos_states, neg_states)
+        #     save_episodes()
+
+    episodes_records = (pos_episodes, neg_episodes)
+    state_records = (pos_states, neg_states)
     save_episodes()
