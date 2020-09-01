@@ -1,23 +1,64 @@
 import torch
 from torch import nn as nn
 
-from architecture.utils import flatten_state
+from architecture.utils import flatten_state, differentiable_or
 
+class Net(nn.Module):
+    def __init__(self, n_inputs):
+        super(Net, self).__init__()
+        self.shared_encoding = nn.Sequential(nn.Linear(1, 100),
+                                             nn.ReLU(),
+                                             nn.Linear(100, n_inputs))
+        self.out_layer = nn.Sequential(nn.Linear(n_inputs, 100),
+                                       nn.ReLU(),
+                                       nn.Linear(100, 1),
+                                       nn.Sigmoid())
+
+    def forward(self, x):
+        latent = self.shared_encoding(x.unsqueeze(dim=2))
+        latent = latent.sum(dim=1)
+        out = self.out_layer(latent)
+        return out
+
+def build_scaler_layer(input_size, params):
+    if params['last_activation'] == 'relu':
+        last_activation_layer = nn.ReLU()
+    elif params['last_activation'] == 'sigmoid':
+        last_activation_layer = nn.Sigmoid()
+    else:
+        raise NotImplementedError(
+            f'last_scaler_activation should be one of relu or sigmoid, not {params["last_activation"]}')
+
+    scaler_layer = nn.Sequential(
+        nn.Linear(input_size, params['hidden1_out']),
+        nn.ReLU(),
+        nn.Linear(params['hidden1_out'], params['latent_out']),
+        last_activation_layer
+    )
+
+    return scaler_layer
 
 class DeepSetStateNet(nn.Module):
-    def __init__(self, instruction_embedding, state_embedding, scaler_layer_params, hidden_state_size=0):
+    def __init__(self, instruction_embedding, state_embedding, scaler_layer_params, hidden_state_size=0,
+                 aggregate='mean'):
         super().__init__()
         self.state_attention_layer = nn.Sequential(
             nn.Linear(instruction_embedding, state_embedding + hidden_state_size),
             nn.Sigmoid()
         )
-        self.scaler_layer = nn.Sequential(
-            nn.Linear(state_embedding + hidden_state_size, scaler_layer_params['hidden1_out']),
-            nn.ReLU(),
-            nn.Linear(scaler_layer_params['hidden1_out'], scaler_layer_params['latent_out']),
-            nn.ReLU()
-        )
+
+        self.scaler_layer = build_scaler_layer(state_embedding + hidden_state_size, scaler_layer_params)
+
         self.out_features = scaler_layer_params['latent_out']
+
+        assert aggregate in ['mean', 'sum', 'diff_or', None], f'aggregate should be one of mean, sum or None, not {aggregate}'
+        self.aggregate = aggregate
+        if self.aggregate == 'diff_or':
+            self.diff_or = Net(n_inputs=3)
+            self.diff_or.load_state_dict(torch.load('/home/nicolas/PycharmProjects/imagineIoT/model/params_or.pk'))
+            self.diff_or.eval()
+            for param in self.diff_or.parameters():
+                param.requires_grad = False
 
     def forward(self, state, instruction, hidden_state=None):
         # print(instruction.size())
@@ -27,8 +68,19 @@ class DeepSetStateNet(nn.Module):
             full_state = torch.cat([full_state, hidden_state], dim=2)
         attention_vector = self.state_attention_layer(instruction)
         full_state = attention_vector.unsqueeze(1) * full_state
-        # TODO change aggregation function
-        full_state = self.scaler_layer(full_state).mean(1)
+        full_state = self.scaler_layer(full_state)
+
+        if self.aggregate == 'mean':
+            full_state = full_state.mean(1)
+        elif self.aggregate == 'sum':
+            full_state = full_state.sum(1)
+        elif self.aggregate == 'diff_or':
+            full_state = self.diff_or(full_state)
+        elif self.aggregate is None:
+            pass
+        else:
+            raise NotImplementedError
+
         # print(full_state.size())
         return full_state
 
