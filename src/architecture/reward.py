@@ -1,97 +1,9 @@
 import numpy as np
-import pandas as pd
 import joblib
 import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils import clip_grad_norm_
-from sklearn.metrics import f1_score, recall_score, precision_score
-
-
-class Reward:
-    def __init__(self, context_model, language_model, net_params, fit_params, device):
-        self.reward_model = RewardModel(context_model=context_model, language_model=language_model,
-                                        reward_params=net_params)
-        self.device = device
-        self.reward_model.to(self.device)
-
-        self.optimizer = fit_params['optimizer'](self.reward_model.parameters())
-        self.loss_function = fit_params['loss']()
-        self.batch_size = fit_params['batch_size']
-        self.n_epoch = fit_params['n_epoch']
-        self.sampler_params = fit_params['sampler_params']
-
-        self.metrics = None
-
-    def fit(self, train_dts, eval=False):
-        if self.reward_model.language_model.frozen:
-            self.reward_model.language_model.unfreeze()
-
-        sampler = ImbalancedDatasetSampler(train_dts, **self.sampler_params)
-        train_loader = DataLoader(dataset=train_dts, sampler=sampler, batch_size=self.batch_size)
-
-        for epoch in range(self.n_epoch):
-            for i, batch in tqdm(enumerate(train_loader)):
-                self.optimizer.zero_grad()
-                reward = self.reward_model(state=batch['state'], instructions=batch['instruction']).view(-1)
-                loss = self.loss_function(reward, batch['reward'].float().to(params['device']))
-                loss.backward()
-                clip_grad_norm_(reward_function.parameters(), 1)
-                self.optimizer.step()
-
-    def eval(self, test_batch, epoch, data_stats=False):
-        def compute_stats(g):
-            count = len(g)
-            pred_1 = g.pred.sum()
-            pred_0 = (1 - g.pred).sum()
-            true_1 = g.true.sum()
-            true_0 = (1 - g.true).sum()
-            stats = [count, true_0, pred_0, true_1, pred_1]
-            stats_name = ['count', 'true_0', 'pred_0', 'true_1', 'pred_1']
-            result = pd.DataFrame(stats).T
-            result.columns = stats_name
-            return result
-
-        def compute_classification_metrics(g):
-            # accuracy = accuracy_score(g.true, g.pred)
-            precision = precision_score(g.true, g.pred)
-            recall = recall_score(g.true, g.pred)
-            f1 = f1_score(g.true, g.pred)
-            # scores = [accuracy, precision, recall, f1]
-            scores = [precision, recall, f1]
-            score_name = ['accuracy', 'precision', 'recall', 'f1_score']
-            result = pd.DataFrame(scores).T
-            result.columns = score_name
-            return result
-
-        def compute_metrics(g, data_stats=False):
-            df_score = compute_classification_metrics(g)
-            df_stats = compute_stats(g) if data_stats else pd.DataFrame()
-            result = pd.concat([df_stats, df_score], axis=1)
-            return result
-
-        test_reward = reward_function(state=test_batch['state'], instructions=test_batch['instruction'])#.view(-1)
-        torch.cat([test_reward.cpu(), test_batch['reward'].float().view(-1, 1)], dim=1)
-        pred_true_tensor = torch.cat([(test_reward >0.5).float().cpu(), test_batch['reward'].float().view(-1, 1)], dim=1)
-        df = pd.DataFrame(pred_true_tensor.detach().numpy(), columns=['pred', 'true'])
-        df['instruction'] = test_batch['instruction']
-        metrics = df.groupby('instruction').apply(compute_metrics, data_stats=data_stats)
-        metrics = metrics.reset_index(level=1, drop=True)
-
-        metrics_overall = compute_metrics(df, data_stats=False)
-        metrics_overall.index = 'model'
-        metrics.append(metrics_overall)
-        metrics.reset_index(inplace=True)
-
-        metrics['epoch'] = epoch
-
-        if metrics is None:
-            self.metrics = metrics
-        else:
-            self.metrics = self.metrics.append(metrics, ignore_index=True)
-
-        return metrics
-
 
 
 class RewardModel(nn.Module):
