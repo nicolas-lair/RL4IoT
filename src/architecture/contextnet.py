@@ -54,8 +54,9 @@ class DeepSetStateNet(nn.Module):
         assert aggregate in ['mean', 'sum', 'diff_or', None], f'aggregate should be one of mean, sum or None, not {aggregate}'
         self.aggregate = aggregate
         if self.aggregate == 'diff_or':
-            self.diff_or = Net(n_inputs=3)
-            self.diff_or.load_state_dict(torch.load('/home/nicolas/PycharmProjects/imagineIoT/model/params_or.pk'))
+            self.diff_or = torch.load('/home/nicolas/PycharmProjects/imagineIoT/model/params_or.pk')
+            # self.diff_or = Net(n_inputs=3)
+            # self.diff_or.load_state_dict(torch.load('/home/nicolas/PycharmProjects/imagineIoT/model/params_or.pk'))
             self.diff_or.eval()
             for param in self.diff_or.parameters():
                 param.requires_grad = False

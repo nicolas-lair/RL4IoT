@@ -9,8 +9,7 @@ from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from architecture.reward import EpisodeDataset, RewardModel
-from reward import ImbalancedDatasetSampler
+from architecture.reward import EpisodeDataset, RewardModel, ImbalancedDatasetSampler
 
 
 class Net(nn.Module):
@@ -133,9 +132,9 @@ class RewardComparision:
             return result
 
         test_reward = model(state=test_batch['state'], instructions=test_batch['instruction'])  # .view(-1)
-        torch.cat([test_reward.cpu().view(-1, 1), test_batch['reward'].float().view(-1, 1)], dim=1)
-        pred_true_tensor = torch.cat([(test_reward > 0.5).float().cpu(), test_batch['reward'].float().view(-1, 1)],
-                                     dim=1)
+        pred_true_tensor = torch.cat(
+            [(test_reward > 0.5).float().cpu().view(-1, 1), test_batch['reward'].float().view(-1, 1)],
+            dim=1)
         df = pd.DataFrame(pred_true_tensor.detach().numpy(), columns=['pred', 'true'])
         df['instruction'] = test_batch['instruction']
         metrics = df.groupby('instruction').apply(compute_metrics, data_stats=data_stats)
