@@ -15,7 +15,7 @@ from architecture.dqnagent import DQNAgent
 from architecture.language_model import LanguageModel
 from architecture.goal_sampler import Goal
 
-N_SIMULATION = 3
+N_SIMULATION = 1
 params = generate_params()
 set_logger_handler(rootLogger, **params['logger'], log_path=params['save_directory'])
 logger = rootLogger.getChild(__name__)
