@@ -81,7 +81,7 @@ def generate_params(save_path=True):
         loss=nn.BCELoss,
         batch_size=128,
         n_epoch=100,
-        sampler_params=dict(num_samples=8000, pos_weight=0.2),
+        sampler_params=dict(num_samples=20000, pos_weight=0.2),
     )
     # Instantiate the param dict
     params = dict(
