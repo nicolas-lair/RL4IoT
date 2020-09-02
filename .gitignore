@@ -210,3 +210,4 @@ src/.vector_cache/
 
 *.jbl
 results/
+model/
