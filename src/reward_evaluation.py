@@ -62,7 +62,7 @@ class RewardComparision:
             loss = self.loss_function(reward, true_reward)
             loss.backward()
             loss_list.append(loss)
-        return loss_list
+        return np.array(loss_list)
 
     def clipping_grad_norm(self):
         for model in self.model_list:
@@ -73,13 +73,17 @@ class RewardComparision:
             optim.step()
 
     def fit_epoch(self, train_loader):
-        for i, batch in tqdm(enumerate(train_loader)):
+        loss = []
+        for i, batch in enumerate(train_loader):
             self.zero_grad()
             reward_list = self.compute_reward(state=batch['state'], instructions=batch['instruction'])
-            loss_list = self.compute_loss(reward_list, batch['reward'])
+            loss.append(self.compute_loss(reward_list, batch['reward']))
             self.clipping_grad_norm()
             self.step_optimizers()
-            return loss_list
+
+        loss = np.stack(loss, axis=0)
+        loss = loss.mean(axis=0)
+        return loss
 
     def run(self, train_dts, test_batch, data_stats):
         sampler = ImbalancedDatasetSampler(train_dts, **self.sampler_params)
@@ -87,16 +91,19 @@ class RewardComparision:
 
         loss_list = []
         metrics = {i: [] for i in range(len(self.model_list))}
-        for epoch in tqdm(range(self.n_epoch)):
+        self.metrics = loss_list, metrics
+        for epoch in range(self.n_epoch):
             loss_list.append(self.fit_epoch(train_loader))
+            print(f'Epoch: {epoch}: loss: {[l.item() for l in loss_list[-1]]}')
             for i in range(len(self.model_list)):
                 metrics[i].append(self.eval(model=self.model_list[i],
                                             test_batch=test_batch,
                                             epoch=epoch,
                                             data_stats=data_stats)
                                   )
-
-        return {i: pd.concat(metrics[i], axis=0, ignore_index=True) for i in range(len(self.model_list))}
+            self.metrics = loss_list, metrics
+        metrics = [pd.concat(metrics[i], axis=0, ignore_index=True) for i in range(len(self.model_list))]
+        return metrics, loss_list
 
     @staticmethod
     def eval(model, test_batch, epoch, data_stats=False):
@@ -114,9 +121,9 @@ class RewardComparision:
 
         def compute_classification_metrics(g):
             # accuracy = accuracy_score(g.true, g.pred)
-            precision = precision_score(g.true, g.pred)
-            recall = recall_score(g.true, g.pred)
-            f1 = f1_score(g.true, g.pred)
+            precision = precision_score(g.true, g.pred, zero_division=0)
+            recall = recall_score(g.true, g.pred, zero_division=0)
+            f1 = f1_score(g.true, g.pred, zero_division=0)
             # scores = [accuracy, precision, recall, f1]
             # score_name = ['accuracy', 'precision', 'recall', 'f1_score']
             scores = [precision, recall, f1]
