@@ -37,7 +37,7 @@ def prepare_simulation(simulation_name):
     return path_dir
 
 
-def generate_params(save_path=True):
+def generate_params(use_pretrained_language_model=False, save_path=True):
     word_embedding_size = 50
     instruction_embedding = 40
     description_embedding = 50
@@ -50,7 +50,7 @@ def generate_params(save_path=True):
     # device = 'cpu'
 
     policy_context_archi = DeepSetStateNet
-    simulation_name = str(policy_context_archi).split("'")[-2].split('.')[-1]
+    simulation_name = 'pretrained_lm'
     if save_path:
         path_dir = prepare_simulation(simulation_name)
     else:
@@ -61,10 +61,10 @@ def generate_params(save_path=True):
                               state_embedding=state_embedding_size,
                               hidden_state_size=action_embedding,
                               aggregate='mean')
-    if simulation_name == 'DeepSetStateNet':
+    if 'DeepSetStateNet' in str(policy_context_archi):
         scaler_layer_params = dict(hidden1_out=256, latent_out=512, last_activation='relu')
-        context_net_params.update(scaler_layer_params)
-    elif simulation_name in ['FlatStateNet', 'AttentionFlatState']:
+        context_net_params.update(scaler_layer_params=scaler_layer_params)
+    elif ('FlatStateNet' in str(policy_context_archi)) or ('AttentionFlatState' in str(policy_context_archi)):
         pass
     else:
         raise NotImplementedError
@@ -73,8 +73,13 @@ def generate_params(save_path=True):
                              hidden_state_size=0,
                              state_embedding=state_embedding_size + state_encoding_size,
                              aggregate='mean')
-    if simulation_name == 'DeepSetStateNet':
+    if 'DeepSetStateNet' in str(policy_context_archi):
         reward_net_params.update(scaler_layer_params=dict(hidden1_out=256, latent_out=512, last_activation='relu'))
+
+    if use_pretrained_language_model:
+        pretrained_model_path = '/home/nicolas/PycharmProjects/imagineIoT/results/learned_language_model.pth'
+    else:
+        pretrained_model_path = None
 
     reward_fit_params = dict(
         optimizer=optim.Adam,
@@ -83,6 +88,7 @@ def generate_params(save_path=True):
         n_epoch=250,
         sampler_params=dict(num_samples=8000, pos_weight=0.2),
     )
+
     # Instantiate the param dict
     params = dict(
         simulation_name=simulation_name,
@@ -160,14 +166,15 @@ def generate_params(save_path=True):
                                         cache=vector_cache
                                         ),
             vocab_size=500,
-            device=device
+            device=device,
+            pretrained_model=pretrained_model_path
         ),
         logger=dict(
             level=logging.INFO,
             console=True,
             log_file=True,
         ),
-        n_episode=30000,
+        n_episode=60000,
         target_update_frequence=100,
         device=device,
         episode_reset=True,

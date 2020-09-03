@@ -71,7 +71,7 @@ def test_agent(agent, test_env, oracle):
                     oracle.was_achieved(test_env.previous_user_state, test_env.user_state, instruction))
             reward_table[thing][instruction] = current_rewards / params['n_iter_test']
         reward_table[thing][f'overall_{thing}'] = sum(reward_table[thing].values()) / len(reward_table[thing])
-    logger.info("%" * 5 + f"Test after {i} episodes" + "%" * 5 + "\n" + yaml.dump(reward_table))
+    logger.info("%" * 5 + f"Test after {j} episodes" + "%" * 5 + "\n" + yaml.dump(reward_table))
     return reward_table
 
 

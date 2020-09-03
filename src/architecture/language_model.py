@@ -14,7 +14,8 @@ nlp = English()
 # TODO check where is language model CPU or GPU
 class LanguageModel(nn.Module):
     def __init__(self, type, embedding_size, linear1_out=256, out_features=100,
-                 vocab=None, vocab_size=500, device='cuda' if torch.cuda.is_available() else 'cpu'):
+                 vocab=None, vocab_size=500, device='cuda' if torch.cuda.is_available() else 'cpu',
+                 pretrained_model=None):
         """
 
         :param type: string 'linear' or 'lstm'
@@ -53,6 +54,11 @@ class LanguageModel(nn.Module):
 
         self.device = device
         self.to(device)
+
+        if pretrained_model:
+            self.load_state_dict(torch.load(pretrained_model))
+            self.eval()
+            self.freeze()
 
     def add_tokens(self, token):
         idx = len(self.word_to_ix)
