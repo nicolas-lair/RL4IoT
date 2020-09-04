@@ -35,7 +35,7 @@ def run_episode(agent, env, target_goal, train=True):
         state, available_actions = env.get_state_and_action()
 
         action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
-                                                   actions=available_actions, hidden_state=hidden_state)
+                                                   actions=available_actions, hidden_state=hidden_state, exploration=train)
         logger.debug(f'State: \n {format_user_state_log(env.user_state)}')
         logger.debug(available_actions)
         logger.debug(action)
@@ -50,6 +50,7 @@ def run_episode(agent, env, target_goal, train=True):
                     agent.store_transitions(goal=target_goal, state=state, action=action,
                                             next_state=(next_state, next_available_actions), done=done, reward=reward,
                                             hidden_state=previous_hidden_state, previous_action=previous_action)
+
     return state, action, next_state, previous_hidden_state, previous_action
 
 

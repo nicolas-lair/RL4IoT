@@ -103,7 +103,7 @@ class DQNAgent:
         return action_embedding, action_type
         # return torch.cat(action_embeddings, dim=0).to(self.device)
 
-    def select_action(self, state, instruction, actions, hidden_state):
+    def select_action(self, state, instruction, actions, hidden_state, exploration):
         """
         select an action among a list of actions and update
         :param state:
@@ -111,7 +111,7 @@ class DQNAgent:
         :param actions: list of action
         :return:
         """
-        sample = random.random()
+        sample = random.random() if exploration else 1
         if sample > self.exploration_threshold:
             with torch.no_grad():
                 # t.max(1) will return largest column value of each row.
