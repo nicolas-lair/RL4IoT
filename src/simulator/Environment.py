@@ -155,6 +155,8 @@ class IoTEnv4ML(gym.Wrapper):
             ITEM_TYPE) + params[
                                           'state_encoding_size']
 
+        self.ignore_exec_action = params['ignore_exec_action']
+
         self.state = None
         self.previous_state = None
         self.available_actions = None
@@ -190,6 +192,8 @@ class IoTEnv4ML(gym.Wrapper):
             self.available_actions = action.get_children_nodes()
             assert self.available_actions is not None
             return (self.state, self.available_actions), 0, False, None
+            if self.ignore_exec_action and any([isinstance(a, ExecAction) for a in self.available_actions]):
+                return self.step(ExecAction())
 
     def save_running_action(self, action):
         if isinstance(action, Thing):

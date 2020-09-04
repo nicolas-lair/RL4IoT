@@ -93,6 +93,7 @@ def generate_params(use_pretrained_language_model=False, save_path=True):
     params = dict(
         simulation_name=simulation_name,
         env_params=dict(
+            ignore_exec_action=True,
             state_encoding_size=state_encoding_size,
             description_embedder_params=dict(
                 embedding='glove',
