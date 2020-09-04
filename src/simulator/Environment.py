@@ -186,7 +186,7 @@ class IoTEnv4ML(gym.Wrapper):
             self.state = self.preprocess_raw_observation(self.user_state)
             self.available_actions = self.get_root_actions()
             done = True
-            return (self.state, self.available_actions), None, done, None
+            reward = None
         elif isinstance(action, DoNothing):
             done = True
             reward = None
@@ -194,9 +194,13 @@ class IoTEnv4ML(gym.Wrapper):
             self.save_running_action(action)
             self.available_actions = action.get_children_nodes()
             assert self.available_actions is not None
-            return (self.state, self.available_actions), 0, False, None
+            reward = 0
+            done = False
+
             if self.ignore_exec_action and any([isinstance(a, ExecAction) for a in self.available_actions]):
                 return self.step(ExecAction())
+
+        return (self.state, self.available_actions), reward, done, None
 
     def save_running_action(self, action):
         if isinstance(action, Thing):
