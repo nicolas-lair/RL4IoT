@@ -32,6 +32,7 @@ ACTION_SPACE = {
     'move': spaces.Discrete(2),
     'stop': spaces.Discrete(2),
     'turnOnOff': spaces.Discrete(2),
+    'do_nothing': []
 }
 
 baseaction_type_embedder = OneHotEncoder(sparse=False)
@@ -50,7 +51,9 @@ class RootAction(NoDescriptionNode):
 
 class DoNothing(NoDescriptionNode):
     def __init__(self):
-        super().__init__()
+        name = 'do_nothing'
+        embedding = baseaction_type_embedder.transform(np.array([name]).reshape(-1, 1)).flatten()
+        super().__init__(name=name, node_type='openHAB_action', node_embedding=embedding, children=[])
 
 class OpenHABAction(NoDescriptionNode):
     def __init__(self, name):

@@ -10,7 +10,7 @@ from simulator.Items import ITEM_TYPE
 from simulator.Thing import Thing, PlugSwitch, LightBulb, LGTV, Speaker, Chromecast
 from simulator.Channel import Channel
 from simulator.description_embedder import Description_embedder
-from simulator.Action import ExecAction, OpenHABAction, Params
+from simulator.Action import ExecAction, OpenHABAction, Params, DoNothing
 from simulator.TreeView import Node
 
 
@@ -184,9 +184,12 @@ class IoTEnv4ML(gym.Wrapper):
             super().step(self.running_action)
             self.previous_state = self.state
             self.state = self.preprocess_raw_observation(self.user_state)
-            self.available_actions = self.get_thing_list()
+            self.available_actions = self.get_root_actions()
             done = True
             return (self.state, self.available_actions), None, done, None
+        elif isinstance(action, DoNothing):
+            done = True
+            reward = None
         else:
             self.save_running_action(action)
             self.available_actions = action.get_children_nodes()
@@ -217,13 +220,17 @@ class IoTEnv4ML(gym.Wrapper):
 
         self.state = self.preprocess_raw_observation(raw_state)
         self.previous_state = None
-        self.available_actions = self.get_thing_list()
+        self.available_actions = self.get_root_actions()
         self.previous_available_actions = None
         self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
         return self.state, self.available_actions
 
     def get_state_and_action(self):
         return self.state, self.available_actions
+
+    def get_root_actions(self):
+        available_things = self.get_thing_list()
+        return available_things.append(DoNothing())
 
 
 if __name__ == "__main__":
