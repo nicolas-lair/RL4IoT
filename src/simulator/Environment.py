@@ -234,7 +234,8 @@ class IoTEnv4ML(gym.Wrapper):
 
     def get_root_actions(self):
         available_things = self.get_thing_list()
-        return available_things.append(DoNothing())
+        available_things.append(DoNothing())
+        return available_things
 
 
 if __name__ == "__main__":
