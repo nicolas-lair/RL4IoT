@@ -111,7 +111,7 @@ class IoTEnv(gym.Env):
         for thing in thing_list:
             thing.reset()
         self.user_state = self.build_state()
-        self.previous_user_state = None
+        self.previous_user_state = self.user_state
         return self.user_state
 
     def render(self, mode='human'):
