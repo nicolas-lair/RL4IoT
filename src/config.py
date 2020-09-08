@@ -37,7 +37,8 @@ def prepare_simulation(simulation_name):
     return path_dir
 
 
-def generate_params(use_pretrained_language_model=False, save_path=True):
+def generate_params(simulation_name='default_simulation', use_pretrained_language_model=False, save_path=True,
+                    device='cuda', dqn_loss='mse'):
     word_embedding_size = 50
     instruction_embedding = 40
     description_embedding = 50
@@ -46,11 +47,11 @@ def generate_params(use_pretrained_language_model=False, save_path=True):
     action_embedding = 50
 
     vector_cache = '/home/nicolas/PycharmProjects/imagineIoT/.vector_cache'
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    device = device
     # device = 'cpu'
 
     policy_context_archi = DeepSetStateNet
-    simulation_name = 'pretrained_lm'
+    simulation_name = simulation_name
     if save_path:
         path_dir = prepare_simulation(simulation_name)
     else:
