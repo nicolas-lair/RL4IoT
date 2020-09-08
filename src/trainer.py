@@ -6,8 +6,8 @@ import yaml
 import torch
 import joblib
 
-from src.logger import rootLogger, format_user_state_log, set_logger_handler
-from src.config import generate_params, save_config, format_config, setup_new_simulation
+from logger import rootLogger, format_user_state_log, set_logger_handler
+from config import generate_params, save_config, format_config, setup_new_simulation
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
 from simulator.Action import RootAction

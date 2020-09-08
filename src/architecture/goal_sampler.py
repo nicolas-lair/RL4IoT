@@ -1,11 +1,8 @@
-# This is inspired from IMAGINE project :
-# https://github.com/nicolas-lair/Curious-nlp/blob/clean_code/src/architecture_le2/goal_sampler.py
-
 import numpy as np
 import torch
 import joblib
 
-from src.logger import rootLogger
+from logger import rootLogger
 
 logger = rootLogger.getChild(__name__)
 

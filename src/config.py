@@ -9,7 +9,7 @@ import torchtext
 from torch import optim
 import torch.nn as nn
 
-from src.logger import update_log_file_path
+from logger import update_log_file_path
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, percent_level

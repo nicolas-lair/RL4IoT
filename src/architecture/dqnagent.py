@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from torch.nn.utils import clip_grad_norm_
 
-from src.logger import rootLogger
+from logger import rootLogger
 from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState
 from architecture.goal_sampler import GoalSampler
 from architecture.replay_buffer import ReplayBuffer, Transition
