@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+import argparse
 
 from pprint import pformat
 import yaml
@@ -15,8 +16,23 @@ from architecture.dqnagent import DQNAgent
 from architecture.language_model import LanguageModel
 from architecture.goal_sampler import Goal
 
-N_SIMULATION = 1
-params = generate_params()
+parser = argparse.ArgumentParser()
+parser.add_argument('-n', '--name', help='Simulation name', default='mse_no_pretrained')
+parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cuda:0')
+parser.add_argument('-ns', '--n_simulation', help='number of simulation to run', type=int, default=10)
+parser.add_argument('-lm', '--pretrained_language_model', help='number of simulation to run', choices=['0', '1'],
+                    default=0)
+parser.add_argument('-l', '--optim_loss', help='DQN loss', choices=['mse', 'smooth_l1'], default='mse')
+args = parser.parse_args()
+
+simulation_name = args.name
+device = args.device
+N_SIMULATION = args.n_simulation
+use_pretrained_language_model = bool(int(args.pretrained_language_model))
+optim_loss = args.optim_loss
+
+params = generate_params(simulation_name=simulation_name, use_pretrained_language_model=use_pretrained_language_model,
+                         device=device)
 set_logger_handler(rootLogger, **params['logger'], log_path=params['save_directory'])
 logger = rootLogger.getChild(__name__)
 
@@ -35,7 +51,8 @@ def run_episode(agent, env, target_goal, train=True):
         state, available_actions = env.get_state_and_action()
 
         action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
-                                                   actions=available_actions, hidden_state=hidden_state, exploration=train)
+                                                   actions=available_actions, hidden_state=hidden_state,
+                                                   exploration=train)
         logger.debug(f'State: \n {format_user_state_log(env.user_state)}')
         logger.debug(available_actions)
         logger.debug(action)
