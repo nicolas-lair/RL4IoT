@@ -7,11 +7,13 @@ Prepare the integration of Jarvis and Imagine. Apply Imagine on an IoT environme
 
 - Create conda virtual environment and install required package
 
-``` conda env create -f requirements.yml```
+``` conda env create -f requirement.yml```
 
-- Activate environment and dowload spacy package
+- Activate environment and download spacy package
 
-``` conda activate imagineIoT```
-``` python -m spacy download en ```
+``` 
+conda activate imagineIoT
+python -m spacy download en 
+```
 
 

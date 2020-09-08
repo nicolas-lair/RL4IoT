@@ -9,6 +9,10 @@ dependencies:
   - torchtext
   - spacy
   - scikit-learn
+  - pip
+  - pandas
+  - matplotlib
+  - notebook
   - pip:
       - gym
       - pyyaml
