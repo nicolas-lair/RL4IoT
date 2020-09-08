@@ -44,7 +44,14 @@ class DQNAgent:
 
         self.batch_size = params['batch_size']
         self.discount_factor = params['discount_factor']
-        self.loss = params['loss']
+
+        if params['loss'] == 'mse':
+            self.loss = torch.nn.functional.mse_loss
+        elif params == 'smooth_l1':
+            self.loss = torch.nn.functional.smooth_l1_loss
+        else:
+            raise NotImplementedError
+
         self.optimizer = params['optimizer'](
             list(self.policy_network.parameters()) + list(self.language_model.parameters()),
             **params['optimizer_params'])
@@ -200,8 +207,7 @@ class DQNAgent:
 
         logger.debug('Computing loss')
         expected_value = rewards + self.discount_factor * maxQ
-        # loss = self.loss(expected_value.detach(), Q_sa.squeeze())
-        loss = torch.nn.functional.smooth_l1_loss(expected_value.detach(), Q_sa.squeeze())
+        loss = self.loss(expected_value.detach(), Q_sa.squeeze())
         logger.debug(f'Done: {loss}')
 
         logger.debug('Backward pass')

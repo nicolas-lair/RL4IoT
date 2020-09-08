@@ -155,7 +155,7 @@ def generate_params(use_pretrained_language_model=False, save_path=True):
         ),
         discount_factor=0.9,
         batch_size=64,
-        loss=nn.functional.smooth_l1_loss,
+        loss=dqn_loss,
         optimizer=optim.Adam,
         optimizer_params=dict(),  # TODO optimize
         language_model_params=dict(
