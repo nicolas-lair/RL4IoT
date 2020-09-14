@@ -4,8 +4,14 @@ color_list = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink']
 color_h_inf = [0, 18, 50, 64, 167, 252, 300, 335]
 color_h_sup = [17, 49, 63, 166, 251, 299, 334, 360]
 
-percent_level = ['very low', 'low', 'average', 'high', 'very high']
+N_LEVELS = 5
 percent_bound_level = [0, 20, 40, 60, 80, 100]
+brightness_level = ['very dark', 'dark', 'average', 'bright', 'very bright']
+volume_level = ['very quiet', 'quiet', 'average', 'loud', 'very loud']
+temperature_level = ['very cold', 'cold', 'average', 'warm', 'very warm']
+levels_dict = {
+    'brightness': brightness_level, 'volume': volume_level, 'temperature': temperature_level
+}
 
 
 def get_color_name_from_hsb(h, s, b):
@@ -28,20 +34,32 @@ def color_to_hsb(string_color):
     return h, 75, 70
 
 
+def find_level_list(lvl):
+    right_list = None
+    for list_ in levels_dict.values():
+        right_list = list_ if lvl in list_ else None
+        if right_list:
+            break
+    if right_list is None:
+        raise NotImplementedError
+    return right_list
+
+
 def level_to_percent(lvl):
-    idx = percent_level.index(lvl)
+    lvl_list = find_level_list(lvl)
+    idx = lvl_list.index(lvl)
     p = (percent_bound_level[idx] + percent_bound_level[idx + 1]) // 2
     return p
 
 
-def percent_to_level(p):
+def percent_to_level(p, lvl_type):
     i = 0
     while i < len(percent_bound_level):
         if p <= percent_bound_level[i + 1]:
             break
         else:
             i += 1
-    return percent_level[i]
+    return levels_dict[lvl_type][i]
 
 
 if __name__ == "__main__":
@@ -68,19 +86,19 @@ if __name__ == "__main__":
     #     print(h, c, c == true_color)
 
     test_dict = {
-        0: "very low",
-        10: "very low",
-        20: "very low",
-        30: "low",
-        40: "low",
+        0: "very dark",
+        10: "very dark",
+        20: "very dark",
+        30: "dark",
+        40: "dark",
         50: "average",
         60: "average",
-        70: "high",
-        80: "high",
-        90: "very high",
-        100: "very high",
+        70: "bright",
+        80: "bright",
+        90: "very bright",
+        100: "very bright",
     }
 
     for p, true_lvl in test_dict.items():
-        lvl = percent_to_level(p)
+        lvl = percent_to_level(p, lvl_type='brightness')
         print(p, lvl, lvl == true_lvl)

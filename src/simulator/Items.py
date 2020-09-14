@@ -34,12 +34,15 @@ def check_method_availability(func):
 
 
 class AbstractItem(ABC):
-    def __init__(self, type, methods):
+    def __init__(self, type, methods, discretization):
         assert type in ITEM_TYPE, 'Wrong item type'
         self.type = type
         # Filter to keep only valid and active methods for the items
         action_space = ACTION_SPACE.keys()
         self.methods = [meth for meth, bool_flag in methods.items() if (meth in action_space and bool_flag)]
+        self.discretization = {m: None for m in self.methods}
+        if discretization:
+            self.discretization.update(discretization)
 
         self.observation_space = None
         self.action_space = spaces.Dict({k: ACTION_SPACE[k] for k in self.methods})
@@ -54,9 +57,9 @@ class AbstractItem(ABC):
         raise NotImplementedError
 
     def set_attribute(self, attribute, value):
-        if self.type == 'string':
-            raise NotImplementedError
-        assert self.observation_space.contains(np.array(value)), self.attr_error_message
+        # if self.type == 'string':
+        #     raise NotImplementedError
+        # assert self.observation_space.contains(np.array(value)), self.attr_error_message
         if isinstance(attribute, list):
             for a, v in zip(attribute, value):
                 setattr(self, a, v)
@@ -69,8 +72,9 @@ class AbstractItem(ABC):
 
 
 class ColorItem(AbstractItem):
-    def __init__(self, turnOn=False, turnOff=False, increase=False, decrease=False, setPercent=False, setHSB=False):
-        super().__init__(type="color", methods=locals())
+    def __init__(self, turnOn=False, turnOff=False, increase=False, decrease=False, setPercent=False, setHSB=False,
+                 discretization=None):
+        super().__init__(type="color", methods=locals(), discretization=discretization)
         self.hue = None
         self.saturation = None
         self.brightness = None
@@ -125,8 +129,8 @@ class ColorItem(AbstractItem):
 
 
 class ContactItem(AbstractItem):
-    def __init__(self, OpenClose=False, Open=False, Close=False, init='default'):
-        super().__init__(type="contact", methods=locals())
+    def __init__(self, OpenClose=False, Open=False, Close=False, discretization=None):
+        super().__init__(type="contact", methods=locals(), discretization=discretization)
         self.state = None
         self.observation_space = spaces.Discrete(2)
         self.attr_error_message = "onoff should be 0 or 1 (boolean)"
@@ -161,8 +165,9 @@ class ContactItem(AbstractItem):
 
 
 class DimmerItem(AbstractItem):
-    def __init__(self, turnOn=False, turnOff=False, increase=False, decrease=False, setPercent=False, init='default'):
-        super().__init__(type="dimmer", methods=locals())
+    def __init__(self, turnOn=False, turnOff=False, increase=False, decrease=False, setPercent=False,
+                 discretization=None):
+        super().__init__(type="dimmer", methods=locals(), discretization=discretization)
         self.percent = None
         self.observation_space = spaces.Box(low=0, high=100, shape=(1,), dtype=float)
         self.attr_error_message = "Percent should be an int between 0 and 100"
@@ -205,8 +210,8 @@ class DimmerItem(AbstractItem):
 
 
 class LocationItem(AbstractItem):
-    def __init__(self, setLocation=False, init='default'):
-        super().__init__(type="location", methods=locals())
+    def __init__(self, setLocation=False, discretization=None):
+        super().__init__(type="location", methods=locals(), discretization=discretization)
         self.latitude = None
         self.longitude = None
         self.altitude = None
@@ -242,10 +247,8 @@ class LocationItem(AbstractItem):
 
 
 class NumberItem(AbstractItem):
-    def __init__(self, setValue=False, setQuantity=False, type=float, init='default'):
-        methods = locals().copy()
-        del methods['type']
-        super().__init__(type="number", methods=methods)
+    def __init__(self, setValue=False, setQuantity=False, type=float, discretization=None):
+        super().__init__(type="number", methods=locals(), discretization=discretization)
         self.value = None
 
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=type)
@@ -278,8 +281,9 @@ class NumberItem(AbstractItem):
 
 
 class PlayerItem(AbstractItem):  # TODO Check user_state of players
-    def __init__(self, PlayPause=False, next=False, previous=False, rewind=False, fastforward=False, init='default'):
-        super().__init__(type="player", methods=locals())
+    def __init__(self, PlayPause=False, next=False, previous=False, rewind=False, fastforward=False,
+                 discretization=None):
+        super().__init__(type="player", methods=locals(), discretization=discretization)
         self.playpause = None
         self.observation_space = spaces.Discrete(2)
         self.attr_error_message = "playpause should be 0 or 1 (boolean)"
@@ -331,8 +335,8 @@ class PlayerItem(AbstractItem):  # TODO Check user_state of players
 
 class RollerShutterItem(AbstractItem):
 
-    def __init__(self, up=False, down=False, stop=False, move=False, setPercent=False, init='default'):
-        super().__init__(type="rollershutter", methods=locals())
+    def __init__(self, up=False, down=False, stop=False, move=False, setPercent=False, discretization=None):
+        super().__init__(type="rollershutter", methods=locals(), discretization=discretization)
         self.percent = None
         self.observation_space = spaces.Box(low=0, high=100, shape=(1,), dtype=float)
         self.attr_error_message = "Percent should be an int between 0 and 100"
@@ -375,8 +379,8 @@ class RollerShutterItem(AbstractItem):
 
 
 class StringItem(AbstractItem):
-    def __init__(self, setString=False, init='default'):
-        super().__init__(type="string", methods=locals())
+    def __init__(self, setString=False, init='default', discretization=None):
+        super().__init__(type="string", methods=locals(), discretization=discretization)
         self.string = None
 
         self.observation_space = None
@@ -407,8 +411,8 @@ class StringItem(AbstractItem):
 
 class SwitchItem(AbstractItem):
 
-    def __init__(self, turnOnOff=False, turnOn=False, turnOff=False, init='default'):
-        super().__init__(type="switch", methods=locals())
+    def __init__(self, turnOnOff=False, turnOn=False, turnOff=False, init='default', discretization=None):
+        super().__init__(type="switch", methods=locals(), discretization=discretization)
         self.onoff = None
         self.observation_space = spaces.Discrete(2)
         self.attr_error_message = "onoff should be 0 or 1 (boolean)"

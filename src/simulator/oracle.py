@@ -1,5 +1,5 @@
 import itertools
-from simulator.utils import color_list, percent_level
+from simulator.utils import color_list
 
 
 class Oracle:

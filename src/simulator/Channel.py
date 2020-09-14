@@ -8,7 +8,9 @@ class Channel(DescriptionNode):
     def __init__(self, name, description, item, read=True, write=True):
 
         self.item = item
-        super().__init__(name=name, description=description, children=[OpenHABAction(m) for m in self.item.methods])
+        super().__init__(name=name, description=description,
+                         children=[OpenHABAction(m, discretization=self.item.discretization[m]) for m in
+                                   self.item.methods])
 
         # self.initial_value = value
         # if value is not None:
