@@ -45,7 +45,7 @@ class AbstractItem(ABC):
             self.discretization.update(discretization)
 
         self.observation_space = None
-        self.action_space = spaces.Dict({k: ACTION_SPACE[k] for k in self.methods})
+        # self.action_space = spaces.Dict({k: ACTION_SPACE[k] for k in self.methods})
         self.attr_error_message = None
 
     @abstractmethod
@@ -391,7 +391,7 @@ class StringItem(AbstractItem):
         if init == 'default':
             self.string = ""
         elif init == 'random':
-            raise NotImplementedError
+            self.string = random.choice([str(i) for i in range(5)]) #TODO Fix Hack
         elif isinstance(init, str):
             self.set_state(init)
         else:
