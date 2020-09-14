@@ -114,7 +114,7 @@ class GoalSampler:
 
     def sample_goal(self, strategy='random'):
         if len(self.discovered_goals) == 0:
-            target = Goal.create_random_goal(goal_embedding_size=self.language_model.embedding_size)
+            target = Goal.create_random_goal(goal_embedding_size=self.language_model.out_features)
         else:
             strategy = strategy if strategy is not None else self.goal_sampling_strategy
             if strategy == 'random':
