@@ -41,6 +41,9 @@ class ActionProjector(nn.Module):
         self.level_projector = nn.Linear(in_features=self.raw_action_size,
                                          out_features=self.action_embedding_size)
 
+        self.channel_projector = nn.Linear(in_features=self.raw_action_size,
+                                         out_features=self.action_embedding_size)
+
         # Dictionnary of projection layer for normalizing the action embedding. The projector should be defined as
         # attributes of the current module to ensure that they are passed to cuda
         self.action_embedding_layers = {
@@ -48,7 +51,8 @@ class ActionProjector(nn.Module):
             'description_node': self.description_embedding_projector,
             'openHAB_action': self.openhab_action_projector,
             'color_params': self.color_projector,
-            'level_params': self.level_projector
+            'level_params': self.level_projector,
+            'TVchannels_params': self.channel_projector
         }
 
     def forward(self, actions, action_type):
@@ -78,8 +82,13 @@ class ActionProjector(nn.Module):
             projection_openhab = self.openhab_action_projector(actions)
             projection_color = self.color_projector(actions)
             projection_level = self.level_projector(actions)
+            projection_channel = self.channel_projector(actions)
+
             projection = [torch.zeros(actions.size(0), actions.size(1), self.action_embedding_size).to(actions.device),
-                          projection_des, projection_openhab, projection_color, projection_level]
+                          projection_des, projection_openhab,
+                          projection_color,
+                          projection_level,
+                          projection_channel]
 
             p = torch.stack(projection, dim=-2)
             embedded_actions = (action_type_mask.to(p.device) * p).sum(dim=-2, keepdim=False)
