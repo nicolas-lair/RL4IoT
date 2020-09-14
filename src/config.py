@@ -4,7 +4,6 @@ import logging
 from collections import namedtuple
 
 import joblib
-import torch
 import torchtext
 from torch import optim
 import torch.nn as nn
@@ -12,9 +11,9 @@ import torch.nn as nn
 from logger import update_log_file_path
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
-from simulator.utils import color_list, percent_level
+from simulator.utils import color_list, N_LEVELS
 from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState
-from simulator.Thing import PlugSwitch, LightBulb
+from simulator.Thing import PlugSwitch, LightBulb, LGTV
 
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
 
@@ -40,7 +39,7 @@ def prepare_simulation(simulation_name):
 def generate_params(simulation_name='default_simulation', use_pretrained_language_model=False, save_path=True,
                     device='cuda', dqn_loss='mse'):
     word_embedding_size = 50
-    instruction_embedding = 40
+    instruction_embedding = 50
     description_embedding = 50
     state_encoding_size = 3  # size of the vector in which is encoded the value of a channel
     state_embedding_size = state_encoding_size + description_embedding + len(ITEM_TYPE)
@@ -120,6 +119,12 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
                                 is_visible=True,
                                 init_type='random',
                                 init_params=dict())
+                           ),
+                ThingParam(LGTV, dict(name='television',
+                                      description='This is a television',
+                                      is_visible=True,
+                                      init_type='random',
+                                      init_params=dict())
                            )
             ],
         ),
@@ -130,7 +135,7 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
                 description_node=description_embedding,
                 openHAB_action=len(ACTION_SPACE),
                 color_params=len(color_list),
-                level_params=len(percent_level)
+                level_params=N_LEVELS,
             ),
             net_params=dict(
                 q_network=dict(

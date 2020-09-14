@@ -1,11 +1,11 @@
-
 from gym import spaces
 
 from simulator.Items import *
 from simulator.Channel import Channel
-from simulator.utils import get_color_name_from_hsb, percent_to_level, color_list, percent_level
+from simulator.utils import get_color_name_from_hsb, percent_to_level, color_list, levels_dict
 from simulator.TreeView import DescriptionNode
 from simulator.instructions import StateDescription
+from simulator.Action import TVchannels_list
 
 
 class Thing(DescriptionNode):
@@ -21,7 +21,8 @@ class Thing(DescriptionNode):
         init value
         """
         super().__init__(name=name, description=description, children=self.get_action_channels())
-        self.observation_space, self.action_space = self.build_observation_and_action_space()
+        self.name = name
+        # self.observation_space, self.action_space = self.build_observation_and_action_space()
         self._channels = self.get_channels()
         self.initial_values = {'is_visible': is_visible, 'init_type': init_type, 'init_params': init_params}
         # self.description_embedding = None
@@ -46,6 +47,10 @@ class Thing(DescriptionNode):
 
     def get_action_channels(self):
         action_channels = [x for x in vars(self).values() if (isinstance(x, Channel) and x.write)]
+        return action_channels
+
+    def get_observation_channels(self):
+        action_channels = [x for x in vars(self).values() if (isinstance(x, Channel) and x.read)]
         return action_channels
 
     def build_observation_and_action_space(self):
@@ -75,7 +80,7 @@ class Thing(DescriptionNode):
         #     self.build_observation_and_action_space()
         return self.action_space
 
-    def _get_state(self):
+    def _get_state(self, oracle):
         """
         Get internal user_state of the object as a dict of dict of channel/item user_state WITH their description and item type
         :return: user_state : { channel1_name: {
@@ -89,19 +94,20 @@ class Thing(DescriptionNode):
         state = dict()
         channels = self.get_channels()
         for c in channels:
-            state[c.name] = {
-                'state': c.get_state(),
-                'description': c.description,
-                'item_type': c.item.type
-            }
+            if oracle or c.read:
+                state[c.name] = {
+                    'state': c.get_state(),
+                    'description': c.description,
+                    'item_type': c.item.type
+                }
 
-            if c.node_embedding is not None:
-                state[c.name].update({'embedding': c.node_embedding})
+                if c.node_embedding is not None:
+                    state[c.name].update({'embedding': c.node_embedding})
         return state
 
-    def get_state(self):
+    def get_state(self, oracle):
         if self.is_visible:
-            return self._get_state()
+            return self._get_state(oracle)
         else:
             return None, None, None
 
@@ -146,20 +152,21 @@ class LightBulb(Thing):
 
     def __init__(self, name="lightbulb", description='This is a light bulb', init_type='default', init_params=None,
                  is_visible=True):
+        self.name = name
         if init_params is None:
             init_params = dict()
-        self.name = name
         self.color = Channel(
             name='color',
             description="This channel supports full color control with hue, saturation and brightness values",
             item=ColorItem(turnOn=True, turnOff=True, increase=True, decrease=True, setPercent=True,
-                           setHSB=True),
+                           setHSB=True, discretization={'setHSB': 'colors', 'setPercent': 'brightness'}),
         )
 
         self.color_temperature = Channel(
             name='color_temperature',
             description='This channel supports adjusting the color temperature from cold (0%) to warm (100%)',
-            item=DimmerItem(increase=True, decrease=True, setPercent=True),
+            item=DimmerItem(increase=True, decrease=True, setPercent=True,
+                            discretization={'setPercent': 'temperature'}),
         )
 
         self.instruction = {
@@ -177,13 +184,19 @@ class LightBulb(Thing):
             self.instruction[f'{color}_color'] = StateDescription(
                 sentences=[f"You set the color of {self.name} to {color}"]
             )
-        for level in percent_level:
-            self.instruction[f'lum_level_{level}'] = StateDescription(
-                sentences=[f"The luminosity of {self.name} is now {level}"]
-            )
+        for level in levels_dict['brightness']:
+            if level == 'average':
+                s = [f"The luminosity of {self.name} is now {level}"]
+            else:
+                s = [f"{self.name} is now {level}"]
+            self.instruction[f'lum_level_{level}'] = StateDescription(sentences=s)
+
+        for level in levels_dict['temperature']:
+            self.instruction[f'temp_level_{level}'] = StateDescription(
+                sentences=[f"The light temperature of {self.name} is now {level}"])
 
         super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
-                             is_visible=is_visible)
+                         is_visible=is_visible)
         # # TODO decide if use or not : maybe not
         # self.alert = Channel(
         #     name='alert',
@@ -206,8 +219,13 @@ class LightBulb(Thing):
             matching_instructions.append(self.instruction['turn_on'])
 
         # BRIGHTNESS LVL
-        brightness_lvl = percent_to_level(b)
+        brightness_lvl = percent_to_level(b, lvl_type='brightness')
         matching_instructions.append(self.instruction[f'lum_level_{brightness_lvl}'])
+
+        # TEMPERATURE LVL
+        temp = current_state['color_temperature']['state'][0]
+        temp_lvl = percent_to_level(temp, lvl_type='temperature')
+        matching_instructions.append(self.instruction[f'temp_level_{temp_lvl}'])
 
         # # COLOR TEMPERATURE LVL
         # color_temperature = current_state["color_temperature"]["state"][0]
@@ -266,6 +284,7 @@ class PlugSwitch(Thing):
     def __init__(self, name="plug switch", description='This is a switch that controls multiple switch',
                  init_type='default', init_params=None, is_visible=True):
         self.name = name
+
         self.switch_binary = Channel(name="switch_binary",
                                      description="Switch the power on and off.",
                                      item=SwitchItem(turnOn=True, turnOff=True),
@@ -293,10 +312,6 @@ class PlugSwitch(Thing):
         #     write=False,
         # )
 
-    def do_action(self, channel, action, params=None):
-        assert channel == "switch_binary", f"Switch_binary is the only available channel, {channel} was called instead"
-        super().do_action(channel, action, params)
-
     def get_state_description(self, state):
         matching_instructions = []
 
@@ -320,6 +335,8 @@ class LGTV(Thing):
     """
 
     def __init__(self, name, description, init_type='default', init_params=None, is_visible=True):
+        self.name = name
+
         self.power = Channel(
             name='power',
             description="Current power setting. TV can only be powered off, not on.",
@@ -337,40 +354,65 @@ class LGTV(Thing):
             description="Current volume setting. Setting and reporting absolute percent values only works when using "
                         "internal speakers. When connected to an external amp, the volume should be controlled using "
                         "increase and decrease commands.",
-            item=DimmerItem(increase=True, decrease=True, setPercent=True)
+            item=DimmerItem(increase=True, decrease=True, setPercent=True, discretization={'setPercent': 'volume'})
         )
 
         self.channel = Channel(
             name="channel",
             description="Current channel. Use only the channel number as command to update the channel.",
-            item=StringItem(setString=True)  # TODO maybe discretize this or use Number item
+            item=StringItem(setString=True, discretization={'setString': 'TVchannels'}),
+            read=False  # TODO Fix Hack
         )
 
-        self.toast = Channel(
-            name='toast',
-            description="Displays a short message on the TV screen. See also rules section.",
-            item=StringItem(setString=True)  # TODO Copy and paste ?
-        )
+        # TODO cannot handle right now, maybe copy paste
+        # self.toast = Channel(
+        #     name='toast',
+        #     description="Displays a short message on the TV screen. See also rules section.",
+        #     item=StringItem(setString=True
+        #     read=False)
+        # )
 
         self.mediaPlayer = Channel(
-            name="mediaplayer",
+            name="mediaPlayer",
             description="Media control player",
-            item=PlayerItem(PlayPause=True, next=True, previous=True),  # TODO how to visualize state ?
+            item=PlayerItem(PlayPause=True, next=False, previous=False),  # TODO how to visualize state ?
             read=False
         )
 
         self.mediaStop = Channel(
-            name="mediastop",
+            name="mediaStop",
             description="Media control stop",
             item=SwitchItem(turnOff=True),
             read=False
         )
 
-        self.appLauncher = Channel(
-            name='applauncher',
-            description="Application ID of currently running application. This also allows to start applications on the TV by sending a specific Application ID to this channel.",
-            item=StringItem(setString=True)
-        )
+        # TODO cannot handle this one for now
+        # self.appLauncher = Channel(
+        #     name='applauncher',
+        #     description="Application ID of currently running application. This also allows to start applications on the TV by sending a specific Application ID to this channel.",
+        #     item=StringItem(setString=True)
+        # )
+
+        self.instruction = {
+            'turn_on': StateDescription(sentences=[f'You turned on the {self.name}']),
+            'turn_off': StateDescription(sentences=[f'You turned off {self.name}']),
+            'mute': StateDescription(sentences=[f'You muted the {self.name}']),
+            'unmute': StateDescription(sentences=[f'You unmuted the {self.name}']),
+            'increased_volume': StateDescription(sentences=[f'You increased the volume of {self.name}']),
+            'decreased_volume': StateDescription(sentences=[f'You decreased the volume of {self.name}']),
+            'play': StateDescription(sentences=[f'You played the film on {self.name}']),
+            'pause': StateDescription(sentences=[f'You paused the film on {self.name}']),
+            # 'next': StateDescription(sentences=[f'You changed the {self.name} to the next channel']),
+            # 'previous': StateDescription(sentences=[f'You changed the {self.name} to the previous channel']),
+            'stop': StateDescription(sentences=[f'You stopped the film on {self.name}']),
+        }
+
+        for level in levels_dict['volume']:
+            self.instruction[f'volume_level_{level}'] = StateDescription(
+                sentences=[f"The volume of {self.name} is now {level}"])
+        for channel in TVchannels_list:
+            self.instruction[f'TVchannel_{channel}'] = StateDescription(
+                sentences=[f"{self.name} is now on channel {channel}"])
 
         super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
                          is_visible=is_visible)
@@ -382,6 +424,68 @@ class LGTV(Thing):
         #     item=StringItem(setString=True),
         #     read=False
         # )
+
+    def get_state_description(self, current_state):
+        matching_instructions = []
+
+        # power
+        if current_state["power"]["state"] == 0:
+            matching_instructions.append(self.instruction['turn_off'])
+        else:
+            matching_instructions.append(self.instruction['turn_on'])
+
+        # mute
+        if current_state["mute"]["state"] == 0:
+            matching_instructions.append(self.instruction['mute'])
+        else:
+            matching_instructions.append(self.instruction['unmute'])
+
+        # volume level
+        volume = current_state['volume']['state'][0]
+        if volume != 0:
+            volume_lvl = percent_to_level(volume, lvl_type='volume')
+            matching_instructions.append(self.instruction[f'volume_level_{volume_lvl}'])
+
+        # channel
+        channel = current_state['channel']['state'][0]
+        matching_instructions.append(self.instruction[f'TVchannel_{channel}'])
+
+        # mediaplayer
+        player_status = current_state['mediaPlayer']['state'][0]
+        if player_status == 1:
+            matching_instructions.append(self.instruction[f'play'])
+        else:
+            matching_instructions.append(self.instruction[f'pause'])
+
+        # stop_status = current_state['mediastop']['state'][0]
+        # if stop_status == 0:
+        #     matching_instructions.append(self.instruction['stop'])
+
+        return matching_instructions
+
+    def get_state_change(self, previous_state, next_state):
+        achieved_descriptions = super().get_state_change(previous_state, next_state)
+
+        achieved_state_transition = []
+
+        previous_volume = previous_state["volume"]["state"][0]
+        next_volume = next_state["volume"]["state"][0]
+        # Check volume change
+        ### INCREASE_DECREASE_STEP is like a threshold for the oracle to detect a change
+        if next_volume >= INCREASE_DECREASE_STEP + previous_volume:
+            achieved_state_transition.append(self.instruction['increased_volume'])
+        if next_volume + INCREASE_DECREASE_STEP <= previous_volume:
+            achieved_state_transition.append(self.instruction['decreased_volume'])
+
+        # Check Stop
+        previous_stop = previous_state["mediaStop"]["state"][0]
+        next_stop = next_state["mediaStop"]["state"][0]
+        if previous_stop != next_stop:
+            achieved_state_transition.append(self.instruction['stop'])
+
+        achieved_str_instructions = achieved_descriptions + [i.get_random_instruction() for i in
+                                                             achieved_state_transition]
+        return achieved_str_instructions
 
 
 class Speaker(Thing):
@@ -405,11 +509,13 @@ class Speaker(Thing):
             description="Set or get the input source",
             item=StringItem(setString=True)
         )
+
         self.volume = Channel(
             name="volume",
             description="Set or get the master volume",
             item=DimmerItem(increase=True, decrease=True, setPercent=True)
         )
+
         self.mute = Channel(
             name="mute",
             description="Set or get the mute state of the master volume",
