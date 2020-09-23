@@ -193,17 +193,18 @@ class DQNAgent:
         done = torch.tensor(transitions.done)  # .to(self.device)
 
         logger.debug('Embedding next available actions')
-        next_av_actions_embedded = self.embed_actions([a for a, mask in zip(next_av_actions, done) if not mask])
-
-        logger.debug('Computing max(Q(s`, a)) over a')
         maxQ = torch.zeros(batch_size, device=self.device)
-        with torch.no_grad():
-            Q_target_net, _ = self.target_network(state=[s for s, flag in zip(next_states, done.numpy()) if not flag],
+        if not done.all():
+            next_av_actions_embedded = self.embed_actions([a for a, mask in zip(next_av_actions, done) if not mask])
+
+            logger.debug('Computing max(Q(s`, a)) over a')
+            with torch.no_grad():
+                Q_target_net, _ = self.target_network(state=[s for s, flag in zip(next_states, done.numpy()) if not flag],
                                                   instruction=goals[~done],
                                                   actions=next_av_actions_embedded,
                                                   hidden_state=next_hidden_states[~done])
-        maxQ[~done] = Q_target_net.max(1).values.squeeze()
-        logger.debug(f'Done: {maxQ}')
+            maxQ[~done] = Q_target_net.max(1).values.squeeze()
+            logger.debug(f'Done: {maxQ}')
 
         logger.debug('Computing loss')
         expected_value = rewards + self.discount_factor * maxQ
