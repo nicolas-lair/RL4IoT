@@ -421,14 +421,14 @@ class SwitchItem(AbstractItem):
         if init == 'default':
             self.onoff = 0
         elif init == 'random':
-            self.onoff = random.randint(0, 1)
+            self.onoff = random.choice([0, 1])
         elif init in [0, 1, True, False]:
             self.set_state(init)
         else:
             raise NotImplementedError
 
     def get_state(self):
-        return [self.onoff]
+        return np.array([self.onoff])
 
     def set_state(self, value):
         self.set_attribute('onoff', value)
