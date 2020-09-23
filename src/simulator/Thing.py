@@ -317,10 +317,12 @@ class PlugSwitch(Thing):
 
         state = state["switch_binary"]["state"][0]
         # ON / OFF
-        if state:
+        if state == 1:
             matching_instructions.append(self.instruction['turn_on'])
-        else:
+        elif state == 0:
             matching_instructions.append(self.instruction['turn_off'])
+        else:
+            raise NotImplementedError
         return matching_instructions
 
     def get_state_change(self, previous_state, next_state):
@@ -397,7 +399,7 @@ class LGTV(Thing):
             'turn_on': StateDescription(sentences=[f'You turned on the {self.name}']),
             'turn_off': StateDescription(sentences=[f'You turned off {self.name}']),
             'mute': StateDescription(sentences=[f'You muted the {self.name}']),
-            'unmute': StateDescription(sentences=[f'You unmuted the {self.name}']),
+            'unmute': StateDescription(sentences=[f'You restored the sound on {self.name}']),
             'increased_volume': StateDescription(sentences=[f'You increased the volume of {self.name}']),
             'decreased_volume': StateDescription(sentences=[f'You decreased the volume of {self.name}']),
             'play': StateDescription(sentences=[f'You played the film on {self.name}']),
