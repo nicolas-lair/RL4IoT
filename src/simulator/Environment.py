@@ -156,6 +156,7 @@ class IoTEnv4ML(gym.Wrapper):
                                           'state_encoding_size']
 
         self.ignore_exec_action = params['ignore_exec_action']
+        self.allow_do_nothing = params['allow_do_nothing']
 
         self.state = None
         self.previous_state = None
@@ -236,7 +237,8 @@ class IoTEnv4ML(gym.Wrapper):
 
     def get_root_actions(self):
         available_things = self.get_thing_list()
-        available_things.append(DoNothing())
+        if self.allow_do_nothing:
+            available_things.append(DoNothing())
         return available_things
 
 
