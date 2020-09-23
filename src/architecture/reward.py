@@ -39,6 +39,8 @@ class RewardModel(nn.Module):
             r = self.reward_layer(r)
         return r
 
+    def save_language_model(self, path):
+        torch.save(self.language_model.state_dict(), path)
 
 class StateDataset(Dataset):
     def __init__(self, data, data_type, raw_state_transformer=None, max_size=np.inf):

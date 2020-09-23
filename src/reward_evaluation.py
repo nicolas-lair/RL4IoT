@@ -7,12 +7,21 @@ import torch.nn as nn
 from sklearn.metrics import precision_score, recall_score, f1_score
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from architecture.reward import EpisodeDataset, RewardModel, ImbalancedDatasetSampler
+from config import get_reward_training_params
+from logger import set_logger_handler, rootLogger
 
+params = get_reward_training_params()
+
+set_logger_handler(rootLogger, **params['logger'])
+logger = rootLogger.getChild(__name__)
+logger.setLevel(10)
 
 class Net(nn.Module):
+    """
+    Cedric Or module
+    """
     def __init__(self, n_inputs):
         super(Net, self).__init__()
         self.shared_encoding = nn.Sequential(nn.Linear(1, 100),
@@ -29,7 +38,8 @@ class Net(nn.Module):
         out = self.out_layer(latent)
         return out
 
-
+class RewardTrainer:
+    pass
 class RewardComparision:
     def __init__(self, reward_list, fit_params, device):
         self.device = device
@@ -155,13 +165,16 @@ class RewardComparision:
         metrics['epoch'] = epoch
         return metrics
 
+    def save_language_model(self):
+        torch.save(self.model_list)
+
 
 def get_transformer_function(params):
     from simulator.Items import ITEM_TYPE
     from simulator.description_embedder import Description_embedder
     from simulator.Environment import preprocess_raw_observation
 
-    description_embedder = Description_embedder(**params['env_params']['description_embedder_params'])
+    description_embedder = Description_embedder(**params['description_embedder_params'])
 
     item_type_embedder = OneHotEncoder(sparse=False)
     item_type_embedder.fit(np.array(ITEM_TYPE).reshape(-1, 1))
@@ -176,13 +189,11 @@ if __name__ == "__main__":
     from collections import namedtuple
     from sklearn.preprocessing import OneHotEncoder
 
-    from config import generate_params
     from architecture.language_model import LanguageModel
 
     StateRecord = namedtuple('StateRecord', ('state', 'instruction', 'reward'))
     EpisodeRecord = namedtuple('EpisodeRecord', ('initial_state', 'final_state', 'instruction', 'reward'))
 
-    params = generate_params(save_path=False)
     episode_path = '/home/nicolas/PycharmProjects/imagineIoT/results/episodes_records3.jbl'
 
     transformer = get_transformer_function(params)
@@ -201,19 +212,25 @@ if __name__ == "__main__":
     test_batch = next(iter(test_loader))
 
     language_model = LanguageModel(**params['language_model_params'])
-    reward = RewardModel(context_model=params['model_params']['context_model'], language_model=language_model,
+    reward = RewardModel(context_model=params['reward_params']['context_model'], language_model=language_model,
                          reward_params=params['reward_params']['net_params'])
 
-    reward_net_params = params['reward_params']['net_params'].copy()
-    reward_net_params.update(aggregate='diff_or',
-                             scaler_layer_params=dict(hidden1_out=256, latent_out=1, last_activation='sigmoid')
-                             )
-    prelearned_or_reward = RewardModel(context_model=params['model_params']['context_model'],
-                                       language_model=language_model,
-                                       reward_params=reward_net_params)
+    evaluator = RewardComparision([reward], fit_params=params['reward_params']['fit_params'],
+                                  device=params['device'])
+
+    metrics, loss_list = evaluator.run(train_dts, test_batch, data_stats=False)
+    torch.save(language_model.state_dict(), params['save_dir'])
+
+    # reward_net_params = params['reward_params']['net_params'].copy()
+    # reward_net_params.update(aggregate='diff_or',
+    #                          scaler_layer_params=dict(hidden1_out=256, latent_out=1, last_activation='sigmoid')
+    #                          )
     # prelearned_or_reward = RewardModel(context_model=params['model_params']['context_model'],
     #                                    language_model=language_model,
-    #                                    **params['reward_params']['net_params'])
-    evaluator = RewardComparision([reward, prelearned_or_reward], fit_params=params['reward_params']['fit_params'],
-                                  device=params['device'])
-    metrics = evaluator.run(train_dts, test_batch, data_stats=False)
+    #                                    reward_params=reward_net_params)
+
+    # evaluator = RewardComparision([reward, prelearned_or_reward], fit_params=params['reward_params']['fit_params'],
+    #                               device=params['device'])
+
+
+
