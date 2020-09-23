@@ -1,29 +1,34 @@
 from collections import namedtuple
-from datetime import datetime
 import random
+
+import numpy as np
 
 import joblib
 
 from src.logger import rootLogger, set_logger_handler
-from src.config import generate_params, ThingParam
+from src.config import get_data_collection_params
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
-from simulator.Thing import PlugSwitch, LightBulb
 
 EpisodeRecord = namedtuple('EpisodeRecord', ('initial_state', 'final_state', 'instruction', 'reward'))
 StateRecord = namedtuple('StateRecord', ('state', 'instruction', 'reward'))
 
-params = generate_params()
-set_logger_handler(rootLogger, **params['logger'], log_path=params['save_directory'])
+params = get_data_collection_params()
+
+set_logger_handler(rootLogger, **params['logger'])
 logger = rootLogger.getChild(__name__)
 logger.setLevel(10)
 
 
-def run_episode(env):
+def run_episode(env, weights):
     _, available_actions = env.get_state_and_action()
-    done = False
+    # Choose thing first to weight according to the number of instruction related to the thing
+    action = np.random.choice(available_actions, p=[weights[t.name] for t in available_actions])
+    logger.debug(f'action: {action.name}')
+    (_, available_actions), _, done, _ = env.step(action=action)
+
     while not done:
-        action_idx = random.randint(0, len(available_actions) - 1)
+        action_idx = random.randint(0, len(available_actions)-1)
         action = available_actions[action_idx]
         logger.debug(f'action: {action.name}')
         (_, available_actions), _, done, _ = env.step(action=action)
@@ -44,8 +49,8 @@ def remove_key(state, key='embedding'):
 
 
 def save_episodes():
-    joblib.dump(episodes_records, '../results/episodes_records4.jbl')
-    joblib.dump(state_records, '../results/state_records4.jbl')
+    joblib.dump(episodes_records, f'../results/episodes_records_{params["name"]}.jbl')
+    # joblib.dump(state_records, '../results/state_records4.jbl')
 
 
 if __name__ == "__main__":
@@ -54,12 +59,15 @@ if __name__ == "__main__":
     oracle = Oracle(env=env)
     num_episodes = 100000
 
-    instructions_set = set(sum([list(v) for v in oracle.str_instructions.values()], []))
+    instruction_by_thing = oracle.str_instructions
+    instructions_set = set(sum([list(v) for v in instruction_by_thing.values()], []))
+    thing_weights = {k: len(v) / len(instructions_set) for k, v in instruction_by_thing.items()}
 
     pos_episodes = {i: [] for i in instructions_set}
     neg_episodes = {i: [] for i in instructions_set}
     pos_states = {i: [] for i in instructions_set}
     neg_states = {i: [] for i in instructions_set}
+
 
     def store_record(obj, pos_storage, neg_storage, achieved_set):
         for i in achieved_set:
@@ -68,10 +76,11 @@ if __name__ == "__main__":
             if random.random() < 0.25:
                 neg_storage[i].append(obj(instruction=i, reward=0))
 
+
     for i in range(num_episodes):
         logger.info('%' * 5 + f' Episode {i} ' + '%' * 5)
         env.reset()
-        run_episode(env=env)
+        run_episode(env=env, weights=thing_weights)
         achieved_goals_str = oracle.get_state_change(env.previous_user_state, env.user_state)
         previous_state_descriptions = oracle.get_state_descriptions(env.previous_user_state, as_string=True)
         state_descriptions = oracle.get_state_descriptions(env.user_state, as_string=True)
@@ -89,11 +98,11 @@ if __name__ == "__main__":
                      pos_storage=pos_episodes,
                      neg_storage=neg_episodes, achieved_set=achieved_goals_str)
 
-        store_record(obj=partial(StateRecord, state=state), pos_storage=pos_states,
-                     neg_storage=neg_states, achieved_set=state_descriptions)
-
-        store_record(obj=partial(StateRecord, state=previous_state), pos_storage=pos_states,
-                     neg_storage=neg_states, achieved_set=previous_state_descriptions)
+        # store_record(obj=partial(StateRecord, state=state), pos_storage=pos_states,
+        #              neg_storage=neg_states, achieved_set=state_descriptions)
+        #
+        # store_record(obj=partial(StateRecord, state=previous_state), pos_storage=pos_states,
+        #              neg_storage=neg_states, achieved_set=previous_state_descriptions)
 
         # if i > 0 and i % 5000 == 0:
         #     episodes_records = (pos_episodes, neg_episodes)
@@ -101,5 +110,5 @@ if __name__ == "__main__":
         #     save_episodes()
 
     episodes_records = (pos_episodes, neg_episodes)
-    state_records = (pos_states, neg_states)
+    # state_records = (pos_states, neg_states)
     save_episodes()

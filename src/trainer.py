@@ -17,8 +17,8 @@ from architecture.language_model import LanguageModel
 from architecture.goal_sampler import Goal
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-n', '--name', help='Simulation name', default='mse_no_pretrained')
-parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cuda:0')
+parser.add_argument('-n', '--name', help='Simulation name', default='tv')
+parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cpu')
 parser.add_argument('-ns', '--n_simulation', help='number of simulation to run', type=int, default=10)
 parser.add_argument('-lm', '--pretrained_language_model', help='number of simulation to run', choices=['0', '1'],
                     default=0)
@@ -37,6 +37,8 @@ set_logger_handler(rootLogger, **params['logger'], log_path=params['save_directo
 logger = rootLogger.getChild(__name__)
 
 logger.info('begin')
+
+# logger.setLevel(10)
 
 
 def run_episode(agent, env, target_goal, train=True):
@@ -77,6 +79,7 @@ def test_agent(agent, test_env, oracle):
     for thing, test_instruction in oracle.str_instructions.items():
         reward_table[thing] = dict()
         for instruction in test_instruction:
+            logger.info(f'Test : {instruction}')
             current_rewards = 0
             for _ in range(params['n_iter_test']):
                 test_env.reset()
@@ -183,5 +186,5 @@ if __name__ == "__main__":
                 end_time = str(datetime.now(tz=None)).split('.')[0]
                 print(f'Completed at {end_time}')
                 break
-            except RuntimeError:
-                pass
+            except RuntimeError as e:
+                raise e

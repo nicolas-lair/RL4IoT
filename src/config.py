@@ -17,6 +17,15 @@ from simulator.Thing import PlugSwitch, LightBulb, LGTV
 
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
 
+word_embedding_size = 50
+instruction_embedding = 40
+description_embedding = 50
+state_encoding_size = 3  # size of the vector in which is encoded the value of a channel
+state_embedding_size = state_encoding_size + description_embedding + len(ITEM_TYPE)
+action_embedding = 50
+
+vector_cache = '/home/nicolas/PycharmProjects/imagineIoT/.vector_cache'
+
 
 def prepare_simulation(simulation_name):
     if simulation_name == '':
@@ -36,20 +45,138 @@ def prepare_simulation(simulation_name):
     return path_dir
 
 
+def generate_env_params():
+    env_params = dict(
+        ignore_exec_action=True,
+        allow_do_nothing=True,
+        state_encoding_size=state_encoding_size,
+        description_embedder_params=dict(
+            embedding='glove',
+            word_embedding_params=dict(
+                name='6B',
+                dim=str(description_embedding),
+                cache=vector_cache
+            ),
+            reduction='mean',
+            authorize_cache=True
+        ),
+        thing_params=[
+            ThingParam(PlugSwitch,
+                       dict(name='first plug',
+                            description='This is a plug',
+                            is_visible=True,
+                            init_type='random',
+                            init_params=dict())
+                       ),
+            ThingParam(LightBulb,
+                       dict(name='first light bulb',
+                            description='This is a light bulb',
+                            is_visible=True,
+                            init_type='random',
+                            init_params=dict())
+                       ),
+            ThingParam(LGTV, dict(name='television',
+                                  description='This is a television',
+                                  is_visible=True,
+                                  init_type='random',
+                                  init_params=dict())
+                       )
+        ],
+    )
+    return env_params
+
+
+def generate_language_model_params(device='cuda', use_pretrained_model=False):
+    if use_pretrained_model:
+        pretrained_model_path = '/home/nicolas/PycharmProjects/imagineIoT/results/learned_language_model.pth'
+    else:
+        pretrained_model_path = None
+
+    language_model_params = dict(
+        type='lstm',
+        embedding_size=word_embedding_size,
+        linear1_out=256,
+        out_features=instruction_embedding,
+        vocab=torchtext.vocab.GloVe(name='6B', dim=word_embedding_size,
+                                    cache=vector_cache
+                                    ),
+        vocab_size=500,
+        device=device,
+        pretrained_model=pretrained_model_path
+    )
+    return language_model_params
+
+
+def generate_reward_params(archi=DeepSetStateNet):
+    reward_net_params = dict(instruction_embedding=instruction_embedding,
+                             hidden_state_size=0,
+                             state_embedding=state_embedding_size + state_encoding_size,
+                             aggregate='mean')
+    if 'DeepSetStateNet' in str(archi):
+        reward_net_params.update(scaler_layer_params=dict(hidden1_out=256, latent_out=512, last_activation='relu'))
+
+    reward_fit_params = dict(
+        optimizer=optim.Adam,
+        loss=nn.BCELoss,
+        batch_size=128,
+        n_epoch=250,
+        sampler_params=dict(num_samples=8000, pos_weight=0.2),
+    )
+    reward_params = dict(context_model=archi,
+                         net_params=reward_net_params,
+                         fit_params=reward_fit_params)
+    return reward_params
+
+
+def get_data_collection_params(name='data_collection_'):
+    from datetime import datetime
+    env_params = generate_env_params()
+    env_params['allow_do_nothing'] = False
+    params = dict(
+        name=name + str(datetime.now()).split('.')[0],
+        env_params=env_params,
+        logger=dict(
+            level=logging.INFO,
+            console=True,
+            log_file=False,
+        ),
+    )
+    return params
+
+
+def get_reward_training_params(name=None, device='cuda'):
+    context_archi = DeepSetStateNet
+
+    env_params = generate_env_params()
+    reward_params = generate_reward_params(archi=context_archi)
+    language_model_params = generate_language_model_params(device=device, use_pretrained_model=False)
+    params = dict(
+        language_model_params=language_model_params,
+        description_embedder_params=env_params['description_embedder_params'],
+        context_archi=context_archi,
+        reward_params=reward_params,
+        logger=dict(
+            level=logging.INFO,
+            console=True,
+            log_file=False,
+        ),
+        device=device
+    )
+    return params
+
+
 def generate_params(simulation_name='default_simulation', use_pretrained_language_model=False, save_path=True,
                     device='cuda', dqn_loss='mse'):
-    word_embedding_size = 50
-    instruction_embedding = 50
-    description_embedding = 50
-    state_encoding_size = 3  # size of the vector in which is encoded the value of a channel
-    state_embedding_size = state_encoding_size + description_embedding + len(ITEM_TYPE)
-    action_embedding = 50
+    env_params = generate_env_params()
+    language_model_params = generate_language_model_params(device=device,
+                                                           use_pretrained_model=use_pretrained_language_model)
 
-    vector_cache = '/home/nicolas/PycharmProjects/imagineIoT/.vector_cache'
     device = device
     # device = 'cpu'
 
     policy_context_archi = DeepSetStateNet
+    reward_params = generate_reward_params(archi=policy_context_archi)
+
     simulation_name = simulation_name
     if save_path:
         path_dir = prepare_simulation(simulation_name)
@@ -69,65 +196,10 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
     else:
         raise NotImplementedError
 
-    reward_net_params = dict(instruction_embedding=instruction_embedding,
-                             hidden_state_size=0,
-                             state_embedding=state_embedding_size + state_encoding_size,
-                             aggregate='mean')
-    if 'DeepSetStateNet' in str(policy_context_archi):
-        reward_net_params.update(scaler_layer_params=dict(hidden1_out=256, latent_out=512, last_activation='relu'))
-
-    if use_pretrained_language_model:
-        pretrained_model_path = '/home/nicolas/PycharmProjects/imagineIoT/results/learned_language_model.pth'
-    else:
-        pretrained_model_path = None
-
-    reward_fit_params = dict(
-        optimizer=optim.Adam,
-        loss=nn.BCELoss,
-        batch_size=128,
-        n_epoch=250,
-        sampler_params=dict(num_samples=8000, pos_weight=0.2),
-    )
-
     # Instantiate the param dict
     params = dict(
         simulation_name=simulation_name,
-        env_params=dict(
-            ignore_exec_action=True,
-            state_encoding_size=state_encoding_size,
-            description_embedder_params=dict(
-                embedding='glove',
-                word_embedding_params=dict(
-                    name='6B',
-                    dim=str(description_embedding),
-                    cache=vector_cache
-                ),
-                reduction='mean',
-                authorize_cache=True
-            ),
-            thing_params=[
-                ThingParam(PlugSwitch,
-                           dict(name='first plug',
-                                description='This is a plug',
-                                is_visible=True,
-                                init_type='random',
-                                init_params=dict())
-                           ),
-                ThingParam(LightBulb,
-                           dict(name='first light bulb',
-                                description='This is a light bulb',
-                                is_visible=True,
-                                init_type='random',
-                                init_params=dict())
-                           ),
-                ThingParam(LGTV, dict(name='television',
-                                      description='This is a television',
-                                      is_visible=True,
-                                      init_type='random',
-                                      init_params=dict())
-                           )
-            ],
-        ),
+        env_params=env_params,
         model_params=dict(
             context_model=policy_context_archi,
             action_embedding_size=action_embedding,  # TODO
@@ -145,8 +217,7 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
                 context_net=context_net_params,
             )
         ),
-        reward_params=dict(net_params=reward_net_params,
-                           fit_params=reward_fit_params),
+        reward_params=reward_params,
         goal_sampler_params=dict(
             goal_sampling_stategy='random',
             oracle_strategy='exhaustive_feedback'
@@ -164,18 +235,7 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
         loss=dqn_loss,
         optimizer=optim.Adam,
         optimizer_params=dict(),  # TODO optimize
-        language_model_params=dict(
-            type='lstm',
-            embedding_size=word_embedding_size,
-            linear1_out=256,
-            out_features=instruction_embedding,
-            vocab=torchtext.vocab.GloVe(name='6B', dim=word_embedding_size,
-                                        cache=vector_cache
-                                        ),
-            vocab_size=500,
-            device=device,
-            pretrained_model=pretrained_model_path
-        ),
+        language_model_params=language_model_params,
         logger=dict(
             level=logging.INFO,
             console=True,
