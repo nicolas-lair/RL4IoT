@@ -1,15 +1,13 @@
-from gym import spaces
-
 from simulator.Items import *
 from simulator.Channel import Channel
-from simulator.utils import get_color_name_from_hsb, percent_to_level, color_list, levels_dict
+from simulator.utils import percent_to_level, levels_dict
 from simulator.TreeView import DescriptionNode
-from simulator.instructions import StateDescription
+from simulator.instructions import StateDescription, initialize_instruction
 from simulator.Action import TVchannels_list
 
 
 class Thing(DescriptionNode):
-    def __init__(self, name, description, is_visible, init_type, init_params):
+    def __init__(self, name, description, is_visible, init_type, init_params, location, instruction_dict):
         """
         Init a generic Thing object as a Node of the environment. The super function that instantiates subclass should
         be called after the definition of the channels. The channels are indeed the children of the node.
@@ -21,7 +19,9 @@ class Thing(DescriptionNode):
         init value
         """
         super().__init__(name=name, description=description, children=self.get_action_channels())
-        self.name = name
+        # self.name = name #TODO check if necessary
+        self.instruction = initialize_instruction(instruction_dict=instruction_dict, name=name, location=location)
+
         # self.observation_space, self.action_space = self.build_observation_and_action_space()
         self._channels = self.get_channels()
         self.initial_values = {'is_visible': is_visible, 'init_type': init_type, 'init_params': init_params}
@@ -135,145 +135,44 @@ class Thing(DescriptionNode):
 
     def get_state_change(self, previous_state, next_state):
         previous_matching_descriptions = self.get_state_description(previous_state)
-        next_matching_descriptions = self.get_state_description(next_state)
-        descriptions_change = set(next_matching_descriptions).difference(set(previous_matching_descriptions))
+        was_powered = self.is_powered(previous_state)
 
-        achieved_instructions = [d.get_random_instruction() for d in descriptions_change]
+        next_matching_descriptions = self.get_state_description(next_state)
+        is_powered = self.is_powered(next_state)
+
+        state_change_descriptions_keys = []
+        for c in self._channels:
+            state_change_descriptions_keys.extend(c.get_state_change_key(previous_state, next_state))
+
+        state_change_descriptions = [self.instruction[key] for key in state_change_descriptions_keys]
+
+        descriptions_change = set(next_matching_descriptions).difference(set(previous_matching_descriptions))
+        descriptions_change = descriptions_change.union(state_change_descriptions)
+
+        if not is_powered * was_powered:
+            descriptions_change = [d for d in descriptions_change if not d.need_power]
+        achieved_instructions = [d.get_instruction() for d in descriptions_change]
         return achieved_instructions
 
-    def get_state_description(self, state):
+    def get_state_description(self, state=None):
+        state = self.get_state(oracle=True) if state is None else state
+        is_powered = self.is_powered(state)
+
+        # Collect all keys
+        state_description_key_list = []
+        for c in self._channels:
+            state_description_key_list.extend(c.get_state_description_key(state))
+
+        # Get corresponding StateDescriptions
+        matching_description = [self.instruction[key] for key in state_description_key_list]
+
+        # Filter if object is not powered
+        if not is_powered:
+            matching_description = [d for d in matching_description if not d.need_power]
+        return matching_description
+
+    def is_powered(self, state=None):
         raise NotImplementedError
-
-
-class LightBulb(Thing):
-    """
-    Thing type 0210 (https://www.openhab.org/addons/bindings/hue/)
-    """
-
-    def __init__(self, name="lightbulb", description='This is a light bulb', init_type='default', init_params=None,
-                 is_visible=True):
-        self.name = name
-        if init_params is None:
-            init_params = dict()
-        self.color = Channel(
-            name='color',
-            description="This channel supports full color control with hue, saturation and brightness values",
-            item=ColorItem(turnOn=True, turnOff=True, increase=True, decrease=True, setPercent=True,
-                           setHSB=True, discretization={'setHSB': 'colors', 'setPercent': 'brightness'}),
-        )
-
-        self.color_temperature = Channel(
-            name='color_temperature',
-            description='This channel supports adjusting the color temperature from cold (0%) to warm (100%)',
-            item=DimmerItem(increase=True, decrease=True, setPercent=True,
-                            discretization={'setPercent': 'temperature'}),
-        )
-
-        self.instruction = {
-            # 'color_change': StateDescription(sentences=["You changed the color of {name} to {color}"]),
-            'turn_on': StateDescription(sentences=[f"You turned on the {self.name}"]),
-            'turn_off': StateDescription(sentences=[f"You turned off the {self.name}"]),
-            'increase_lum': StateDescription(sentences=[f"You increased the luminosity of {self.name}"]),
-            'decrease_lum': StateDescription(sentences=[f"You decreased the luminosity of {self.name}"]),
-            # 'lum_change': StateDescription(sentences=["The luminosity of {name} is now {level}"]),
-            'warmer_color': StateDescription(sentences=[f"You made the light of {self.name} warmer"]),
-            'colder_color': StateDescription(sentences=[f"You made the light of {self.name} colder"]),
-        }
-
-        for color in color_list:
-            self.instruction[f'{color}_color'] = StateDescription(
-                sentences=[f"You set the color of {self.name} to {color}"]
-            )
-        for level in levels_dict['brightness']:
-            if level == 'average':
-                s = [f"The luminosity of {self.name} is now {level}"]
-            else:
-                s = [f"{self.name} is now {level}"]
-            self.instruction[f'lum_level_{level}'] = StateDescription(sentences=s)
-
-        for level in levels_dict['temperature']:
-            self.instruction[f'temp_level_{level}'] = StateDescription(
-                sentences=[f"The light temperature of {self.name} is now {level}"])
-
-        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
-                         is_visible=is_visible)
-        # # TODO decide if use or not : maybe not
-        # self.alert = Channel(
-        #     name='alert',
-        #     description='This channel supports displaying alerts by flashing the bulb either once or multiple times. Valid values are: NONE, SELECT and LSELECT.',
-        #     item=StringItem()
-        # )
-
-    def get_state_description(self, current_state):
-        matching_instructions = []
-
-        # COlOR
-        h, s, b = current_state["color"]["state"]
-        color = get_color_name_from_hsb(h, s, b)
-        matching_instructions.append(self.instruction[f'{color}_color'])
-
-        # ON / OFF
-        if b == 0:
-            matching_instructions.append(self.instruction['turn_off'])
-        else:
-            matching_instructions.append(self.instruction['turn_on'])
-
-        # BRIGHTNESS LVL
-        brightness_lvl = percent_to_level(b, lvl_type='brightness')
-        matching_instructions.append(self.instruction[f'lum_level_{brightness_lvl}'])
-
-        # TEMPERATURE LVL
-        temp = current_state['color_temperature']['state'][0]
-        temp_lvl = percent_to_level(temp, lvl_type='temperature')
-        matching_instructions.append(self.instruction[f'temp_level_{temp_lvl}'])
-
-        # # COLOR TEMPERATURE LVL
-        # color_temperature = current_state["color_temperature"]["state"][0]
-
-        return matching_instructions
-
-    def get_state_change(self, previous_state, next_state):
-        achieved_descriptions = super().get_state_change(previous_state, next_state)
-
-        achieved_state_transition = []
-        # Check color channel change
-        h, s, b = previous_state["color"]["state"]
-        new_h, new_s, new_b = next_state["color"]["state"]
-        # previous_color = get_color_name_from_hsb(h, s, b)
-        # next_color = get_color_name_from_hsb(new_h, new_s, new_b)
-        # if previous_color != next_color:
-        #     achieved_instructions.append(
-        #         random.choice(self.instruction['color_change']).format(name=self.name, color=next_color))
-        # if b == 0 and new_b > 0:
-        #     achieved_instructions.append(random.choice(self.instruction['turn_on']))
-        # if b > 0 and new_b == 0:
-        #     achieved_instructions.append(random.choice(self.instruction['turn_off']))
-
-        ### INCREASE_DECREASE_STEP is a threshold for the oracle to detect a change
-        if new_b >= INCREASE_DECREASE_STEP + b:
-            achieved_state_transition.append(self.instruction['increase_lum'])
-        if new_b + INCREASE_DECREASE_STEP <= b:
-            achieved_state_transition.append(self.instruction['decrease_lum'])
-
-        # b_lvl = percent_to_level(b)
-        # new_b_lvl = percent_to_level(new_b)
-        # # Increase the brightness using set Percent
-        # if b_lvl != new_b_lvl:
-        #     achieved_instructions.append(
-        #         random.choice(self.instruction['lum_change']).format(name=self.name, level=new_b_lvl))
-
-        previous_color_temperature = previous_state["color_temperature"]["state"][0]
-        next_color_temperature = next_state["color_temperature"]["state"][0]
-        # Check color_temperature change
-        ### INCREASE_DECREASE_STEP is like a threshold for the oracle to detect a change
-        if next_color_temperature >= INCREASE_DECREASE_STEP + previous_color_temperature:
-            achieved_state_transition.append(self.instruction['warmer_color'])
-        if next_color_temperature + INCREASE_DECREASE_STEP <= previous_color_temperature:
-            achieved_state_transition.append(self.instruction['colder_color'])
-
-        achieved_str_instructions = achieved_descriptions + [i.get_random_instruction() for i in
-                                                             achieved_state_transition]
-        return achieved_str_instructions
 
 
 class PlugSwitch(Thing):
@@ -485,7 +384,7 @@ class LGTV(Thing):
         if previous_stop != next_stop:
             achieved_state_transition.append(self.instruction['stop'])
 
-        achieved_str_instructions = achieved_descriptions + [i.get_random_instruction() for i in
+        achieved_str_instructions = achieved_descriptions + [i.get_instruction() for i in
                                                              achieved_state_transition]
         return achieved_str_instructions
 

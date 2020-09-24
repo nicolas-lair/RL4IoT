@@ -13,7 +13,8 @@ from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, N_LEVELS
 from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState
-from simulator.Thing import PlugSwitch, LightBulb, LGTV
+from simulator.Thing import PlugSwitch, LGTV
+from lighting_things import LightBulb
 
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
 

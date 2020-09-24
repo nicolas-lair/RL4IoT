@@ -5,7 +5,8 @@ from simulator.TreeView import DescriptionNode
 
 
 class Channel(DescriptionNode):
-    def __init__(self, name, description, item, read=True, write=True):
+    def __init__(self, name, description, item, read=True, write=True, associated_state_description=None,
+                 associated_state_change=None):
 
         self.item = item
         super().__init__(name=name, description=description,
@@ -18,6 +19,20 @@ class Channel(DescriptionNode):
 
         self.read = read
         self.write = write
+
+        if associated_state_description is None:
+            self.associated_state_description = []
+        elif isinstance(associated_state_description, list):
+            self.associated_state_description = associated_state_description
+        else:
+            self.associated_state_description = [associated_state_description]
+
+        if associated_state_change is None:
+            self.associated_state_change = []
+        elif isinstance(associated_state_change, list):
+            self.associated_state_change = associated_state_change
+        else:
+            self.associated_state_change = [associated_state_change]
 
     def get_state(self):
         return self.item.get_state()
@@ -41,8 +56,14 @@ class Channel(DescriptionNode):
     def get_available_actions(self):
         return self.item.methods
 
-    def get_state_change(self):
-        pass
-
     def init(self, init_param):
         self.item.initialize_value(init_param)
+
+    def get_state_description_key(self, state):
+        keys = [f(*state[self.name]['state']) for f in self.associated_state_description]
+        return list(filter(None, keys))
+
+    def get_state_change_key(self, previous_state, next_state):
+        keys =  [f(*previous_state[self.name]['state'], *next_state[self.name]['state']) for f in
+                self.associated_state_change]
+        return list(filter(None, keys))
