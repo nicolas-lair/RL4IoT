@@ -49,30 +49,72 @@ def get_increase_change(previous_brightness, next_brightness, type):
         return None
 
 
-class AdorneLightBulb(Thing):
+class PowerChannel(Channel):
+    def __init__(self, name, description):
+        super().__init__(name=name,
+                         description=description,
+                         item=SwitchItem(turnOn=True, turnOff=True),
+                         read=True,
+                         write=True,
+                         associated_state_description=lambda x: 'turn_on' if x else 'turn_off',
+                         associated_state_change=None)
+
+
+class BrightnessChannel(Channel):
+    def __init__(self, name, description, methods=dict(setPercent=True)):
+        super().__init__(name=name,
+                         description=description,
+                         item=DimmerItem(**methods, discretization={'setPercent': 'brightness'}),
+                         read=True,
+                         write=True,
+                         associated_state_description=lambda p: f'lum_level_{percent_to_level(p, "brightness")}',
+                         associated_state_change=partial(get_increase_change, type='brightness')
+                         )
+
+
+class ColorTemperatureChannel(Channel):
+    def __init__(self, name, description, methods=dict(setPercent=True)):
+        super().__init__(name=name,
+                         description=description,
+                         item=DimmerItem(**methods, discretization={'setPercent': 'temperature'}),
+                         read=True,
+                         write=True,
+                         associated_state_description=lambda p: f'temp_level_{percent_to_level(p, "temperature")}',
+                         associated_state_change=partial(get_increase_change, type="temperature")
+                         )
+
+
+class ColorChannel(Channel):
+    def __init__(self, name, description):
+        super().__init__(name=name,
+                         description=description,
+                         item=ColorItem(turnOn=True, turnOff=True, increase=True, decrease=True, setPercent=True,
+                                        setHSB=True, discretization={'setHSB': 'colors', 'setPercent': 'brightness'}),
+                         associated_state_description=[
+                             lambda h, s, b: 'turn_on' if b > 0 else 'turn_off',
+                             lambda h, s, b: f'{get_color_name_from_hsb(h, s, b)}_color',
+                             lambda h, s, b: f'lum_level_{percent_to_level(b, "brightness")}',
+                         ],
+                         associated_state_change=lambda h1, s1, b1, h2, s2, b2: get_increase_change(b1, b2,
+                                                                                                    type='brightness'),
+                         )
+
+
+class LightBulb(Thing):
+    pass
+
+
+class AdorneLightBulb(LightBulb):
     """
-    Simple lightbulb supporting just breightness adjustment
+    Simple light bulb supporting just brightness adjustment
 
     https://www.openhab.org/addons/bindings/adorne/
     """
 
-    def __init__(self, name="simple light bulb", description='This is a simple light bulb', init_type='default',
+    def __init__(self, name="level one light bulb", description='This is a simple light bulb', init_type='random',
                  init_params=None, is_visible=True, location=None):
-        self.power = Channel(
-            name='power',
-            description='Turn device on and off',
-            item=SwitchItem(turnOn=True, turnOff=True),
-            associated_state_description=lambda x: 'turn_on' if x else 'turn_off',
-        )
-
-        self.brightness = Channel(
-            name='brightness',
-            description="Set device's brightness",
-            item=DimmerItem(setPercent=True, discretization={'setPercent': 'brightness'}),
-            associated_state_description=lambda p: f'lum_level_{percent_to_level(p, "brightness")}',
-            associated_state_change=partial(get_increase_change, type='brightness'),
-        )
-
+        self.power = PowerChannel(name='power', description='Turn device on and off')
+        self.brightness = BrightnessChannel(name='brightness', description="Set device's brightness", )
         super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
                          is_visible=is_visible, location=location, instruction_dict=Light_instruction)
 
@@ -81,37 +123,42 @@ class AdorneLightBulb(Thing):
         return state['power']['state'][0] == 1
 
 
-class HueLightBulb(Thing):
+class BigAssFanLightBulb(LightBulb):
+    """
+    Light Object from BigAssFan https://www.openhab.org/addons/bindings/bigassfan/
+    """
+
+    def __init__(self, name="intermediate light bulb", description='This is a light bulb with color temperature setting',
+                 init_type='random', init_params=None, is_visible=True, location=None):
+        self.light_power = PowerChannel(name='light_power', description='Power on / off the light')
+        self.light_level = BrightnessChannel(name='light_level', description="Adjust the brightness of the light", )
+        self.light_hue = ColorTemperatureChannel(name='light_hue',
+                                                 description="Adjust the color temperature of the light",
+                                                 methods=dict(setPercent=True, increase=True, decrease=True))
+        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
+                         is_visible=is_visible, location=location, instruction_dict=Light_instruction)
+
+    def is_powered(self, state=None):
+        state = self.get_state(oracle=True) if state is None else state
+        return state['light_power']['state'][0] == 1
+
+
+class HueLightBulb(LightBulb):
     """
     Thing type 0210 (https://www.openhab.org/addons/bindings/hue/)
     """
 
-    def __init__(self, name="colored light bulb", description='This is a colored light bulb', init_type='default', init_params=None,
-                 is_visible=True, location=None):
-        # self.name = name
-        # if init_params is None:
-        #     init_params = dict()
-
-        self.color = Channel(
+    def __init__(self, name="colored light bulb", description='This is a colored light bulb', init_type='random',
+                 init_params=None, is_visible=True, location=None):
+        self.color = ColorChannel(
             name='color',
-            description="This channel supports full color control with hue, saturation and brightness values",
-            item=ColorItem(turnOn=True, turnOff=True, increase=True, decrease=True, setPercent=True,
-                           setHSB=True, discretization={'setHSB': 'colors', 'setPercent': 'brightness'}),
-            associated_state_description=[
-                lambda h, s, b: 'turn_on' if b > 0 else 'turn_off',
-                lambda h, s, b: f'{get_color_name_from_hsb(h, s, b)}_color',
-                lambda h, s, b: f'lum_level_{percent_to_level(b, "brightness")}',
-            ],
-            associated_state_change=lambda h1, s1, b1, h2, s2, b2: get_increase_change(b1, b2, type='brightness'),
+            description="This channel supports full color control with hue, saturation and brightness values"
         )
 
-        self.color_temperature = Channel(
+        self.color_temperature = ColorTemperatureChannel(
             name='color_temperature',
             description='This channel supports adjusting the color temperature from cold (0%) to warm (100%)',
-            item=DimmerItem(increase=True, decrease=True, setPercent=True,
-                            discretization={'setPercent': 'temperature'}),
-            associated_state_description=lambda p: f'temp_level_{percent_to_level(p, "temperature")}',
-            associated_state_change=partial(get_increase_change, type="temperature")
+            methods=dict(increase=True, decrease=True, setPercent=True)
         )
 
         super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
@@ -123,7 +170,7 @@ class HueLightBulb(Thing):
 
 
 if __name__ == "__main__":
-    a = HueLightBulb(location='the kitchen', init_type='random')
+    a = AdorneLightBulb(location='the kitchen', init_type='random')
 
     a.reset()
     state1 = a.get_state(oracle=True)

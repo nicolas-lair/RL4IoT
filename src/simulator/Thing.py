@@ -1,12 +1,14 @@
+from abc import ABC, abstractmethod
+
 from simulator.Items import *
 from simulator.Channel import Channel
 from simulator.utils import percent_to_level, levels_dict
 from simulator.TreeView import DescriptionNode
 from simulator.instructions import StateDescription, initialize_instruction
-from simulator.Action import TVchannels_list
+from discrete_parameters import TVchannels_list
 
 
-class Thing(DescriptionNode):
+class Thing(ABC, DescriptionNode):
     def __init__(self, name, description, is_visible, init_type, init_params, location, instruction_dict):
         """
         Init a generic Thing object as a Node of the environment. The super function that instantiates subclass should
@@ -24,7 +26,8 @@ class Thing(DescriptionNode):
 
         # self.observation_space, self.action_space = self.build_observation_and_action_space()
         self._channels = self.get_channels()
-        self.initial_values = {'is_visible': is_visible, 'init_type': init_type, 'init_params': init_params}
+        self.initial_values = {'is_visible': is_visible, 'init_type': init_type,
+                               'init_params': init_params if init_params is not None else dict()}
         # self.description_embedding = None
         # self.item_type = None
 
@@ -171,6 +174,7 @@ class Thing(DescriptionNode):
             matching_description = [d for d in matching_description if not d.need_power]
         return matching_description
 
+    @abstractmethod
     def is_powered(self, state=None):
         raise NotImplementedError
 

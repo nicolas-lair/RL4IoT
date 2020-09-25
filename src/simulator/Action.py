@@ -3,7 +3,7 @@ import gym
 from gym import spaces
 from sklearn.preprocessing import OneHotEncoder
 
-from simulator.utils import color_list, level_to_percent, color_to_hsb, levels_dict, N_LEVELS, find_level_list
+from simulator.discrete_parameters import discrete_parameters, params_interpreters
 from simulator.TreeView import NoDescriptionNode
 
 gym.logger.set_level(40)
@@ -36,19 +36,36 @@ ACTION_SPACE = {
     'do_nothing': []
 }
 
-TVchannels_list = [str(i) for i in range(6)]
-
 baseaction_type_embedder = OneHotEncoder(sparse=False)
 baseaction_type_embedder.fit(np.array(list(ACTION_SPACE.keys())).reshape(-1, 1))
 
-color_embedder = OneHotEncoder(sparse=False)
-color_embedder.fit(np.array(color_list).reshape(-1, 1))
 
-level_one_hot_encoder = OneHotEncoder(sparse=False)
-level_one_hot_encoder.fit(np.array(range(N_LEVELS)).reshape(-1, 1))
+def create_embedders(discrete_params):
+    def aux(d):
+        if isinstance(d, dict):
+            return {k: aux(v) for k, v in d.items()}
+        elif isinstance(d, list):
+            emb = OneHotEncoder(sparse=False)
+            emb.fit(np.array(d).reshape(-1, 1))
+            return emb
+        else:
+            raise InterruptedError
 
-tv_embedder = OneHotEncoder(sparse=False)
-tv_embedder.fit(np.array(TVchannels_list).reshape(-1, 1))
+    return aux(discrete_params)
+
+
+params_embedders = create_embedders(discrete_parameters)
+
+
+#
+# color_embedder = OneHotEncoder(sparse=False)
+# color_embedder.fit(np.array(discrete_parameters['colors']).reshape(-1, 1))
+#
+# level_one_hot_encoder = OneHotEncoder(sparse=False)
+# level_one_hot_encoder.fit(np.array(range(N_LEVELS)).reshape(-1, 1))
+#
+# tv_embedder = OneHotEncoder(sparse=False)
+# tv_embedder.fit(np.array(discrete_parameters['TVchannels']).reshape(-1, 1))
 
 
 class RootAction(NoDescriptionNode):
@@ -67,27 +84,12 @@ class OpenHABAction(NoDescriptionNode):
     def __init__(self, name, discretization=None):
         embedding = baseaction_type_embedder.transform(np.array([name]).reshape(-1, 1)).flatten()
         super().__init__(name, children=[ExecAction()], node_embedding=embedding, node_type='openHAB_action')
-        if name == 'setPercent':
-            try:
-                lvl_list = levels_dict[discretization]
-            except KeyError:
-                raise NotImplementedError
-            self.children = [Params(p) for p in lvl_list]
-
-        elif name == 'setHSB':
-            if discretization == 'colors':
-                self.children = [Params(c) for c in color_list]
-            else:
-                raise NotImplementedError
-
-        elif name == 'setString':
-            if discretization == 'TVchannels':
-                self.children = [Params(c) for c in TVchannels_list]
-            else:
-                raise NotImplementedError
-        elif name == 'setValue':
-            self.children = None
-            raise NotImplementedError
+        if name in discrete_parameters:
+            self.children = [
+                Params(name=p,
+                       type=name,
+                       embedder=params_embedders[name][discretization])
+                for p in discrete_parameters[name][discretization]]
 
 
 # class BackAction(Node):
@@ -102,32 +104,30 @@ class ExecAction(NoDescriptionNode):
 
 
 class Params(NoDescriptionNode):
-    def __init__(self, name):
-        levels = sum(levels_dict.values(), [])
-        n = name
-        if name in levels:
-            embedder = level_one_hot_encoder
-            n = find_level_list(name).index(name)
-        elif name in color_list:
-            embedder = color_embedder
-        elif name in TVchannels_list:
-            embedder = tv_embedder
-        else:
-            raise NotImplementedError
-        embedding = embedder.transform(np.array([n]).reshape(-1, 1)).flatten()
-        node_type = (name in levels) * 'level' + (name in color_list) * 'color' + (
-                    name in TVchannels_list) * 'TVchannels' + '_params'
+    def __init__(self, name, type, embedder):
+        self.value = params_interpreters[type](name)
 
-        super().__init__(name=name, children=[ExecAction()], node_embedding=embedding, node_type=node_type)
+        # levels = sum(levels_dict.values(), [])
+        # n = name
+        # if name in levels:
+        #     embedder = level_one_hot_encoder
+        #     n = find_level_list(name).index(name)
+        #     self.interpreter = level_to_percent
+        # elif name in color_list:
+        #     embedder = color_embedder
+        #     self.interpreter = color_to_hsb
+        # elif name in TVchannels_list:
+        #     embedder = tv_embedder
+        #     self.interpreter = lambda x: x
+        #
+        # else:
+        #     raise NotImplementedError
 
-        if self.name in levels:
-            self.interpreter = level_to_percent
-        elif self.name in color_list:
-            self.interpreter = color_to_hsb
-        elif self.name in TVchannels_list:
-            self.interpreter = lambda x: x
-        else:
-            raise NotImplementedError
+        embedding = embedder.transform(np.array([name]).reshape(-1, 1)).flatten()
+        # node_type = (name in levels) * 'levels' + (name in color_list) * 'colors' + (
+        #         name in TVchannels_list) * 'TVchannels' + '_params'
+
+        super().__init__(name=name, children=[ExecAction()], node_embedding=embedding, node_type=type + '_params')
 
     def interpret_params(self):
-        return self.interpreter(self.name)
+        return self.value
