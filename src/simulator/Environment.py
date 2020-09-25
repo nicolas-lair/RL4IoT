@@ -13,6 +13,7 @@ from simulator.Channel import Channel
 from simulator.description_embedder import Description_embedder
 from simulator.Action import ExecAction, OpenHABAction, Params, DoNothing
 from simulator.TreeView import Node
+from simulator.discrete_parameters import discrete_parameters
 
 
 class IoTEnv(gym.Env):
@@ -52,6 +53,7 @@ class IoTEnv(gym.Env):
         # })
 
         # self._things_lookup_table = self._build_things_lookup_table()
+        self.discrete_params = discrete_parameters
         self.previous_user_state = None
         self.user_state = self.build_state(oracle=True)
 

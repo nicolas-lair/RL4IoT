@@ -18,14 +18,13 @@ logger = rootLogger.getChild(__name__)
 
 
 class DQNAgent:
-    def __init__(self, language_model, params):
+    def __init__(self, language_model, params, env_discrete_params):
         self.device = params['device']
 
-        # self.policy_network = model(**params['model_params'])
-        self.policy_network = FullNet(**params['model_params'])
+        self.policy_network = FullNet(**params['model_params'], discrete_params=env_discrete_params)
         self.policy_network.to(self.device)
 
-        self.target_network = FullNet(**params['model_params'])
+        self.target_network = FullNet(**params['model_params'], discrete_params=env_discrete_params)
         self.target_network.to(self.device)
         self.target_network.load_state_dict(self.policy_network.state_dict())
         self.target_update_freq = params['target_update_frequence']
