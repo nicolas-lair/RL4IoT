@@ -7,8 +7,7 @@ import torch
 import gym
 
 from simulator.Items import ITEM_TYPE
-from simulator.Thing import Thing, PlugSwitch, LGTV, Speaker, Chromecast
-from lighting_things import LightBulb
+from simulator.Thing import Thing
 from simulator.Channel import Channel
 from simulator.description_embedder import Description_embedder
 from simulator.Action import ExecAction, OpenHABAction, Params, DoNothing
