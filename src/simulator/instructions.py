@@ -36,7 +36,7 @@ class StateDescription:
 
     def set_name_and_location(self, name, location):
         location = 'in ' + location if location else ''
-        self.sentences = [s.format(name=name, location=location) for s in self.sentences]
+        self.sentences = [' '.join(s.format(name=name, location=location).split()) for s in self.sentences]
 
 
 if __name__ == '__main__':
