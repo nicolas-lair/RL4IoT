@@ -22,7 +22,8 @@ class IoTEnv(gym.Env):
 
         self._things_lookup_table = {}
         for obj in obj_list:
-            self._things_lookup_table[obj.Params['name']] = obj.Class(**obj.Params)
+            thing = obj.Class(**obj.Params)
+            self._things_lookup_table[thing.name] = thing
 
         # self.plug = PlugSwitch(obj_list['plug1'])
         # self.lightbulb = LightBulb(obj_list['lightbulb1'])
