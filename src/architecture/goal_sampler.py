@@ -72,28 +72,19 @@ class GoalSampler:
                            reached_goal_sequence=dict())
         self.language_model = language_model
 
-    def update_discovered_goals(self, reached_goals_str, iter):
-        new_goals = self._find_new_goals(reached_goals_str)
-        logger.info(f'New goals discovered: {new_goals}')
-        if isinstance(new_goals, str):
-            assert len(new_goals) > 0, 'goal string should be a non empty string'
-            new_goal = TrainGoal(goal_string=new_goals, episode_discovery=iter,  # id=len(self.discovered_goals),
-                                 language_model=self.language_model)
-            self.discovered_goals.update({new_goals: new_goal})
-        elif isinstance(new_goals, list):
-            for g in new_goals:
-                self.update_discovered_goals(g, iter=iter)
-        else:
-            raise TypeError("goals should be passed as a string or list of string")
-
-    def _find_new_goals(self, goals_str):
+    def update_discovered_goals(self, goals_str, iter):
         if isinstance(goals_str, str):
             s = {goals_str}
         elif isinstance(goals_str, list):
             s = set(goals_str)
         else:
             raise TypeError("goals should be passed as a string or list of string")
-        return list(s.difference(list(self.discovered_goals.keys()) + ['']))
+        new_goals_str = list(s.difference(list(self.discovered_goals.keys()) + ['']))
+        logger.info(f'New goals discovered: {new_goals_str}')
+        for g in new_goals_str:
+            assert len(g) > 0, 'goal string should be a non empty string'
+            new_goal = TrainGoal(goal_string=g, episode_discovery=iter, language_model=self.language_model)
+            self.discovered_goals.update({g: new_goal})
 
     def update(self, target_goals, reached_goals_str, iter):
         logger.debug('Updating Goal Sampler')
