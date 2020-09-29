@@ -87,9 +87,9 @@ def run_episode(agent, env, target_goal, save_transitions=True):
                 pass  # TODO use internal reward function
 
             elif len(target_goal.goal_string) > 0:
-                agent._store_transitions(goal=target_goal, state=state, action=action,
-                                         next_state=(next_state, next_available_actions), done=done, reward=reward,
-                                         hidden_state=previous_hidden_state, previous_action=previous_action)
+                agent.store_transitions(goal=target_goal, state=state, action=action,
+                                        next_state=(next_state, next_available_actions), done=done, reward=reward,
+                                        hidden_state=previous_hidden_state, previous_action=previous_action)
 
 
 def test_agent(agent, test_env, oracle):
