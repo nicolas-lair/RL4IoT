@@ -183,18 +183,18 @@ class DQNAgent:
         next_hidden_states = normalized_action_embedding.squeeze()
 
         next_states, next_av_actions = zip(*transitions.next_state)
-        next_states = [dict_to_device(d, self.device) for d in next_states]
         done = torch.tensor(transitions.done)  # .to(self.device)
 
         logger.debug('Embedding next available actions')
         maxQ = torch.zeros(batch_size, device=self.device)
         if not done.all():
+            next_states = [dict_to_device(s, self.device) for s, mask in zip(next_states, done) if not mask]
             next_av_actions_embedded = self.embed_actions([a for a, mask in zip(next_av_actions, done) if not mask])
 
             logger.debug('Computing max(Q(s`, a)) over a')
             with torch.no_grad():
                 Q_target_net, _ = self.target_network(
-                    state=[s for s, flag in zip(next_states, done.numpy()) if not flag],
+                    state=next_states,
                     instruction=goals[~done],
                     actions=next_av_actions_embedded,
                     hidden_state=next_hidden_states[~done])
