@@ -48,6 +48,7 @@ def prepare_simulation(simulation_name):
 
 def generate_env_params():
     env_params = dict(
+        max_episode_length=2,
         ignore_exec_action=True,
         allow_do_nothing=True,
         state_encoding_size=state_encoding_size,

@@ -156,6 +156,9 @@ class IoTEnv4ML(gym.Wrapper):
         self.available_actions = None
         self.previous_available_actions = None
 
+        self.max_episode_length = params['max_episode_length']
+        self.episode_length = 0
+
         # # Compute node embedding
         # things_list = self.get_thing_list()
         # description_node_iterator = chain.from_iterable([things_list] + [t.get_channels() for t in things_list])
@@ -176,25 +179,30 @@ class IoTEnv4ML(gym.Wrapper):
         self.previous_available_actions = self.available_actions
         if isinstance(action, ExecAction):
             super().step(self.running_action)
+            self.episode_length += 0
             self.previous_state = self.state
             self.state = self.preprocess_raw_observation(self.build_state(oracle=False))
             self.available_actions = self.get_root_actions()
-            done = True
-            reward = None
+            done = self.episode_length < self.max_episode_length
+            reward = None if done else 0
+            info = 'exec_action'
         elif isinstance(action, DoNothing):
             done = True
             reward = None
+            info = 'do_nothing'
         else:
             self.save_running_action(action)
             self.available_actions = action.get_children_nodes()
             assert self.available_actions is not None
             reward = 0
             done = False
+            info = ""
 
             if self.ignore_exec_action and any([isinstance(a, ExecAction) for a in self.available_actions]):
                 return self.step(ExecAction())
 
-        return (self.state, self.available_actions), reward, done, None
+        available_actions = self.available_actions if not done else []
+        return (self.state, available_actions), reward, done, info
 
     def save_running_action(self, action):
         if isinstance(action, Thing):
@@ -210,6 +218,7 @@ class IoTEnv4ML(gym.Wrapper):
 
     def reset(self):
         super().reset()
+        self.episode_length = 0
 
         # Cache node embedding
         things_list = self.get_thing_list()
