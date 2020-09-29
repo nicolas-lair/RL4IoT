@@ -73,16 +73,11 @@ def run_episode(agent, env, target_goal, save_transitions=True):
                                                              hidden_state=previous_hidden_state,
                                                              previous_action=previous_action)
 
-                if target_goal.goal_string in achieved_goals_str:
-                    done = True
-                    agent.store_transitions(goal=target_goal, state=next_state, action=DoNothing(),
-                                            next_state=(state, []), done=done, reward=1,
-                                            hidden_state=hidden_state, previous_action=action)
-                else:
-                    done = False
-                    agent.store_transitions(goal=target_goal, state=next_state, action=DoNothing(),
-                                            next_state=(state, []), done=done, reward=0,
-                                            hidden_state=hidden_state, previous_action=action)
+                agent.store_transitions(goal=target_goal, state=next_state, action=DoNothing(),
+                                        next_state=([], []),
+                                        done=True,
+                                        reward=int(target_goal.goal_string in achieved_goals_str),
+                                        hidden_state=hidden_state, previous_action=action)
             elif info == 'do_nothing':
                 pass  # TODO use internal reward function
 
