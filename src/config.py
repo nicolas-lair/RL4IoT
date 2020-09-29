@@ -63,26 +63,30 @@ def generate_env_params():
             authorize_cache=True
         ),
         thing_params=[
-            ThingParam(PlugSwitch,
-                       dict(name='first plug',
-                            description='This is a plug',
-                            is_visible=True,
-                            init_type='random',
-                            init_params=dict())
-                       ),
-            ThingParam(LightBulb,
-                       dict(name='first light bulb',
-                            description='This is a light bulb',
-                            is_visible=True,
-                            init_type='random',
-                            init_params=dict())
-                       ),
-            ThingParam(LGTV, dict(name='television',
-                                  description='This is a television',
-                                  is_visible=True,
-                                  init_type='random',
-                                  init_params=dict())
-                       )
+            ThingParam(AdorneLightBulb, dict()),
+            ThingParam(HueLightBulb, dict()),
+            ThingParam(BigAssFanLightBulb, dict())
+
+            # ThingParam(PlugSwitch,
+            #            dict(name='first plug',
+            #                 description='This is a plug',
+            #                 is_visible=True,
+            #                 init_type='random',
+            #                 init_params=dict())
+            #            ),
+            # ThingParam(LightBulb,
+            #            dict(name='first light bulb',
+            #                 description='This is a light bulb',
+            #                 is_visible=True,
+            #                 init_type='random',
+            #                 init_params=dict())
+            #            ),
+            # ThingParam(LGTV, dict(name='television',
+            #                       description='This is a television',
+            #                       is_visible=True,
+            #                       init_type='random',
+            #                       init_params=dict())
+            #            )
         ],
     )
     return env_params
@@ -133,7 +137,7 @@ def generate_reward_params(archi=DeepSetStateNet):
 def get_data_collection_params(name='data_collection_'):
     from datetime import datetime
     env_params = generate_env_params()
-    env_params['allow_do_nothing'] = False
+    env_params['allow_do_nothing'] = True
     params = dict(
         name=name + str(datetime.now()).split('.')[0],
         env_params=env_params,
@@ -162,7 +166,8 @@ def get_reward_training_params(name=None, device='cuda'):
             console=True,
             log_file=False,
         ),
-        device=device
+        device=device,
+        lm_save_path=f'/home/nicolas/PycharmProjects/imagineIoT/results/lm_{name}.pth'
     )
     return params
 

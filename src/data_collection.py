@@ -9,6 +9,7 @@ from src.logger import rootLogger, set_logger_handler
 from src.config import get_data_collection_params
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
+from architecture.reward import EpisodeDataset
 
 EpisodeRecord = namedtuple('EpisodeRecord', ('initial_state', 'final_state', 'instruction', 'reward'))
 StateRecord = namedtuple('StateRecord', ('state', 'instruction', 'reward'))
@@ -28,7 +29,7 @@ def run_episode(env, weights):
     (_, available_actions), _, done, _ = env.step(action=action)
 
     while not done:
-        action_idx = random.randint(0, len(available_actions)-1)
+        action_idx = random.randint(0, len(available_actions) - 1)
         action = available_actions[action_idx]
         logger.debug(f'action: {action.name}')
         (_, available_actions), _, done, _ = env.step(action=action)
@@ -51,17 +52,22 @@ def remove_key(state, key='embedding'):
 def save_episodes():
     joblib.dump(episodes_records, f'../results/episodes_records_{params["name"]}.jbl')
     # joblib.dump(state_records, '../results/state_records4.jbl')
+    pass
 
 
 if __name__ == "__main__":
 
     env = IoTEnv4ML(params=params['env_params'])
-    oracle = Oracle(env=env)
-    num_episodes = 100000
+    oracle = Oracle(thing_list=env.get_thing_list())
+    num_episodes = 60000
 
     instruction_by_thing = oracle.str_instructions
     instructions_set = set(sum([list(v) for v in instruction_by_thing.values()], []))
     thing_weights = {k: len(v) / len(instructions_set) for k, v in instruction_by_thing.items()}
+    if env.allow_do_nothing:
+        do_nothing_weight = 0.05
+        thing_weights = {k: v * (1 - do_nothing_weight) for k, v in thing_weights.items()}
+        thing_weights.update({'do_nothing': 0.05})
 
     pos_episodes = {i: [] for i in instructions_set}
     neg_episodes = {i: [] for i in instructions_set}
@@ -73,7 +79,7 @@ if __name__ == "__main__":
         for i in achieved_set:
             pos_storage[i].append(obj(instruction=i, reward=1))
         for i in instructions_set.difference(achieved_set):
-            if random.random() < 0.25:
+            if random.random() < 0.025:
                 neg_storage[i].append(obj(instruction=i, reward=0))
 
 
@@ -112,3 +118,6 @@ if __name__ == "__main__":
     episodes_records = (pos_episodes, neg_episodes)
     # state_records = (pos_states, neg_states)
     save_episodes()
+
+    dts = EpisodeDataset.from_tuple(data=(pos_episodes, neg_episodes))
+    print(dts.get_stats())

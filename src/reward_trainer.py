@@ -1,55 +1,31 @@
 from functools import partial
+from pprint import pformat
 
 import numpy as np
 import pandas as pd
 import torch
-import torch.nn as nn
 from sklearn.metrics import precision_score, recall_score, f1_score
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
 
 from architecture.reward import EpisodeDataset, RewardModel, ImbalancedDatasetSampler
-from config import get_reward_training_params
+from config import get_reward_training_params, format_config
 from logger import set_logger_handler, rootLogger
 
-params = get_reward_training_params()
+params = get_reward_training_params(name='do_nothing_test')
 
 set_logger_handler(rootLogger, **params['logger'])
 logger = rootLogger.getChild(__name__)
 logger.setLevel(10)
 
 
-class Net(nn.Module):
-    """
-    Cedric Or module
-    """
-
-    def __init__(self, n_inputs):
-        super(Net, self).__init__()
-        self.shared_encoding = nn.Sequential(nn.Linear(1, 100),
-                                             nn.ReLU(),
-                                             nn.Linear(100, n_inputs))
-        self.out_layer = nn.Sequential(nn.Linear(n_inputs, 100),
-                                       nn.ReLU(),
-                                       nn.Linear(100, 1),
-                                       nn.Sigmoid())
-
-    def forward(self, x):
-        latent = self.shared_encoding(x.unsqueeze(dim=2))
-        latent = latent.sum(dim=1)
-        out = self.out_layer(latent)
-        return out
-
 class RewardTrainer:
-    pass
-class RewardComparision:
-    def __init__(self, reward_list, fit_params, device):
+    def __init__(self, model, optimizer, fit_params, device):
         self.device = device
-        self.model_list = reward_list
-        for model in reward_list:
-            model.to(self.device)
+        self.model = model
+        self.model.to(self.device)
 
-        self.optimizers_list = [fit_params['optimizer'](model.parameters()) for model in self.model_list]
+        self.optimizer = optimizer(model.parameters())
         self.loss_function = fit_params['loss']()
         self.batch_size = fit_params['batch_size']
         self.n_epoch = fit_params['n_epoch']
@@ -57,44 +33,22 @@ class RewardComparision:
 
         self.metrics = None
 
-    def zero_grad(self):
-        for optim in self.optimizers_list:
-            optim.zero_grad()
-
-    def compute_reward(self, state, instructions):
-        reward_list = []
-        for model in self.model_list:
-            reward_list.append(model(state, instructions).view(-1))
-        return reward_list
-
-    def compute_loss(self, reward_list, true_reward):
-        true_reward = true_reward.float().to(self.device)
-        loss_list = []
-        for reward in reward_list:
-            loss = self.loss_function(reward, true_reward)
-            loss.backward()
-            loss_list.append(loss)
-        return np.array(loss_list)
-
-    def clipping_grad_norm(self):
-        for model in self.model_list:
-            clip_grad_norm_(model.parameters(), 1)
-
-    def step_optimizers(self):
-        for optim in self.optimizers_list:
-            optim.step()
+    def compute_loss(self, predicted_y, true_y):
+        true_y = true_y.float().to(self.device)
+        loss = self.loss_function(predicted_y, true_y)
+        loss.backward()
+        return loss
 
     def fit_epoch(self, train_loader):
         loss = []
         for i, batch in enumerate(train_loader):
-            self.zero_grad()
-            reward_list = self.compute_reward(state=batch['state'], instructions=batch['instruction'])
-            loss.append(self.compute_loss(reward_list, batch['reward']))
-            self.clipping_grad_norm()
-            self.step_optimizers()
+            self.optimizer.zero_grad()
+            predicted_y = self.model(state=batch['state'], instructions=batch['instruction']).view(-1)
+            loss.append(self.compute_loss(predicted_y, batch['reward']))
+            clip_grad_norm_(self.model.parameters(), 1)
+            self.optimizer.step()
 
-        loss = np.stack(loss, axis=0)
-        loss = loss.mean(axis=0)
+        loss = torch.stack(loss).mean()
         return loss
 
     def run(self, train_dts, test_batch, data_stats):
@@ -102,19 +56,19 @@ class RewardComparision:
         train_loader = DataLoader(dataset=train_dts, sampler=sampler, batch_size=self.batch_size)
 
         loss_list = []
-        metrics = {i: [] for i in range(len(self.model_list))}
+        metrics = []
         self.metrics = loss_list, metrics
         for epoch in range(self.n_epoch):
             loss_list.append(self.fit_epoch(train_loader))
-            print(f'Epoch: {epoch}: loss: {[l.item() for l in loss_list[-1]]}')
-            for i in range(len(self.model_list)):
-                metrics[i].append(self.eval(model=self.model_list[i],
-                                            test_batch=test_batch,
-                                            epoch=epoch,
-                                            data_stats=data_stats)
-                                  )
+            logger.info(f'Epoch: {epoch}: loss: {loss_list[-1].item()}')
+
+            metrics.append(self.eval(model=self.model,
+                                     test_batch=test_batch,
+                                     epoch=epoch,
+                                     data_stats=data_stats)
+                           )
             self.metrics = loss_list, metrics
-        metrics = [pd.concat(metrics[i], axis=0, ignore_index=True) for i in range(len(self.model_list))]
+        metrics = [pd.concat(metrics, axis=0, ignore_index=True)]
         return metrics, loss_list
 
     @staticmethod
@@ -167,8 +121,8 @@ class RewardComparision:
         metrics['epoch'] = epoch
         return metrics
 
-    def save_language_model(self):
-        torch.save(self.model_list)
+    def save_language_model(self, path):
+        torch.save(self.model.state_dict(), path)
 
 
 def get_transformer_function(params):
@@ -193,23 +147,26 @@ if __name__ == "__main__":
 
     from architecture.language_model import LanguageModel
 
-    StateRecord = namedtuple('StateRecord', ('state', 'instruction', 'reward'))
+    logger.info(f'Simulation params:\n {pformat(format_config(params))}')
+
     EpisodeRecord = namedtuple('EpisodeRecord', ('initial_state', 'final_state', 'instruction', 'reward'))
 
-    episode_path = '/home/nicolas/PycharmProjects/imagineIoT/results/episodes_records3.jbl'
+    episode_path = '/home/nicolas/PycharmProjects/imagineIoT/results/episodes_records_data_collection_do_nothing_test.jbl'
 
     transformer = get_transformer_function(params)
 
-    # dts = StateDataset.from_files(state_path, raw_state_transformer=transformer, max_size=5000)
-    # dts = EpisodeDataset.from_files(episode_path, raw_state_transformer=transformer)
+    logger.info('Loading datasets')
+    dts = EpisodeDataset.from_files(episode_path, raw_state_transformer=transformer)
     # dts_loader = DataLoader(dts, batch_size=len(dts))
-    # train_dts, test_dts = dts.split(train_test_ratio = 0.85)
-    train_episode = '/home/nicolas/PycharmProjects/imagineIoT/results/episodes_records4.jbl'
-    test_episode = '/home/nicolas/PycharmProjects/imagineIoT/results/episodes_records3.jbl'
 
-    train_dts = EpisodeDataset.from_files(train_episode, raw_state_transformer=transformer)
+    logger.info('Splitting between train and test')
+    train_dts, test_dts = dts.split(train_test_ratio=0.85, max_test=5000)
+    # train_episode = '/home/nicolas/PycharmProjects/imagineIoT/results/episodes_records4.jbl'
+    # test_episode = '/home/nicolas/PycharmProjects/imagineIoT/results/episodes_records3.jbl'
+    # train_dts = EpisodeDataset.from_files(train_episode, raw_state_transformer=transformer)
+    # test_dts = EpisodeDataset.from_files(test_episode, raw_state_transformer=transformer, max_size=10000)
 
-    test_dts = EpisodeDataset.from_files(test_episode, raw_state_transformer=transformer, max_size=10000)
+    logger.info('Creating test batch')
     test_loader = DataLoader(test_dts, batch_size=len(test_dts))
     test_batch = next(iter(test_loader))
 
@@ -217,11 +174,16 @@ if __name__ == "__main__":
     reward = RewardModel(context_model=params['reward_params']['context_model'], language_model=language_model,
                          reward_params=params['reward_params']['net_params'])
 
-    evaluator = RewardComparision([reward], fit_params=params['reward_params']['fit_params'],
-                                  device=params['device'])
 
+    evaluator = RewardTrainer(model=reward,
+                              optimizer=params['reward_params']['fit_params']['optimizer'],
+                              fit_params=params['reward_params']['fit_params'],
+                              device=params['device'])
+    logger.info('Run training')
     metrics, loss_list = evaluator.run(train_dts, test_batch, data_stats=False)
-    torch.save(language_model.state_dict(), params['save_dir'])
+
+    logger.info('Saving language model')
+    evaluator.save_language_model(params['save_dir'])
 
     # reward_net_params = params['reward_params']['net_params'].copy()
     # reward_net_params.update(aggregate='diff_or',
@@ -233,3 +195,26 @@ if __name__ == "__main__":
 
     # evaluator = RewardComparision([reward, prelearned_or_reward], fit_params=params['reward_params']['fit_params'],
     #                               device=params['device'])
+
+# instruction with no positive reward
+# ['You set the color of intermediate light bulb to pink',
+#  'You set the color of level one light bulb to yellow',
+#  'the light temperature of level one light bulb is now warm',
+#  'the light temperature of level one light bulb is now cold',
+#  'You set the color of intermediate light bulb to yellow',
+#  'You made the light of level one light bulb colder',
+#  'You set the color of intermediate light bulb to green',
+#  'You set the color of level one light bulb to orange',
+#  'You made the light of level one light bulb warmer',
+#  'You set the color of intermediate light bulb to red',
+#  'You set the color of level one light bulb to red',
+#  'You set the color of intermediate light bulb to purple',
+#  'You set the color of intermediate light bulb to blue',
+#  'You set the color of level one light bulb to green',
+#  'the light temperature of level one light bulb is now very warm',
+#  'the light temperature of level one light bulb is now average',
+#  'You set the color of level one light bulb to blue',
+#  'the light temperature of level one light bulb is now very cold',
+#  'You set the color of intermediate light bulb to orange',
+#  'You set the color of level one light bulb to purple',
+#  'You set the color of level one light bulb to pink']
