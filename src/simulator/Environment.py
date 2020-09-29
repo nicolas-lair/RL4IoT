@@ -179,7 +179,8 @@ class IoTEnv4ML(gym.Wrapper):
         self.previous_available_actions = self.available_actions
         if isinstance(action, ExecAction):
             super().step(self.running_action)
-            self.episode_length += 0
+            self.reset_running_action()
+            self.episode_length += 1
             self.previous_state = self.state
             self.state = self.preprocess_raw_observation(self.build_state(oracle=False))
             self.available_actions = self.get_root_actions()
@@ -202,6 +203,7 @@ class IoTEnv4ML(gym.Wrapper):
                 return self.step(ExecAction())
 
         available_actions = self.available_actions if not done else []
+        # state = self.state if not done else []
         return (self.state, available_actions), reward, done, info
 
     def save_running_action(self, action):
@@ -231,7 +233,7 @@ class IoTEnv4ML(gym.Wrapper):
         self.previous_state = None
         self.available_actions = self.get_root_actions()
         self.previous_available_actions = None
-        self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
+        self.reset_running_action()
         return self.state, self.available_actions
 
     def get_state_and_action(self):
@@ -242,6 +244,9 @@ class IoTEnv4ML(gym.Wrapper):
         if self.allow_do_nothing:
             available_things.append(DoNothing())
         return available_things
+
+    def reset_running_action(self):
+        self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
 
 
 if __name__ == "__main__":
