@@ -42,6 +42,7 @@ class RewardModel(nn.Module):
     def save_language_model(self, path):
         torch.save(self.language_model.state_dict(), path)
 
+
 class StateDataset(Dataset):
     def __init__(self, data, data_type, raw_state_transformer=None, max_size=np.inf):
         if data_type == 'file':
@@ -186,8 +187,8 @@ class StateDataset(Dataset):
         import pandas as pd
         positive_count = [len(v) for v in self.positive_record.values()]
         negative_count = [len(v) for v in self.negative_record.values()]
-        df = pd.DataFrame([positive_count, negative_count], columns=['pos', 'neg']).T
-        df.index = list(self.positive_record)
+        df = pd.DataFrame(np.array([positive_count, negative_count]).T, columns=['pos', 'neg'],
+                          index=list(self.positive_record))
         df['%pos'] = df.pos / (df.pos + df.neg)
         return df
 
@@ -240,7 +241,7 @@ class ImbalancedDatasetSampler(torch.utils.data.sampler.Sampler):
         # weight for each sample
         pos_samples = [len(v) for v in dataset.positive_record.values()]
         neg_samples = [len(v) for v in dataset.negative_record.values()]
-        weights = sum([[pos_weight / (n_samples * len(pos_samples))] * n_samples for n_samples in pos_samples], [])
+        weights = sum([n_samples * [pos_weight / max(1, (n_samples * len(pos_samples)))] for n_samples in pos_samples], [])
         weights += sum([[(1 - pos_weight) / (n_samples * len(neg_samples))] * n_samples for n_samples in neg_samples],
                        [])
         self.weights = torch.DoubleTensor(weights)
