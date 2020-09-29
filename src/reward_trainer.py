@@ -68,7 +68,7 @@ class RewardTrainer:
                                      data_stats=data_stats)
                            )
             self.metrics = loss_list, metrics
-        metrics = [pd.concat(metrics, axis=0, ignore_index=True)]
+        metrics = pd.concat(metrics, axis=0, ignore_index=True)
         return metrics, loss_list
 
     @staticmethod
@@ -183,7 +183,7 @@ if __name__ == "__main__":
     metrics, loss_list = evaluator.run(train_dts, test_batch, data_stats=False)
 
     logger.info('Saving language model')
-    evaluator.save_language_model(params['save_dir'])
+    evaluator.save_language_model(params['lm_save_path'])
 
     # reward_net_params = params['reward_params']['net_params'].copy()
     # reward_net_params.update(aggregate='diff_or',
