@@ -4,7 +4,7 @@ from architecture.goal_sampler import GoalSampler
 
 if __name__ == "__main__":
     env = IoTEnv()
-    oracle = Oracle(env=env)
+    oracle = Oracle(thing_list=env.get_thing_list())
     goal_sampler = GoalSampler(language_model=lambda x: x)
 
     #####################TURN ON LIGHTBULB ###############
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     achieved_instruction = oracle.get_state_change(previous_state=current_state, next_state=new_state)
     print(achieved_instruction)
 
-    goal_sampler._update_discovered_goals(achieved_instruction, iter=2)
+    goal_sampler.update_discovered_goals(achieved_instruction, iter=2)
     goal_sampler.update(target_goals=[target], reached_goals_str=achieved_instruction, iter=2)
 
     ##################CHange color LIGHTBULB########################
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     achieved_instruction = oracle.get_state_change(previous_state=current_state, next_state=new_state)
     print(achieved_instruction)
 
-    goal_sampler._update_discovered_goals(achieved_instruction, iter=2)
+    goal_sampler.update_discovered_goals(achieved_instruction, iter=2)
     goal_sampler.update(target_goals=[target], reached_goals_str=achieved_instruction, iter=2)
 
     ##################Change brightness LIGHTBULB########################
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     achieved_instruction = oracle.get_state_change(previous_state=current_state, next_state=new_state)
     print(achieved_instruction)
 
-    goal_sampler._update_discovered_goals(achieved_instruction, iter=2)
+    goal_sampler.update_discovered_goals(achieved_instruction, iter=2)
     goal_sampler.update(target_goals=[target], reached_goals_str=achieved_instruction, iter=2)
 
     print('end')

@@ -60,11 +60,13 @@ class DQNAgent:
     def store_transitions(self, **kwargs):
         self.replay_buffer.store(**kwargs)
 
-    def store_final_transitions(self, achieved_goals, failed_goals, **kwargs):
+    def store_transitions_with_oracle_feedback(self, achieved_goals_str, done, **kwargs):
+        failed_goals = self.goal_sampler.get_failed_goals(achieved_goals_str=achieved_goals_str)
+        achieved_goals = [self.goal_sampler.discovered_goals[g] for g in achieved_goals_str]
         for g in achieved_goals:
-            self.store_transitions(goal=g, done=True, reward=1, **kwargs)
+            self.store_transitions(goal=g, done=done, reward=1, **kwargs)
         for g in failed_goals:
-            self.store_transitions(goal=g, done=True, reward=0, **kwargs)
+            self.store_transitions(goal=g, done=done, reward=0, **kwargs)
 
     def sample_goal(self, strategy=None):
         return self.goal_sampler.sample_goal(strategy=strategy)
@@ -75,17 +77,10 @@ class DQNAgent:
         :param a: object of Node Type
         :return:
         """
-        # embedding = a.get_node_embedding()
-        # if embedding is None and a.has_description:
-        #     # if action has no embedding already, it should have a description
-        #     # We then use the language policy_network to compute an embedding
-        #     a.node_embedding = self.language_model(a.description)
-        # else:
-        #     raise NotImplementedError
         embedding = a.get_node_embedding()
         if not isinstance(embedding, torch.Tensor):
             embedding = torch.tensor(embedding)
-        logger.debug(f'View debuggin: {embedding.size()}')
+        logger.debug(f'View debugging: {embedding.size()}')
         embedding = embedding.view(1, -1)
         return embedding.float().to(self.device), a.node_type
 
@@ -198,10 +193,11 @@ class DQNAgent:
 
             logger.debug('Computing max(Q(s`, a)) over a')
             with torch.no_grad():
-                Q_target_net, _ = self.target_network(state=[s for s, flag in zip(next_states, done.numpy()) if not flag],
-                                                  instruction=goals[~done],
-                                                  actions=next_av_actions_embedded,
-                                                  hidden_state=next_hidden_states[~done])
+                Q_target_net, _ = self.target_network(
+                    state=[s for s, flag in zip(next_states, done.numpy()) if not flag],
+                    instruction=goals[~done],
+                    actions=next_av_actions_embedded,
+                    hidden_state=next_hidden_states[~done])
             maxQ[~done] = Q_target_net.max(1).values.squeeze()
             logger.debug(f'Done: {maxQ}')
 

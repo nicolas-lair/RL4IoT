@@ -69,19 +69,19 @@ class GoalSampler:
                            reached_goal_sequence=dict())
         self.language_model = language_model
 
-    def _update_discovered_goals(self, goal_string, iter):
-        if isinstance(goal_string, str):
-            assert len(goal_string) > 0, 'goal string should be a non empty string'
-            new_goal = TrainGoal(goal_string=goal_string, episode_discovery=iter,  # id=len(self.discovered_goals),
+    def update_discovered_goals(self, reached_goals_str, iter):
+        new_goals = self._find_new_goals(reached_goals_str)
+        logger.info(f'New goals discovered: {new_goals}')
+        if isinstance(new_goals, str):
+            assert len(new_goals) > 0, 'goal string should be a non empty string'
+            new_goal = TrainGoal(goal_string=new_goals, episode_discovery=iter,  # id=len(self.discovered_goals),
                                  language_model=self.language_model)
-            self.discovered_goals.update({goal_string: new_goal})
-        elif isinstance(goal_string, list):
-            for g in goal_string:
-                self._update_discovered_goals(g, iter=iter)
+            self.discovered_goals.update({new_goals: new_goal})
+        elif isinstance(new_goals, list):
+            for g in new_goals:
+                self.update_discovered_goals(g, iter=iter)
         else:
             raise TypeError("goals should be passed as a string or list of string")
-
-
 
     def _find_new_goals(self, goals_str):
         if isinstance(goals_str, str):
@@ -94,10 +94,10 @@ class GoalSampler:
 
     def update(self, target_goals, reached_goals_str, iter):
         logger.debug('Updating Goal Sampler')
-        new_goals = self._find_new_goals(reached_goals_str)
-        logger.info(f'New goals discovered: {new_goals}')
-        self._update_discovered_goals(new_goals, iter=iter)
+        self.update_discovered_goals(reached_goals_str, iter=iter)
+        self.update_records(target_goals, reached_goals_str)
 
+    def update_records(self, target_goals, reached_goals_str):
         self.record['nb_feedbacks'] += len(self.discovered_goals)
         self.record['nb_positive_feedbacks'] += len(reached_goals_str)
         self.record['reached_goal_sequence'][iter] = reached_goals_str

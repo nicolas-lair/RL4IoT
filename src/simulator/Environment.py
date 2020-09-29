@@ -25,12 +25,6 @@ class IoTEnv(gym.Env):
             thing = obj.Class(**obj.Params)
             self._things_lookup_table[thing.name] = thing
 
-        # self.plug = PlugSwitch(obj_list['plug1'])
-        # self.lightbulb = LightBulb(obj_list['lightbulb1'])
-
-        # Connect objects and set
-        # self.plug.connect_thing(self.lightbulb)
-
         # TODO Fix this for gym compatibility
         # Compute observation_space
         # self.observation_space = gym.spaces.Dict(
@@ -52,7 +46,6 @@ class IoTEnv(gym.Env):
         #     "lightbulb": self.lightbulb.get_action_space()
         # })
 
-        # self._things_lookup_table = self._build_things_lookup_table()
         self.discrete_params = discrete_parameters
         self.previous_user_state = None
         self.user_state = self.build_state(oracle=True)
@@ -62,9 +55,6 @@ class IoTEnv(gym.Env):
 
     def get_thing(self, name):
         return self._things_lookup_table[name]
-
-    # def _build_things_lookup_table(self):
-    #     return {x.name: x for x in vars(self).values() if isinstance(x, Thing)}
 
     def step(self, action):
         """

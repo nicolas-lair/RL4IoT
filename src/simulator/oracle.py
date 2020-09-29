@@ -3,8 +3,8 @@ from simulator.utils import color_list
 
 
 class Oracle:
-    def __init__(self, env):
-        self.env = env
+    def __init__(self, thing_list):
+        self.thing_list = thing_list
         self.state_description_set, self.str_instructions = self.build_instruction_set()
 
     def get_state_change(self, previous_state, next_state):
@@ -15,7 +15,7 @@ class Oracle:
         :return: list of string one per StateDescription change in the environment
         """
         achieved_instruction = []
-        for thing in self.env.get_thing_list():
+        for thing in self.thing_list:
             achieved_instruction.extend(thing.get_state_change(previous_state[thing.name], next_state[thing.name]))
         return achieved_instruction
 
@@ -25,7 +25,7 @@ class Oracle:
         :return: list of StateDescription object
         """
         current_descriptions = []
-        for thing in self.env.get_thing_list():
+        for thing in self.thing_list:
             current_descriptions.extend(thing.get_state_description(state[thing.name]))
 
         if as_string:
@@ -41,7 +41,7 @@ class Oracle:
     def build_instruction_set(self):
         str_instructions = dict()
         state_description_set = dict()
-        for thing in self.env.get_thing_list():
+        for thing in self.thing_list:
             state_description_set[thing.name] = list(thing.instruction.values())
             str_instructions[thing.name] = sum([state_des.sentences for state_des in state_description_set[thing.name]],
                                                [])

@@ -33,7 +33,7 @@ ACTION_SPACE = {
     'stop': spaces.Discrete(2),
     'turnOnOff': spaces.Discrete(2),
     'setString': [],
-    'do_nothing': []
+    'do_nothing': [],
 }
 
 baseaction_type_embedder = OneHotEncoder(sparse=False)

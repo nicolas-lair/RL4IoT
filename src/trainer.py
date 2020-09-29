@@ -11,7 +11,7 @@ from logger import rootLogger, format_user_state_log, set_logger_handler
 from config import generate_params, save_config, format_config, setup_new_simulation
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
-from simulator.Action import RootAction
+from simulator.Action import RootAction, DoNothing
 from architecture.dqnagent import DQNAgent
 from architecture.language_model import LanguageModel
 from architecture.goal_sampler import Goal
@@ -38,10 +38,11 @@ logger = rootLogger.getChild(__name__)
 
 logger.info('begin')
 
+
 # logger.setLevel(10)
 
 
-def run_episode(agent, env, target_goal, train=True):
+def run_episode(agent, env, target_goal, save_transitions=True):
     hidden_state = torch.zeros(1, deep_action_space_embedding_size).to(agent.device)
     state, available_actions = env.get_state_and_action()
 
@@ -54,23 +55,41 @@ def run_episode(agent, env, target_goal, train=True):
 
         action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
                                                    actions=available_actions, hidden_state=hidden_state,
-                                                   exploration=train)
+                                                   exploration=save_transitions)
         logger.debug(f'State: \n {format_user_state_log(env.user_state)}')
         logger.debug(available_actions)
         logger.debug(action)
 
         (next_state, next_available_actions), reward, done, info = env.step(action=action)
-        # TODO change to use Modular archi
-        # next_state = torch.stack(list(flatten(next_state).values())).mean(0, keepdim=True).float()
-        if not done:
-            if train:
-                # Do not store transition with random goals
-                if len(target_goal.goal_string) > 0:
-                    agent.store_transitions(goal=target_goal, state=state, action=action,
-                                            next_state=(next_state, next_available_actions), done=done, reward=reward,
-                                            hidden_state=previous_hidden_state, previous_action=previous_action)
+        if save_transitions:
+            if info in ['exec_action']:
+                achieved_goals_str = oracle.get_state_change(env.previous_user_state, env.user_state)
+                agent.goal_sampler.update_discovered_goals(achieved_goals_str, iter=j)
+                agent.store_transitions_with_oracle_feedback(achieved_goals_str=achieved_goals_str,
+                                                             done=done,
+                                                             state=state,
+                                                             action=action,
+                                                             next_state=(next_state, next_available_actions),
+                                                             hidden_state=previous_hidden_state,
+                                                             previous_action=previous_action)
 
-    return state, action, next_state, previous_hidden_state, previous_action
+                if target_goal.goal_string in achieved_goals_str:
+                    done = True
+                    agent.store_transitions(goal=target_goal, state=next_state, action=DoNothing(),
+                                            next_state=(state, []), done=done, reward=1,
+                                            hidden_state=hidden_state, previous_action=action)
+                else:
+                    done = False
+                    agent.store_transitions(goal=target_goal, state=next_state, action=DoNothing(),
+                                            next_state=(state, []), done=done, reward=0,
+                                            hidden_state=hidden_state, previous_action=action)
+            elif info == 'do_nothing':
+                pass  # TODO use internal reward function
+
+            elif len(target_goal.goal_string) > 0:
+                agent._store_transitions(goal=target_goal, state=state, action=action,
+                                         next_state=(next_state, next_available_actions), done=done, reward=reward,
+                                         hidden_state=previous_hidden_state, previous_action=previous_action)
 
 
 def test_agent(agent, test_env, oracle):
@@ -87,7 +106,7 @@ def test_agent(agent, test_env, oracle):
                     test_env.reset()
 
                 test_goal = Goal(goal_string=instruction, language_model=agent.language_model)
-                run_episode(agent=agent, env=test_env, target_goal=test_goal, train=False)
+                run_episode(agent=agent, env=test_env, target_goal=test_goal, save_transitions=False)
                 current_rewards += int(
                     oracle.was_achieved(test_env.previous_user_state, test_env.user_state, instruction))
             reward_table[thing][instruction] = current_rewards / params['n_iter_test']
@@ -106,85 +125,58 @@ def save_records():
 
 if __name__ == "__main__":
     for i in range(N_SIMULATION):
-        # TODO Fix Hack
-        while True:
-            try:
-                if i != 0:
-                    setup_new_simulation(rootLogger, params)
+        if i != 0:
+            setup_new_simulation(rootLogger, params)
 
-                save_config(params)
-                logger.info(f'Simulation params:\n {pformat(format_config(params))}')
+        save_config(params)
+        logger.info(f'Simulation params:\n {pformat(format_config(params))}')
 
-                test_record = {}
-                env = IoTEnv4ML(params=params['env_params'])
-                test_env = IoTEnv4ML(params=params['env_params'])
+        test_record = {}
+        env = IoTEnv4ML(params=params['env_params'])
+        test_env = IoTEnv4ML(params=params['env_params'])
 
-                oracle = Oracle(env=env)
-                language_model = LanguageModel(**params['language_model_params'])
-                agent = DQNAgent(language_model=language_model, params=params, env_discrete_params=env.discrete_params)
+        oracle = Oracle(thing_list=env.get_thing_list())
+        language_model = LanguageModel(**params['language_model_params'])
+        agent = DQNAgent(language_model=language_model, params=params, env_discrete_params=env.discrete_params)
 
-                num_episodes = params['n_episode']
-                deep_action_space_embedding_size = params['model_params']['action_embedding_size']
+        num_episodes = params['n_episode']
+        deep_action_space_embedding_size = params['model_params']['action_embedding_size']
 
-                # (state, available_actions) = env.reset()
-                for j in range(num_episodes):
-                    logger.info('%' * 5 + f' Episode {j} ' + '%' * 5)
-                    if params['episode_reset']:
-                        # Initialize the environment and state + flatten
-                        env.reset()
-                    else:
-                        raise NotImplementedError
-                    # TODO go to root action but no global reset
-                    target_goal = agent.sample_goal()
-                    logger.info(f'Targeted goal: {target_goal.goal_string}')
-                    while oracle.is_achieved(state=env.user_state, instruction=target_goal.goal_string):
-                        env.reset()
+        # (state, available_actions) = env.reset()
+        for j in range(num_episodes):
+            logger.info('%' * 5 + f' Episode {j} ' + '%' * 5)
+            if params['episode_reset']:
+                # Initialize the environment and state + flatten
+                env.reset()
+            else:
+                raise NotImplementedError
+            target_goal = agent.sample_goal()
+            logger.info(f'Targeted goal: {target_goal.goal_string}')
+            while oracle.is_achieved(state=env.user_state, instruction=target_goal.goal_string):
+                env.reset()
 
-                    final_state, final_action, final_next_state, ante_final_hidden_state, ante_final_action = run_episode(
-                        agent=agent, env=env,
-                        target_goal=target_goal,
-                        train=True)
+            run_episode(agent=agent, env=env, target_goal=target_goal, save_transitions=True)
 
-                    # TODO refactoring to let the goal sampler ask to the oracle
-                    achieved_goals_str = oracle.get_state_change(env.previous_user_state, env.user_state)
+            agent.update(j)
+            # logger.debug('Update of policy net')
+            # agent.update_policy_net()
+            # logger.debug('done')
+            #
+            # agent.update_exploration_function(n=i + 1)
+            #
+            # if i % params['target_update_frequence'] == 0:
+            #     logger.debug('Update of target net')
+            #     agent.update_target_net()
+            #     logger.debug('done')
 
-                    agent.goal_sampler.update([target_goal], achieved_goals_str, iter=j)
+            if j > 0 and j % params['test_frequence'] == 0:
+                test_record[j] = test_agent(agent=agent, test_env=test_env, oracle=oracle)
 
-                    failed_goals = agent.goal_sampler.get_failed_goals(achieved_goals_str=achieved_goals_str)
-                    achieved_goals = [agent.goal_sampler.discovered_goals[g] for g in achieved_goals_str]
-
-                    agent.store_final_transitions(achieved_goals=achieved_goals,
-                                                  failed_goals=failed_goals,
-                                                  state=final_state,
-                                                  action=final_action,
-                                                  next_state=(final_next_state, []),
-                                                  hidden_state=ante_final_hidden_state,
-                                                  previous_action=ante_final_action
-                                                  )
-
-                    agent.update(j)
-                    # logger.debug('Update of policy net')
-                    # agent.update_policy_net()
-                    # logger.debug('done')
-                    #
-                    # agent.update_exploration_function(n=i + 1)
-                    #
-                    # if i % params['target_update_frequence'] == 0:
-                    #     logger.debug('Update of target net')
-                    #     agent.update_target_net()
-                    #     logger.debug('done')
-
-                    if j > 0 and j % params['test_frequence'] == 0:
-                        test_record[j] = test_agent(agent=agent, test_env=test_env, oracle=oracle)
-
-                    if j > 0 and j % 10 * params['test_frequence'] == 0:
-                        save_records()
-
-                test_record[num_episodes] = test_agent(agent=agent, test_env=test_env, oracle=oracle)
+            if j > 0 and j % 10 * params['test_frequence'] == 0:
                 save_records()
 
-                end_time = str(datetime.now(tz=None)).split('.')[0]
-                print(f'Completed at {end_time}')
-                break
-            except RuntimeError as e:
-                raise e
+        test_record[num_episodes] = test_agent(agent=agent, test_env=test_env, oracle=oracle)
+        save_records()
+
+        end_time = str(datetime.now(tz=None)).split('.')[0]
+        print(f'Completed at {end_time}')
