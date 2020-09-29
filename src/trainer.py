@@ -17,8 +17,8 @@ from architecture.language_model import LanguageModel
 from architecture.goal_sampler import Goal
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-n', '--name', help='Simulation name', default='tv')
-parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cpu')
+parser.add_argument('-n', '--name', help='Simulation name', default='test')
+parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cuda:0')
 parser.add_argument('-ns', '--n_simulation', help='number of simulation to run', type=int, default=10)
 parser.add_argument('-lm', '--pretrained_language_model', help='number of simulation to run', choices=['0', '1'],
                     default=0)
