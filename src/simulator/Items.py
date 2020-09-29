@@ -23,7 +23,7 @@ def check_method_availability(func):
     """
 
     def wrapper_check(self, *args, **kwargs):
-        if self.methods[func.__name__]:
+        if func.__name__ in self.methods:
             func(*args, **kwargs)
         else:
             raise MethodUnavailableError
@@ -53,7 +53,7 @@ class AbstractItem(ABC):
     def set_attribute(self, attribute, value):
         if self.type == 'string':
             raise NotImplementedError
-        assert self.observation_space.contains(value), self.attr_error_message
+        assert self.observation_space.contains(np.array(value)), self.attr_error_message
         if isinstance(attribute, list):
             for a, v in zip(attribute, value):
                 setattr(self, a, v)
@@ -100,7 +100,7 @@ class ColorItem(AbstractItem):
 
     @check_method_availability
     def setPercent(self, percent):
-        self.setHSB([self.hue, percent, self.saturation])
+        self.set_state((self.hue, self.saturation, percent))
 
     @check_method_availability
     def setHSB(self, h, s, b):
@@ -219,7 +219,7 @@ class NumberItem(AbstractItem):
         raise NotImplementedError
 
 
-class PlayerItem(AbstractItem):  # TODO Check state of players
+class PlayerItem(AbstractItem):  # TODO Check user_state of players
     def __init__(self, PlayPause=False, next=False, previous=False, rewind=False, fastforward=False):
         super().__init__(type="player", methods=locals())
         self.playpause = False

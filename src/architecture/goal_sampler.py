@@ -2,6 +2,7 @@
 # https://github.com/nicolas-lair/Curious-nlp/blob/clean_code/src/architecture_le2/goal_sampler.py
 
 import numpy as np
+import torch
 
 
 # from src import logger
@@ -22,14 +23,20 @@ class Goal:
             self.update_embedding(language_model)
 
     def update_embedding(self, language_model):
-        self.goal_embedding = language_model(self.goal_string)
+        self.goal_embedding = language_model(self.goal_string).view(1, -1)
+
+    @classmethod
+    def create_random_goal(cls, goal_embedding_size):
+        return cls('', episode_discovery=0, id=-1,
+                   goal_embedding=torch.rand(goal_embedding_size).view(1, -1))  # TODO check size
 
 
 class GoalSampler:
-    def __init__(self, language_model, sampling_stategy='random'):
+    def __init__(self, language_model, goal_sampling_stategy='random', oracle_strategy='exhaustive_feedback'):
         self.discovered_goals = dict()
 
-        self.goal_sampling_strategy = sampling_stategy
+        self.oracle_strategy = oracle_strategy
+        self.goal_sampling_strategy = goal_sampling_stategy
         self.nb_feedbacks = 0
         self.nb_positive_feedbacks = 0
 
@@ -53,7 +60,7 @@ class GoalSampler:
             s = set(goals_str)
         else:
             raise TypeError("goals should be passed as a string or list of string")
-        return list(s.difference(self.discovered_goals.keys()))
+        return list(s.difference(list(self.discovered_goals.keys()) + ['']))
 
     def update(self, target_goals, reached_goals_str, iter):
         new_goals = self._find_new_goals(reached_goals_str)
@@ -72,9 +79,21 @@ class GoalSampler:
             g.update_embedding(self.language_model)
 
     def sample_goal(self, strategy='random'):
-        strategy = strategy if strategy is not None else self.goal_sampling_strategy
-        if strategy == 'random':
-            target = np.random.choice(list(self.discovered_goals.values()), 1).item()
+        if len(self.discovered_goals) == 0:
+            target = Goal.create_random_goal(goal_embedding_size=self.language_model.embedding_size)
+        else:
+            strategy = strategy if strategy is not None else self.goal_sampling_strategy
+            if strategy == 'random':
+                target = np.random.choice(list(self.discovered_goals.values()), 1).item()
+            else:
+                raise NotImplementedError
+        return target
+
+    def get_failed_goals(self, achieved_goals_str):
+        if self.oracle_strategy == 'exhaustive_feedback':
+            failed_goals = set(self.discovered_goals.keys()).difference(set(achieved_goals_str))
+            failed_goals = [self.discovered_goals[g] for g in failed_goals]
         else:
             raise NotImplementedError
-        return target
+
+        return failed_goals

@@ -2,8 +2,8 @@ import numpy as np
 from gym import spaces
 from sklearn.preprocessing import OneHotEncoder
 
-from utils import color_list
-from TreeView import Node
+from simulator.utils import color_list, percent_level, level_to_percent, color_to_hsb
+from TreeView import NoDescriptionNode
 
 ACTION_SPACE = {
     'turnOn': spaces.Discrete(2),
@@ -38,15 +38,14 @@ baseaction_type_embedder.fit(np.array(list(ACTION_SPACE.keys())).reshape(-1, 1))
 color_embedder = OneHotEncoder(sparse=False)
 color_embedder.fit(np.array(color_list).reshape(-1, 1))
 
-percent_level = ['very low', 'low', 'average', 'high', 'very high']
 percent_embedder = OneHotEncoder(sparse=False)
 percent_embedder.fit(np.array(percent_level).reshape(-1, 1))
 
 
-class OpenHABAction(Node):
+class OpenHABAction(NoDescriptionNode):
     def __init__(self, name):
         embedding = baseaction_type_embedder.transform(np.array([name]).reshape(-1, 1)).flatten()
-        super().__init__(name, description=None, children=[ExecAction()], node_embedding=embedding)
+        super().__init__(name, children=[ExecAction()], node_embedding=embedding)
         if name == 'setPercent':
             self.children = [Params(p) for p in percent_level]
         elif name == 'setHSB':
@@ -61,13 +60,13 @@ class OpenHABAction(Node):
 #         embedding = np.ones(len(ACTION_SPACE))
 #         super().__init__(name, description=None, father, children = node_embedding=embedding)
 
-class ExecAction(Node):
+class ExecAction(NoDescriptionNode):
     def __init__(self, name='exec_action'):
         embedding = np.zeros(len(ACTION_SPACE))
-        super().__init__(name, description=None, node_embedding=embedding)
+        super().__init__(name, children=[], node_embedding=embedding)
 
 
-class Params(Node):
+class Params(NoDescriptionNode):
     def __init__(self, name):
         if name in percent_level:
             embedder = percent_embedder
@@ -76,4 +75,14 @@ class Params(Node):
         else:
             raise NotImplementedError
         embedding = embedder.transform(np.array([name]).reshape(-1, 1)).flatten()
-        super().__init__(name=name, description=None, children=[ExecAction()], node_embedding=embedding)
+        super().__init__(name=name, children=[ExecAction()], node_embedding=embedding)
+
+    def interpret_params(self):
+        if self.name in percent_level:
+            interpreter = level_to_percent
+        elif self.name in color_list:
+            interpreter = color_to_hsb
+        else:
+            raise NotImplementedError
+
+        return interpreter(self.name)

@@ -101,7 +101,7 @@ def train(model, optimizer, loss, task, epoch, step_per_epoch, batch_size, n_fea
         # Backward
         loss_tensor.backward()
         # TODO check if necessary
-        # nn.utils.clip_grad_norm_(model.parameters(), clip)
+        # nn.utils.clip_grad_norm_(policy_network.parameters(), clip)
         optimizer.step()
 
         if (step + 1) % 100 == 0:

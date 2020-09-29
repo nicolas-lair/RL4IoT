@@ -3,11 +3,11 @@ from Items import *
 from gym import spaces
 
 from Channel import Channel
-from utils import get_color_name_from_hsb
-from TreeView import Node
+from simulator.utils import get_color_name_from_hsb, percent_to_level
+from TreeView import DescriptionNode
 
 
-class Thing(Node):
+class Thing(DescriptionNode):
     def __init__(self, name, description, is_visible=True):
         """
         Init a generic Thing object as a Node of the environment. The super function that instantiates subclass should
@@ -74,9 +74,9 @@ class Thing(Node):
 
     def _get_state(self):
         """
-        Get internal state of the object as a dict of dict of channel/item state WITH their description and item type
-        :return: state : { channel1_name: {
-                                            'state': channel1_state,
+        Get internal user_state of the object as a dict of dict of channel/item user_state WITH their description and item type
+        :return: user_state : { channel1_name: {
+                                            'user_state': channel1_state,
                                             'description': "...",
                                             'item_type': "..."
                                             },
@@ -91,6 +91,9 @@ class Thing(Node):
                 'description': c.description,
                 'item_type': c.item.type
             }
+
+            if c.node_embedding is not None:
+                state[c.name].update({'embedding': c.node_embedding})
         return state
 
     def get_state(self):
@@ -143,21 +146,28 @@ class LightBulb(Thing):
         achieved_instructions = []
 
         # Check color channel change
-        previous_color_state = previous_state["color"]["state"]
-        next_color_state = next_state["color"]["state"]
-        previous_color = get_color_name_from_hsb(*previous_color_state)
-        next_color = get_color_name_from_hsb(*next_color_state)
+        h, s, b = previous_state["color"]["state"]
+        new_h, new_s, new_b = next_state["color"]["state"]
+        previous_color = get_color_name_from_hsb(h, s, b)
+        next_color = get_color_name_from_hsb(new_h, new_s, new_b)
         if previous_color != next_color:
-            achieved_instructions.append(f"You changed the color to {next_color} of {self.name}")
-        if previous_color_state[2] == 0 and next_color_state[2] > 0:
+            achieved_instructions.append(f"You changed the color of {self.name} to {next_color}")
+        if b == 0 and new_b > 0:
             achieved_instructions.append(f"You turned on the {self.name}")
-        if previous_color_state[2] > 0 and next_color_state[2] == 0:
+        if b > 0 and new_b == 0:
             achieved_instructions.append(f"You turned off the {self.name}")
-        ### INCREASE_DECREASE_STEP is like a threshold for the oracle to detect a change
-        if next_color_state[2] >= INCREASE_DECREASE_STEP + previous_color_state[2]:
+
+        ### INCREASE_DECREASE_STEP is a threshold for the oracle to detect a change
+        if new_b >= INCREASE_DECREASE_STEP + b:
             achieved_instructions.append(f"You increased the luminosity of {self.name}")
-        if next_color_state[2] + INCREASE_DECREASE_STEP <= previous_color_state[2]:
+        if new_b + INCREASE_DECREASE_STEP <= b:
             achieved_instructions.append(f"You decreased the luminosity of {self.name}")
+
+        b_lvl = percent_to_level(b)
+        new_b_lvl = percent_to_level(new_b)
+        # Increase the brightness using set Percent
+        if b_lvl != new_b_lvl:
+            achieved_instructions.append(f"The luminosity of {self.name} is now {new_b_lvl}")
 
         previous_color_temperature = previous_state["color_temperature"]["state"][0]
         next_color_temperature = next_state["color_temperature"]["state"][0]
@@ -176,7 +186,7 @@ class PlugSwitch(Thing):
     https://www.openhab.org/addons/bindings/zwave/thing.html?manufacturer=everspring&file=an180_0_0.html
     """
 
-    def __init__(self, name="plugswitch", description='This is a switch that controls multiple switchs',
+    def __init__(self, name="plug switch", description='This is a switch that controls multiple switch',
                  is_visible=True):
         self.switch_binary = Channel(name="switch_binary",
                                      description="Switch the power on and off.",

@@ -1,9 +1,13 @@
 from torch import nn
 import torch
 import torch.nn.functional as F
-import torchtext as text
 
+from spacy.tokenizer import Tokenizer
+from spacy.lang.en import English
 
+nlp = English()
+
+# TODO check where is language model CPU or GPU
 class LanguageModel(nn.Module):
     def __init__(self, type, embedding_size, linear1_out=256, out_features=100,
                  vocab=None, vocab_size=500):
@@ -12,8 +16,6 @@ class LanguageModel(nn.Module):
         :param type: string 'linear' or 'lstm'
         :param embedding_size:
         :param linear1_out:
-        :param linear2_out:
-        :param lstm_hidden_size:
         :param vocab:
         :param vocab_size:
         """
@@ -21,7 +23,8 @@ class LanguageModel(nn.Module):
         self.out_features = out_features
         self.word_to_ix = dict()
         self.type = type
-        self.tokenizer = text.data.utils.get_tokenizer(tokenizer="spacy", language="en")
+        self.tokenizer = Tokenizer(nlp.vocab)
+        self.embedding_size = embedding_size
 
         if vocab:
             self.word_to_ix = vocab.stoi
@@ -51,9 +54,9 @@ class LanguageModel(nn.Module):
 
     def prepare_sentence(self, sentence):
         if isinstance(sentence, str):
-            tokens = self.tokenizer(sentence)
+            tokens = self.tokenizer(sentence.lower())
             try:
-                return torch.LongTensor([[self.word_to_ix[t] for t in tokens]])
+                return torch.LongTensor([[self.word_to_ix[t.text] for t in tokens]])
             except KeyError as new_t:
                 self.add_tokens(new_t.args[0])
                 return self.prepare_sentence(sentence)
@@ -80,7 +83,7 @@ class LanguageModel(nn.Module):
                 out = h
                 # out = F.tanh(h)
             else:
-                raise NotImplementedError('Language model type should be linear or LSTM')
+                raise NotImplementedError('Language policy_network type should be linear or LSTM')
             return out
         elif isinstance(sentence, list):
             out = []

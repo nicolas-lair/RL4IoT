@@ -46,6 +46,46 @@ if __name__ == "__main__":
     goal_sampler._update_discovered_goals(achieved_instruction, iter=2)
     goal_sampler.update(target_goals=[target], reached_goals_str=achieved_instruction, iter=2)
 
+    ##################CHange color LIGHTBULB########################
+    print("*" * 20)
+    current_state = new_state
+    action = {
+        "thing": "lightbulb",
+        "channel": "color",
+        "action": "setHSB",
+        "params": (100, 70, 70)
+    }
+
+    target = goal_sampler.sample_goal()
+    new_state, _, _, _ = env.step(action)
+    print(new_state)
+
+    achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    print(achieved_instruction)
+
+    goal_sampler._update_discovered_goals(achieved_instruction, iter=2)
+    goal_sampler.update(target_goals=[target], reached_goals_str=achieved_instruction, iter=2)
+
+    ##################Change brightness LIGHTBULB########################
+    print("*" * 20)
+    current_state = new_state
+    action = {
+        "thing": "lightbulb",
+        "channel": "color",
+        "action": "setPercent",
+        "params": 100
+    }
+
+    target = goal_sampler.sample_goal()
+    new_state, _, _, _ = env.step(action)
+    print(new_state)
+
+    achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    print(achieved_instruction)
+
+    goal_sampler._update_discovered_goals(achieved_instruction, iter=2)
+    goal_sampler.update(target_goals=[target], reached_goals_str=achieved_instruction, iter=2)
+
     print('end')
 
     # ################ACTIVATE PLUG ##########################
@@ -61,7 +101,7 @@ if __name__ == "__main__":
     # new_state, _, _, _ = env.step(action)
     # print(new_state)
     #
-    # achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    # achieved_instruction = oracle.get_achieved_instruction(previous_user_state=current_state, next_state=new_state)
     # print(achieved_instruction)
     #
     # ################DEACTIVATE PLUG ##########################
@@ -77,7 +117,7 @@ if __name__ == "__main__":
     # new_state, _, _, _ = env.step(action)
     # print(new_state)
     #
-    # achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    # achieved_instruction = oracle.get_achieved_instruction(previous_user_state=current_state, next_state=new_state)
     # print(achieved_instruction)
     #
     # ##################INCREASE LUMINOSITY########################
@@ -93,7 +133,7 @@ if __name__ == "__main__":
     # new_state, _, _, _ = env.step(action)
     # print(new_state)
     #
-    # achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    # achieved_instruction = oracle.get_achieved_instruction(previous_user_state=current_state, next_state=new_state)
     # print(achieved_instruction)
     #
     # ##################INCREASE LUMINOSITY AGAIN########################
@@ -109,7 +149,7 @@ if __name__ == "__main__":
     # new_state, _, _, _ = env.step(action)
     # print(new_state)
     #
-    # achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    # achieved_instruction = oracle.get_achieved_instruction(previous_user_state=current_state, next_state=new_state)
     # print(achieved_instruction)
     #
     # ################ DECREASE LUMINOSITY ##########################
@@ -125,7 +165,7 @@ if __name__ == "__main__":
     # new_state, _, _, _ = env.step(action)
     # print(new_state)
     #
-    # achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    # achieved_instruction = oracle.get_achieved_instruction(previous_user_state=current_state, next_state=new_state)
     # print(achieved_instruction)
     # ################ INCREASE COLOR TEMEPRATURE ##########################
     # print("*" * 20)
@@ -140,7 +180,7 @@ if __name__ == "__main__":
     # new_state, _, _, _ = env.step(action)
     # print(new_state)
     #
-    # achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    # achieved_instruction = oracle.get_achieved_instruction(previous_user_state=current_state, next_state=new_state)
     # print(achieved_instruction)
     #
     # ################ DECREASE LUMINOSITY ##########################
@@ -156,5 +196,5 @@ if __name__ == "__main__":
     # new_state, _, _, _ = env.step(action)
     # print(new_state)
     #
-    # achieved_instruction = oracle.get_achieved_instruction(previous_state=current_state, next_state=new_state)
+    # achieved_instruction = oracle.get_achieved_instruction(previous_user_state=current_state, next_state=new_state)
     # print(achieved_instruction)

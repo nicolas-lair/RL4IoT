@@ -1,73 +1,66 @@
 import torch
+import tqdm
 
+from config import params
 from simulator.Environment import IoTEnv4ML
+from simulator.oracle import Oracle
 from architecture.dqnagent import DQNAgent
-from architecture.dqn import FlatCritic
-from architecture.goal_sampler import GoalSampler
-from architecture.replay_buffer import ReplayBuffer
+from architecture.dqn import FlatQnet
+from architecture.language_model import LanguageModel
+from architecture.utils import flatten
 
+if __name__ == "__main__":
+    env = IoTEnv4ML(params=params['env_params'])
+    oracle = Oracle(env=env)
+    language_model = LanguageModel(**params['language_model_params'])
+    agent = DQNAgent(FlatQnet, language_model=language_model, params=params)
 
-def dqn_update():
+    num_episodes = 50
+    deep_action_space_embedding_size = params['model_params']['action_embedding']
+    for i in tqdm.trange(num_episodes):
+        # Initialize the environment and state + flatten
+        (state, available_actions) = env.reset()
+        #TODO change to use Modualr archi
+        flatten_state = flatten(state)
+        state = torch.stack(list(flatten_state.values())).mean(0, keepdim=True).float()
 
+        hidden_state = torch.zeros(1, deep_action_space_embedding_size)
+        target_goal = agent.sample_goal()
+        running_episode = True
 
-model_params = {'instruction_embedding': None, 'state_embedding': None, 'action_embedding': None, 'n_step': None,
-                'net_params': None}
-exploration_params = {}
-env = IoTEnv4ML()
-agent = DQNAgent(FlatCritic(**model_params), exploration_params=exploration_params,
-                 goal_sampler=GoalSampler(language_model=None), language_model=None)
-replay_buffer = ReplayBuffer(max_size=10000)
+        done = False
+        while not done:
+            action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
+                                                       actions=available_actions, hidden_state=hidden_state)
+            (next_state, next_available_actions), reward, done, info = env.step(action=action)
+            #TODO change to use Modualr archi
+            next_state = torch.stack(list(flatten(next_state).values())).mean(0, keepdim=True).float()
+            if not done:
+                assert isinstance(next_available_actions, list)
+                if next_available_actions is []:
+                    pass
+                agent.store_transitions(target_goal, state, action, (next_state, next_available_actions), done, reward,
+                                        hidden_state)
+                state = next_state
+                available_actions = next_available_actions
 
-num_episodes = 50
-for i_episode in range(num_episodes):
-    # Initialize the environment and state
-    state = env.reset()
-    (overall_state, available_actions) = state
-    hidden_state = torch.zeros(1, model_params['action_embedding'])
-    g = agent.sample_goal()
-    running_episode = True
+            agent.udpate_policy_net()
 
-    done = False
-    while not done:
-        action, hidden_state = agent.select_action(state=overall_state, instruction=g.goal_embedding,
-                                                   actions=available_actions, hidden_state=hidden_state)
-        next_state, reward, done, info = env.step(action=action)
-        replay_buffer.store(g, state, action, next_state, done, reward, hidden_state)
+        achieved_goals_str = oracle.get_achieved_instruction(env.previous_user_state, env.user_state)
 
-        state = next_state
+        agent.goal_sampler.update([target_goal], achieved_goals_str, iter=i)
 
-    for t in count():
-        # Select and perform an action
-        action = select_action(state)
-        _, reward, done, _ = env.step(action.item())
-        reward = torch.tensor([reward], device=device)
+        failed_goals = agent.goal_sampler.get_failed_goals(achieved_goals_str=achieved_goals_str)
+        achieved_goals = [agent.goal_sampler.discovered_goals[g] for g in achieved_goals_str]
 
-        # Observe new state
-        last_screen = current_screen
-        current_screen = get_screen()
-        if not done:
-            next_state = current_screen - last_screen
-        else:
-            next_state = None
+        agent.store_final_transitions(achieved_goals=achieved_goals,
+                                      failed_goals=failed_goals,
+                                      state=state,
+                                      action=available_actions,
+                                      next_state=next_state,
+                                      hidden_state=hidden_state)
 
-        # Store the transition in memory
-        memory.push(state, action, next_state, reward)
+        if i % params['target_update_frequence'] == 0:
+            agent.update_target_net()
 
-        # Move to the next state
-        state = next_state
-
-        # Perform one step of the optimization (on the target network)
-        optimize_model()
-        if done:
-            episode_durations.append(t + 1)
-            plot_durations()
-            break
-    # Update the target network, copying all weights and biases in DQN
-    if i_episode % TARGET_UPDATE == 0:
-        target_net.load_state_dict(policy_net.state_dict())
-
-print('Complete')
-env.render()
-env.close()
-plt.ioff()
-plt.show()
+    print('Complete')

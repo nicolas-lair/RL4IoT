@@ -1,7 +1,10 @@
+from collections.abc import Iterable
 from Action import OpenHABAction
-from TreeView import Node
 
-class Channel(Node):
+from TreeView import DescriptionNode
+
+
+class Channel(DescriptionNode):
     def __init__(self, name, description, item, value=None, read=True, write=True):
 
         self.item = item
@@ -29,7 +32,12 @@ class Channel(Node):
     def do_action(self, action, params=None):
         if params is None:
             params = []
+        elif isinstance(params, str) or not isinstance(params, Iterable):
+            params = [params]
         getattr(self.item, action)(self.item, *params)
 
     def get_available_actions(self):
         return self.item.methods
+
+    def get_state_change(self):
+        pass

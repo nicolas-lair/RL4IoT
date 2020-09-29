@@ -1,9 +1,9 @@
 """
 Module implementing the pointer network proposed at: https://arxiv.org/abs/1506.03134
 The implementation try to follows the variables naming conventions
-ei: Encoder hidden state
-di: Decoder hidden state
-di_prime: Attention aware decoder state
+ei: Encoder hidden user_state
+di: Decoder hidden user_state
+di_prime: Attention aware decoder user_state
 W1: Learnable matrix (Attention layer)
 W2: Learnable matrix (Attention layer)
 V: Learnable parameter (Attention layer)
@@ -79,7 +79,7 @@ class Attention(nn.Module):
         # encoder_out: (BATCH, ARRAY_LEN, HIDDEN_SIZE)
         # decoder_hidden: (BATCH, HIDDEN_SIZE)
 
-        # Add time axis to decoder hidden state
+        # Add time axis to decoder hidden user_state
         # in order to make operations compatible with encoder_out
         # condition_embedding: (BATCH, 1, HIDDEN_SIZE)
         condition_embedding = condition_embedding.unsqueeze(1)
@@ -148,7 +148,7 @@ def train(model, embedder, optimizer, task, epoch, step_per_epoch, batch_size, l
 
         # Forward
         # x, y = batch(BATCH_SIZE)
-        # seq_proba, prediction = model(x, y)
+        # seq_proba, prediction = policy_network(x, y)
         loss = F.cross_entropy(seq_proba, y)
 
         # loss_record.append(loss.mean().item())

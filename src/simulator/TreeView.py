@@ -1,15 +1,11 @@
-
-
 class Node:
-    def __init__(self, name, description, children=None, node_embedding=None):
+    def __init__(self, name, children=None, node_embedding=None):
         self.name = name
-
-        self.description = description
-        self.node_embedding = node_embedding
 
         # self.father = father
         self.children = children
-        self.has_description = description is not None
+
+        self.node_embedding = node_embedding
 
     def get_node_embedding(self):
         return self.node_embedding
@@ -22,6 +18,25 @@ class Node:
             return self.children
         else:
             raise NotImplementedError
+
+
+class DescriptionNode(Node):
+    def __init__(self, name, description, children):
+        super().__init__(name=name, children=children)
+        self.description = description
+        self.has_description = True
+
+    def embed_node_description(self, embedder):
+        self.node_embedding = embedder(self.description)
+
+
+class NoDescriptionNode(Node):
+    def __init__(self, name, node_embedding, children):
+        super().__init__(name=name, children=children)
+        self.description = None
+        self.has_description = False
+        self.node_embedding = node_embedding
+
 
 if __name__ == "__main__":
     n = Node()

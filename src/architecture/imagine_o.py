@@ -77,7 +77,7 @@ class Net(nn.Module):
 
 class MyAccumulatedAccuracyMetric():
     """
-    Works with classification model
+    Works with classification policy_network
     """
 
     def __init__(self):
@@ -192,7 +192,7 @@ if __name__ == "__main__":
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=batch_size, shuffle=True, **kwargs)
     valid_loader = torch.utils.data.DataLoader(valid_set, batch_size=batch_size, shuffle=True, **kwargs)
 
-    # model = Net(n_objs)
+    # policy_network = Net(n_objs)
     model = DiffOR(input_size=n_objs)
 
     loss_fn = F.binary_cross_entropy

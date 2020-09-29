@@ -1,9 +1,9 @@
 """
 Module implementing the pointer network proposed at: https://arxiv.org/abs/1506.03134
 The implementation try to follows the variables naming conventions
-ei: Encoder hidden state
-di: Decoder hidden state
-di_prime: Attention aware decoder state
+ei: Encoder hidden user_state
+di: Decoder hidden user_state
+di_prime: Attention aware decoder user_state
 W1: Learnable matrix (Attention layer)
 W2: Learnable matrix (Attention layer)
 V: Learnable parameter (Attention layer)
@@ -76,7 +76,7 @@ class Attention(nn.Module):
         # encoder_out: (BATCH, ARRAY_LEN, HIDDEN_SIZE)
         # decoder_hidden: (BATCH, HIDDEN_SIZE)
 
-        # Add time axis to decoder hidden state
+        # Add time axis to decoder hidden user_state
         # in order to make operations compatible with encoder_out
         # decoder_hidden_time: (BATCH, 1, HIDDEN_SIZE)
         decoder_hidden_time = decoder_hidden.unsqueeze(1)
@@ -121,15 +121,15 @@ class Decoder(nn.Module):
         # from the first and unique LSTM layer
         ht = hidden[0][0]  # ht: (BATCH, HIDDEN_SIZE)
 
-        # di: Attention aware hidden state -> (BATCH, HIDDEN_SIZE)
+        # di: Attention aware hidden user_state -> (BATCH, HIDDEN_SIZE)
         # att_w: Not 'softmaxed', torch will take care of it -> (BATCH, ARRAY_LEN)
         di, att_w = self.attention(encoder_out, ht)
 
-        # Append attention aware hidden state to our input
+        # Append attention aware hidden user_state to our input
         # x: (BATCH, 1, 1 + HIDDEN_SIZE)
         x = torch.cat([di.unsqueeze(1), x], dim=2)
 
-        # Generate the hidden state for next timestep
+        # Generate the hidden user_state for next timestep
         _, hidden = self.lstm(x, hidden)
         return hidden, att_w
 

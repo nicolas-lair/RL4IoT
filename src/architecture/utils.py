@@ -16,6 +16,18 @@ def differentiable_or(proba_tensor):
     bool_value = u.clamp(-1, 1)
     return bool_value
 
+def flatten(d):
+    out = {}
+    for key, val in d.items():
+        if isinstance(val, dict):
+            val = [val]
+        if isinstance(val, list):
+            for subdict in val:
+                deeper = flatten(subdict).items()
+                out.update({key + '_' + key2: val2 for key2, val2 in deeper})
+        else:
+            out[key] = torch.tensor(val)
+    return out
 
 if __name__ == "__main__":
     for i in range(10000):
