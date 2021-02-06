@@ -4,12 +4,12 @@ from simulator.Items import *
 from simulator.Channel import Channel
 from simulator.utils import percent_to_level, levels_dict
 from simulator.TreeView import DescriptionNode
-from simulator.instructions import StateDescription, initialize_instruction
+from simulator.instructions import GoalDescription, initialize_instruction
 from discrete_parameters import TVchannels_list
 
 
 class Thing(ABC, DescriptionNode):
-    def __init__(self, name, description, is_visible, init_type, init_params, location, instruction_dict):
+    def __init__(self, name, description, is_visible, init_type, init_params, location, goals_dict):
         """
         Init a generic Thing object as a Node of the environment. The super function that instantiates subclass should
         be called after the definition of the channels. The channels are indeed the children of the node.
@@ -22,7 +22,7 @@ class Thing(ABC, DescriptionNode):
         """
         super().__init__(name=name, description=description, children=self.get_action_channels())
         # self.name = name #TODO check if necessary
-        self.instruction = initialize_instruction(instruction_dict=instruction_dict, name=name, location=location)
+        self.goals_dict = initialize_instruction(goal_dict=goals_dict, name=name, location=location)
 
         # self.observation_space, self.action_space = self.build_observation_and_action_space()
         self._channels = self.get_channels()
@@ -124,19 +124,21 @@ class Thing(ABC, DescriptionNode):
         self.is_visible = is_visible
 
         if init_type in ['default', 'random']:
-            init_param = lambda x: init_type
+            init_func = lambda x: init_type
         elif init_type == 'custom':
-            init_param = lambda x: init_params[x]
+            init_func = lambda x: init_params[x]
         else:
             raise NotImplementedError('init_type should be one of {default, random, custom}')
 
         for c in self._channels:
-            c.init(init_param(c.name))
+            c.init(init_func(c.name))
+
+        return self.get_state(oracle=True)
 
     def reset(self):
         self.init(**self.initial_values)
 
-    def get_state_change(self, previous_state, next_state):
+    def get_state_change(self, previous_state, next_state, ignore_power=False, as_string=True):
         previous_matching_descriptions = self.get_state_description(previous_state)
         was_powered = self.is_powered(previous_state)
 
@@ -147,17 +149,18 @@ class Thing(ABC, DescriptionNode):
         for c in self._channels:
             state_change_descriptions_keys.extend(c.get_state_change_key(previous_state, next_state))
 
-        state_change_descriptions = [self.instruction[key] for key in state_change_descriptions_keys]
+        state_change_descriptions = [self.goals_dict['change'][key] for key in state_change_descriptions_keys]
+        if not (ignore_power or (is_powered and was_powered)):
+            state_change_descriptions = [d for d in state_change_descriptions if not d.need_power]
 
         descriptions_change = set(next_matching_descriptions).difference(set(previous_matching_descriptions))
         descriptions_change = descriptions_change.union(state_change_descriptions)
 
-        if not is_powered * was_powered:
-            descriptions_change = [d for d in descriptions_change if not d.need_power]
-        achieved_instructions = [d.get_instruction() for d in descriptions_change]
-        return achieved_instructions
+        if as_string:
+            descriptions_change = [d.get_instruction() for d in descriptions_change]
+        return list(descriptions_change)
 
-    def get_state_description(self, state=None):
+    def get_state_description(self, state=None, ignore_power=False):
         state = self.get_state(oracle=True) if state is None else state
         is_powered = self.is_powered(state)
 
@@ -167,10 +170,10 @@ class Thing(ABC, DescriptionNode):
             state_description_key_list.extend(c.get_state_description_key(state))
 
         # Get corresponding StateDescriptions
-        matching_description = [self.instruction[key] for key in state_description_key_list]
+        matching_description = [self.goals_dict['description'][key] for key in state_description_key_list]
 
         # Filter if object is not powered
-        if not is_powered:
+        if not ignore_power and not is_powered:
             matching_description = [d for d in matching_description if not d.need_power]
         return matching_description
 
@@ -194,8 +197,8 @@ class PlugSwitch(Thing):
                                      )
 
         self.instruction = {
-            'turn_on': StateDescription(sentences=[f"You turned on the {self.name}"]),
-            'turn_off': StateDescription(sentences=[f"You turned off the {self.name}"]),
+            'turn_on': GoalDescription(sentences=[f"You turned on the {self.name}"]),
+            'turn_off': GoalDescription(sentences=[f"You turned off the {self.name}"]),
         }
         super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
                          is_visible=is_visible)
@@ -299,24 +302,24 @@ class LGTV(Thing):
         # )
 
         self.instruction = {
-            'turn_on': StateDescription(sentences=[f'You turned on the {self.name}']),
-            'turn_off': StateDescription(sentences=[f'You turned off {self.name}']),
-            'mute': StateDescription(sentences=[f'You muted the {self.name}']),
-            'unmute': StateDescription(sentences=[f'You restored the sound on {self.name}']),
-            'increased_volume': StateDescription(sentences=[f'You increased the volume of {self.name}']),
-            'decreased_volume': StateDescription(sentences=[f'You decreased the volume of {self.name}']),
-            'play': StateDescription(sentences=[f'You played the film on {self.name}']),
-            'pause': StateDescription(sentences=[f'You paused the film on {self.name}']),
+            'turn_on': GoalDescription(sentences=[f'You turned on the {self.name}']),
+            'turn_off': GoalDescription(sentences=[f'You turned off {self.name}']),
+            'mute': GoalDescription(sentences=[f'You muted the {self.name}']),
+            'unmute': GoalDescription(sentences=[f'You restored the sound on {self.name}']),
+            'increased_volume': GoalDescription(sentences=[f'You increased the volume of {self.name}']),
+            'decreased_volume': GoalDescription(sentences=[f'You decreased the volume of {self.name}']),
+            'play': GoalDescription(sentences=[f'You played the film on {self.name}']),
+            'pause': GoalDescription(sentences=[f'You paused the film on {self.name}']),
             # 'next': StateDescription(sentences=[f'You changed the {self.name} to the next channel']),
             # 'previous': StateDescription(sentences=[f'You changed the {self.name} to the previous channel']),
-            'stop': StateDescription(sentences=[f'You stopped the film on {self.name}']),
+            'stop': GoalDescription(sentences=[f'You stopped the film on {self.name}']),
         }
 
         for level in levels_dict['volume']:
-            self.instruction[f'volume_level_{level}'] = StateDescription(
+            self.instruction[f'volume_level_{level}'] = GoalDescription(
                 sentences=[f"The volume of {self.name} is now {level}"])
         for channel in TVchannels_list:
-            self.instruction[f'TVchannel_{channel}'] = StateDescription(
+            self.instruction[f'TVchannel_{channel}'] = GoalDescription(
                 sentences=[f"{self.name} is now on channel {channel}"])
 
         super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
@@ -405,14 +408,14 @@ class Speaker(Thing):
         self.power = Channel(
             name="power",
             description="Main power on/off",
-            item=SwitchItem(turnOnOff=True)
+            item=SwitchItem(turnOn=True, turnOff=True)
         )
 
         # TODO Discretize this
         self.input = Channel(
             name="input",
             description="Set or get the input source",
-            item=StringItem(setString=True)
+            item=SwitchItem(turnOn=True, turnOff=True)
         )
 
         self.volume = Channel(

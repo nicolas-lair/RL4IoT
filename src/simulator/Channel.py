@@ -64,6 +64,6 @@ class Channel(DescriptionNode):
         return list(filter(None, keys))
 
     def get_state_change_key(self, previous_state, next_state):
-        keys =  [f(*previous_state[self.name]['state'], *next_state[self.name]['state']) for f in
+        keys = [f(*previous_state[self.name]['state'], *next_state[self.name]['state']) for f in
                 self.associated_state_change]
         return list(filter(None, keys))
