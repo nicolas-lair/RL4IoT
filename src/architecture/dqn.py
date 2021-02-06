@@ -22,22 +22,22 @@ class BasicQnet(nn.Module):
         return self.q_network(x)
 
 
-class ActionProjector(nn.Module):
-    def __init__(self, in_features, out_features, env_discrete_params):
+class ActionModel(nn.Module):
+    def __init__(self, raw_action_size, out_features, env_discrete_params):
         super().__init__()
-        self.raw_action_size = in_features
+        self.in_features = max(raw_action_size.values())
         self.action_embedding_size = out_features
 
         # Dictionnary of projection layer for normalizing the action embedding. The projector should be defined as
         # attributes of the current module to ensure that they are passed to cuda
         self.action_embedding_layers = nn.ModuleDict({
             'root': nn.Identity(),
-            'description_node': nn.Linear(in_features=self.raw_action_size, out_features=self.action_embedding_size),
-            'openHAB_action': nn.Linear(in_features=self.raw_action_size, out_features=self.action_embedding_size),
+            'description_node': nn.Linear(in_features=self.in_features, out_features=self.action_embedding_size),
+            'openHAB_action': nn.Linear(in_features=self.in_features, out_features=self.action_embedding_size),
         })
         self.action_embedding_layers.update(
             nn.ModuleDict(
-                {k + '_params': nn.Linear(in_features=self.raw_action_size, out_features=self.action_embedding_size)
+                {k + '_params': nn.Linear(in_features=self.in_features, out_features=self.action_embedding_size)
                  for k in env_discrete_params})
         )
 
@@ -59,7 +59,7 @@ class ActionProjector(nn.Module):
             action_type_mask = action_type_mask.scatter_(-1, action_type_indices.unsqueeze(dim=-1), 1.).unsqueeze(
                 -1).detach()
 
-            actions = [torch.cat([F.pad(a, pad=(0, self.raw_action_size - a.size(1), 0, 0)) for a in seq], dim=0)
+            actions = [torch.cat([F.pad(a, pad=(0, self.in_features - a.size(1), 0, 0)) for a in seq], dim=0)
                        for seq in actions]
             actions = rnn_utils.pad_sequence(actions, batch_first=True).detach()
 
@@ -73,9 +73,9 @@ class FullNet(nn.Module):
     def __init__(self, context_model, action_embedding_size, net_params, raw_action_size, discrete_params):
         super().__init__()
 
-        self.action_projector = ActionProjector(in_features=max(raw_action_size.values()),
-                                                out_features=action_embedding_size,
-                                                env_discrete_params=discrete_params)
+        # self.action_projector = ActionProjector(in_features=max(raw_action_size.values()),
+        #                                         out_features=action_embedding_size,
+        #                                         env_discrete_params=discrete_params)
 
         self.context_net = context_model(**net_params['context_net'])
 
@@ -83,12 +83,26 @@ class FullNet(nn.Module):
         self.q_network = BasicQnet(self.qnet_in_features, qnet_params=net_params['q_network'])
 
     def forward(self, instruction, state, actions, hidden_state):
-        embedded_actions = self.action_projector(*actions)
+        """
+
+        Parameters
+        ----------
+        instruction : torch tensor (batch_size, instruction_embedding)
+        state : dict or list of dict
+        actions : tuple(List(embedded actions), List(action_type))
+        hidden_state : torch tensor
+
+        Returns
+        -------
+        x: Q_value torch tensor batch size, max_action, 1)
+        embedded_actions : torch tensor containing the projection of the embedded actions in a common action space
+        """
+        # embedded_actions = self.action_projector(*actions)
         context = self.context_net(state=state, instruction=instruction, hidden_state=hidden_state)
-        context = context.unsqueeze(1).repeat_interleave(repeats=embedded_actions.size(1), dim=1)
-        x = torch.cat([context, embedded_actions], dim=2)
+        context = context.unsqueeze(1).repeat_interleave(repeats=actions.size(1), dim=1)
+        x = torch.cat([context, actions], dim=2)
         x = self.q_network(x)
-        return x, embedded_actions
+        return x
 
 
 class DoubleDeepSetQnet(nn.Module):
@@ -97,9 +111,9 @@ class DoubleDeepSetQnet(nn.Module):
         super().__init__()
         self.in_features = net_params['scaler_layer']['latent_out'] + action_embedding_size
 
-        self.action_projector = ActionProjector(in_features=max(raw_action_size.values()),
-                                                out_features=action_embedding_size,
-                                                env_discrete_params=discrete_params)
+        self.action_projector = ActionModel(raw_action_size=max(raw_action_size.values()),
+                                            out_features=action_embedding_size,
+                                            env_discrete_params=discrete_params)
         self.state_attention_layer = nn.Sequential(
             nn.Linear(instruction_embedding, state_embedding + action_embedding_size),
             nn.Sigmoid()

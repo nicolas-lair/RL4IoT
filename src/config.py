@@ -25,7 +25,7 @@ state_encoding_size = 3  # size of the vector in which is encoded the value of a
 state_embedding_size = state_encoding_size + description_embedding + len(ITEM_TYPE)
 action_embedding = 50
 
-vector_cache = '/home/nicolas/PycharmProjects/imagineIoT/.vector_cache'
+vector_cache = '/home/nicolas/PycharmProjects/RL4IoT/.vector_cache'
 
 
 def prepare_simulation(simulation_name):
@@ -64,7 +64,7 @@ def generate_env_params():
         ),
         thing_params=[
             ThingParam(AdorneLightBulb, dict()),
-            ThingParam(HueLightBulb, dict()),
+            # ThingParam(HueLightBulb, dict()),
             ThingParam(BigAssFanLightBulb, dict())
 
             # ThingParam(PlugSwitch,
@@ -94,7 +94,8 @@ def generate_env_params():
 
 def generate_language_model_params(device='cuda', use_pretrained_model=False):
     if use_pretrained_model:
-        pretrained_model_path = '/home/nicolas/PycharmProjects/imagineIoT/results/learned_language_model.pth'
+        # pretrained_model_path = '/home/nicolas/PycharmProjects/RL4IoT/results/learned_language_model.pth'
+        pretrained_model_path = '/home/nicolas/PycharmProjects/RL4IoT/results/lm_do_nothing_test.pth'
     else:
         pretrained_model_path = None
 
@@ -167,7 +168,7 @@ def get_reward_training_params(name=None, device='cuda'):
             log_file=False,
         ),
         device=device,
-        lm_save_path=f'/home/nicolas/PycharmProjects/imagineIoT/results/lm_{name}.pth'
+        lm_save_path=f'/home/nicolas/PycharmProjects/RL4IoT/results/lm_{name}.pth'
     )
     return params
 
@@ -235,9 +236,14 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
             eps_decay=200
         ),
         replay_buffer_params=dict(
-            max_size=10000,
+            per=True,
+            max_size=20000,
+            alpha=0.5,
+            beta=0.6,
+            prior_eps=1e-6
         ),
-        discount_factor=0.9,
+        use_double_dqn=True,
+        discount_factor=0.95,
         batch_size=128,
         loss=dqn_loss,
         optimizer=optim.Adam,
@@ -248,8 +254,8 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
             console=True,
             log_file=True,
         ),
-        n_episode=30000,
-        target_update_frequence=250,
+        n_episode=100000,
+        target_update_frequence=10,
         device=device,
         episode_reset=True,
         test_frequence=300,

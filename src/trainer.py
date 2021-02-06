@@ -17,10 +17,10 @@ from architecture.language_model import LanguageModel
 from architecture.goal_sampler import Goal
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-n', '--name', help='Simulation name', default='test')
-parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cuda:0')
+parser.add_argument('-n', '--name', help='Simulation name', default='up_target_10_++epis')
+parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cuda:3')
 parser.add_argument('-ns', '--n_simulation', help='number of simulation to run', type=int, default=10)
-parser.add_argument('-lm', '--pretrained_language_model', help='number of simulation to run', choices=['0', '1'],
+parser.add_argument('-lm', '--pretrained_language_model', help='use pretrained language model', choices=['0', '1'],
                     default=0)
 parser.add_argument('-l', '--optim_loss', help='DQN loss', choices=['mse', 'smooth_l1'], default='mse')
 args = parser.parse_args()
@@ -50,7 +50,6 @@ def run_episode(agent, env, target_goal, save_transitions=True):
     done = False
     while not done:
         previous_action = action
-        previous_hidden_state = hidden_state
         state, available_actions = env.get_state_and_action()
 
         action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
@@ -70,21 +69,20 @@ def run_episode(agent, env, target_goal, save_transitions=True):
                                                              state=state,
                                                              action=action,
                                                              next_state=(next_state, next_available_actions),
-                                                             hidden_state=previous_hidden_state,
                                                              previous_action=previous_action)
 
                 agent.store_transitions(goal=target_goal, state=next_state, action=DoNothing(),
                                         next_state=([], []),
                                         done=True,
                                         reward=int(target_goal.goal_string in achieved_goals_str),
-                                        hidden_state=hidden_state, previous_action=action)
+                                        previous_action=action)
             elif info == 'do_nothing':
                 pass  # TODO use internal reward function
 
             elif len(target_goal.goal_string) > 0:
                 agent.store_transitions(goal=target_goal, state=state, action=action,
                                         next_state=(next_state, next_available_actions), done=done, reward=reward,
-                                        hidden_state=previous_hidden_state, previous_action=previous_action)
+                                        previous_action=previous_action)
 
 
 def test_agent(agent, test_env, oracle):
@@ -97,15 +95,15 @@ def test_agent(agent, test_env, oracle):
             current_rewards = 0
             for _ in range(params['n_iter_test']):
                 test_env.reset()
-                while oracle.is_achieved(state=test_env.user_state, instruction=instruction):
-                    test_env.reset()
+                # while oracle.is_achieved(state=test_env.user_state, instruction=instruction):
+                #     test_env.reset()
 
                 test_goal = Goal(goal_string=instruction, language_model=agent.language_model)
                 run_episode(agent=agent, env=test_env, target_goal=test_goal, save_transitions=False)
                 current_rewards += int(
                     oracle.was_achieved(test_env.previous_user_state, test_env.user_state, instruction))
-            reward_table[thing][instruction] = current_rewards / params['n_iter_test']
-        reward_table[thing][f'overall_{thing}'] = sum(reward_table[thing].values()) / len(reward_table[thing])
+            reward_table[thing][instruction] = round(current_rewards / params['n_iter_test'], 2)
+        reward_table[thing][f'overall_{thing}'] = round(sum(reward_table[thing].values()) / len(reward_table[thing]), 2)
     logger.info("%" * 5 + f"Test after {j} episodes" + "%" * 5 + "\n" + yaml.dump(reward_table))
     return reward_table
 
@@ -147,12 +145,12 @@ if __name__ == "__main__":
                 raise NotImplementedError
             target_goal = agent.sample_goal()
             logger.info(f'Targeted goal: {target_goal.goal_string}')
-            while oracle.is_achieved(state=env.user_state, instruction=target_goal.goal_string):
-                env.reset()
+            # while oracle.is_achieved(state=env.user_state, instruction=target_goal.goal_string):
+            #     env.reset()
 
             run_episode(agent=agent, env=env, target_goal=target_goal, save_transitions=True)
 
-            agent.update(j)
+            agent.update(episode=j, max_episodes=num_episodes)
             # logger.debug('Update of policy net')
             # agent.update_policy_net()
             # logger.debug('done')

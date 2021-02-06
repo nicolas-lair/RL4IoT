@@ -32,16 +32,31 @@ def flatten(d):
 
 
 def dict_to_device(d, device):
-    out = {}
-    for key, val in d.items():
-        if isinstance(val, dict):
-            out[key] = dict_to_device(val, device)
-        elif isinstance(val, torch.Tensor):
-            out[key] = val.to(device)
-        else:
-            print(type(val))
-            raise NotImplementedError
-    return out
+    """
+
+    Parameters
+    ----------
+    d : dict or list of dict
+    device : torch device
+
+    Returns
+    -------
+    same type as input d (dict or list of dict) with torch tensor on device
+
+    """
+    if isinstance(d, (list, tuple)):
+        return [dict_to_device(d_, device) for d_ in d]
+    else:
+        out = {}
+        for key, val in d.items():
+            if isinstance(val, dict):
+                out[key] = dict_to_device(val, device)
+            elif isinstance(val, torch.Tensor):
+                out[key] = val.to(device)
+            else:
+                print(type(val))
+                raise NotImplementedError
+        return out
 
 
 if __name__ == "__main__":

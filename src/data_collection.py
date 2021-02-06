@@ -88,8 +88,8 @@ if __name__ == "__main__":
         env.reset()
         run_episode(env=env, weights=thing_weights)
         achieved_goals_str = oracle.get_state_change(env.previous_user_state, env.user_state)
-        previous_state_descriptions = oracle.get_state_descriptions(env.previous_user_state, as_string=True)
-        state_descriptions = oracle.get_state_descriptions(env.user_state, as_string=True)
+        previous_state_descriptions = oracle.get_state_description(env.previous_user_state, as_string=True)
+        state_descriptions = oracle.get_state_description(env.user_state, as_string=True)
 
         logger.info(achieved_goals_str)
         logger.info(previous_state_descriptions)

@@ -121,8 +121,11 @@ class RewardTrainer:
         metrics['epoch'] = epoch
         return metrics
 
-    def save_language_model(self, path):
+    def save_reward_model(self, path):
         torch.save(self.model.state_dict(), path)
+
+    def save_language_model(self, path):
+        torch.save(self.model.language_model.state_dict(), path)
 
 
 def get_transformer_function(params):
@@ -151,18 +154,18 @@ if __name__ == "__main__":
 
     EpisodeRecord = namedtuple('EpisodeRecord', ('initial_state', 'final_state', 'instruction', 'reward'))
 
-    episode_path = '/home/nicolas/PycharmProjects/imagineIoT/results/episodes_records_data_collection_do_nothing_test.jbl'
+    episode_path = '/home/nicolas/PycharmProjects/RL4IoT/results/episodes_records_data_collection_do_nothing_test.jbl'
 
     transformer = get_transformer_function(params)
 
     logger.info('Loading datasets')
     dts = EpisodeDataset.from_files(episode_path, raw_state_transformer=transformer)
-    # dts_loader = DataLoader(dts, batch_size=len(dts))
 
     logger.info('Splitting between train and test')
     train_dts, test_dts = dts.split(train_test_ratio=0.85, max_test=5000)
-    # train_episode = '/home/nicolas/PycharmProjects/imagineIoT/results/episodes_records4.jbl'
-    # test_episode = '/home/nicolas/PycharmProjects/imagineIoT/results/episodes_records3.jbl'
+
+    # train_episode = '/home/nicolas/PycharmProjects/RL4IoT/results/episodes_records4.jbl'
+    # test_episode = '/home/nicolas/PycharmProjects/RL4IoT/results/episodes_records3.jbl'
     # train_dts = EpisodeDataset.from_files(train_episode, raw_state_transformer=transformer)
     # test_dts = EpisodeDataset.from_files(test_episode, raw_state_transformer=transformer, max_size=10000)
 
@@ -173,28 +176,19 @@ if __name__ == "__main__":
     language_model = LanguageModel(**params['language_model_params'])
     reward = RewardModel(context_model=params['reward_params']['context_model'], language_model=language_model,
                          reward_params=params['reward_params']['net_params'])
-
+    reward.load_state_dict(torch.load('/home/nicolas/PycharmProjects/RL4IoT/results/reward_do_nothing_test.pth'))
 
     evaluator = RewardTrainer(model=reward,
                               optimizer=params['reward_params']['fit_params']['optimizer'],
                               fit_params=params['reward_params']['fit_params'],
                               device=params['device'])
+
     logger.info('Run training')
     metrics, loss_list = evaluator.run(train_dts, test_batch, data_stats=False)
 
     logger.info('Saving language model')
     evaluator.save_language_model(params['lm_save_path'])
 
-    # reward_net_params = params['reward_params']['net_params'].copy()
-    # reward_net_params.update(aggregate='diff_or',
-    #                          scaler_layer_params=dict(hidden1_out=256, latent_out=1, last_activation='sigmoid')
-    #                          )
-    # prelearned_or_reward = RewardModel(context_model=params['model_params']['context_model'],
-    #                                    language_model=language_model,
-    #                                    reward_params=reward_net_params)
-
-    # evaluator = RewardComparision([reward, prelearned_or_reward], fit_params=params['reward_params']['fit_params'],
-    #                               device=params['device'])
 
 # instruction with no positive reward
 # ['You set the color of intermediate light bulb to pink',
