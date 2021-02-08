@@ -1,6 +1,7 @@
 from random import choice
 import copy
 
+
 def initialize_instruction(goal_dict, name, location):
     goal_dict = copy.deepcopy(goal_dict)
     for g in goal_dict.values():
@@ -10,14 +11,16 @@ def initialize_instruction(goal_dict, name, location):
 
 
 class GoalDescription:
-    def __init__(self, sentences, need_power=True):
+    def __init__(self, sentences, need_power=True, mode='first'):
         if isinstance(sentences, str):
             sentences = [sentences]
 
+        self.mode = mode
         self.sentences = sentences
         self.need_power = need_power
 
-    def get_instruction(self, mode='random'):
+    def get_instruction(self, mode=None):
+        mode = mode if mode is not None else self.mode
         if mode == 'random':
             return choice(self.sentences)
         elif mode == 'first':
@@ -33,7 +36,7 @@ class GoalDescription:
 
     # Needed to be used in set
     def __hash__(self):
-        return hash(*self.sentences)
+        return hash(''.join(self.sentences))
 
     def set_name_and_location(self, name, location):
         location = 'in ' + location if location else ''

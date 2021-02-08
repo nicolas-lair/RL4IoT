@@ -49,13 +49,20 @@ class Oracle:
         goals_set = set(sum(state_description, []) + sum(state_change, []))
         return goals_set
 
-    def build_instruction_set(self):
+    def build_instruction_set(self, mode='first'):
         str_instructions = dict()
         state_description_set = dict()
         for thing in self.thing_list:
             state_description_set[thing.name] = self.get_thing_goals(thing)
-            str_instructions[thing.name] = sum([state_des.sentences for state_des in state_description_set[thing.name]],
-                                               [])
+            if mode == 'all':
+                str_instructions[thing.name] = sum(
+                    [state_des.sentences for state_des in state_description_set[thing.name]],
+                    [])
+            elif mode == 'first':
+                str_instructions[thing.name] = [state_des.sentences[0] for state_des in
+                                                state_description_set[thing.name]]
+            else:
+                raise NotImplementedError(f'mode should be one of all or first, was {mode}')
             # thing_instruction = itertools.chain.from_iterable(thing.instruction.values())
             # instructions[thing.name] = {i.format(color=c, level=l, name=thing.name) for i, c, l in
             #                             itertools.product(thing_instruction, color_list, percent_level)}
