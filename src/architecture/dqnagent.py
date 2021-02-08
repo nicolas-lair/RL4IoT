@@ -73,7 +73,7 @@ class DQNAgent:
         failed_goals = self.goal_sampler.get_failed_goals(achieved_goals_str=achieved_goals_str)
         achieved_goals = [self.goal_sampler.discovered_goals[g] for g in achieved_goals_str]
         for g in achieved_goals:
-            self.store_transitions(goal=g, done=done, reward=1, **kwargs)
+            self.store_transitions(goal=g, done=True, reward=1, **kwargs)
         for g in failed_goals:
             self.store_transitions(goal=g, done=done, reward=0, **kwargs)
 
