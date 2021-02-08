@@ -6,6 +6,7 @@ from pprint import pformat
 import yaml
 import torch
 import joblib
+import logging
 
 from logger import rootLogger, format_user_state_log, set_logger_handler
 from config import generate_params, save_config, format_config, setup_new_simulation
@@ -17,8 +18,8 @@ from architecture.language_model import LanguageModel
 from architecture.goal_sampler import Goal
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-n', '--name', help='Simulation name', default='up_target_10_++epis')
-parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cuda:3')
+parser.add_argument('-n', '--name', help='Simulation name', default='new_test')
+parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cuda:1')
 parser.add_argument('-ns', '--n_simulation', help='number of simulation to run', type=int, default=10)
 parser.add_argument('-lm', '--pretrained_language_model', help='use pretrained language model', choices=['0', '1'],
                     default=0)
@@ -37,17 +38,18 @@ set_logger_handler(rootLogger, **params['logger'], log_path=params['save_directo
 logger = rootLogger.getChild(__name__)
 
 logger.info('begin')
-
-
-# logger.setLevel(10)
+logger.setLevel(logging.DEBUG)
 
 
 def run_episode(agent, env, target_goal, save_transitions=True):
+    action_record = []
     hidden_state = torch.zeros(1, deep_action_space_embedding_size).to(agent.device)
     state, available_actions = env.get_state_and_action()
 
     action = RootAction(children=available_actions, embedding=hidden_state.clone())
     done = False
+    logger.debug(f'State: \n {format_user_state_log(env.user_state)}')
+
     while not done:
         previous_action = action
         state, available_actions = env.get_state_and_action()
@@ -55,15 +57,20 @@ def run_episode(agent, env, target_goal, save_transitions=True):
         action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
                                                    actions=available_actions, hidden_state=hidden_state,
                                                    exploration=save_transitions)
-        logger.debug(f'State: \n {format_user_state_log(env.user_state)}')
-        logger.debug(available_actions)
-        logger.debug(action)
+        # logger.debug(f'available_actions{[a.name for a in available_actions]}')
+        # logger.debug(action.name)
+        action_record.append(action.name)
 
         (next_state, next_available_actions), reward, done, info = env.step(action=action)
+        if info == 'exec_action':
+            logger.debug(f'State: \n {format_user_state_log(env.user_state)}')
+
         if save_transitions:
             if info in ['exec_action']:
+                logger.debug(f'Running action: {"/".join(action_record)}')
                 achieved_goals_str = oracle.get_state_change(env.previous_user_state, env.user_state)
-                agent.goal_sampler.update_discovered_goals(achieved_goals_str, iter=j)
+                logger.debug(f'Achieved goals: {achieved_goals_str}')
+                agent.goal_sampler.update(reached_goals_str=achieved_goals_str, iter=j)
                 agent.store_transitions_with_oracle_feedback(achieved_goals_str=achieved_goals_str,
                                                              done=done,
                                                              state=state,
@@ -76,24 +83,30 @@ def run_episode(agent, env, target_goal, save_transitions=True):
                                         done=True,
                                         reward=int(target_goal.goal_string in achieved_goals_str),
                                         previous_action=action)
+                action_record.append('/')
             elif info == 'do_nothing':
                 pass  # TODO use internal reward function
 
             elif len(target_goal.goal_string) > 0:
+                assert info != 'do_nothing'
                 agent.store_transitions(goal=target_goal, state=state, action=action,
                                         next_state=(next_state, next_available_actions), done=done, reward=reward,
                                         previous_action=previous_action)
+
+    logger.info(f'Action summary: {"/".join(action_record)}')
 
 
 def test_agent(agent, test_env, oracle):
     logger.info('Testing agent')
     reward_table = dict()
+    reward_table['overall'] = []
     for thing, test_instruction in oracle.str_instructions.items():
         reward_table[thing] = dict()
         for instruction in test_instruction:
             logger.info(f'Test : {instruction}')
             current_rewards = 0
             for _ in range(params['n_iter_test']):
+                logger.debug('New test episode')
                 test_env.reset()
                 # while oracle.is_achieved(state=test_env.user_state, instruction=instruction):
                 #     test_env.reset()
@@ -103,8 +116,9 @@ def test_agent(agent, test_env, oracle):
                 current_rewards += int(
                     oracle.was_achieved(test_env.previous_user_state, test_env.user_state, instruction))
             reward_table[thing][instruction] = round(current_rewards / params['n_iter_test'], 2)
-        reward_table[thing][f'overall_{thing}'] = round(sum(reward_table[thing].values()) / len(reward_table[thing]), 2)
-    logger.info("%" * 5 + f"Test after {j} episodes" + "%" * 5 + "\n" + yaml.dump(reward_table))
+        reward_table[thing][f'overall {thing}'] = round(sum(reward_table[thing].values()) / len(reward_table[thing]), 2)
+        reward_table['overall'] += reward_table[thing].values()
+    reward_table['overall'] = round(sum(reward_table['overall']) / len(reward_table['overall']), 2)
     return reward_table
 
 
@@ -125,6 +139,7 @@ if __name__ == "__main__":
         logger.info(f'Simulation params:\n {pformat(format_config(params))}')
 
         test_record = {}
+        best_result = (-1, {'overall': 0})
         env = IoTEnv4ML(params=params['env_params'])
         test_env = IoTEnv4ML(params=params['env_params'])
 
@@ -164,6 +179,13 @@ if __name__ == "__main__":
 
             if j > 0 and j % params['test_frequence'] == 0:
                 test_record[j] = test_agent(agent=agent, test_env=test_env, oracle=oracle)
+                logger.info("%" * 5 + f" Test after {j} episodes " + "%" * 5 + "\n" + yaml.dump(test_record[j]))
+                if test_record[j]['overall'] > best_result[1]['overall']:
+                    best_result = (j, test_record[j])
+                    logger.info('This is best result!')
+                else:
+                    logger.info("%" * 5 + f" Best result after {best_result[0]} episodes " + "%" * 5 + "\n" + yaml.dump(best_result[1]))
+                logger.info(f"Goal sampler record: \n {pformat(agent.goal_sampler.get_record())}")
 
             if j > 0 and j % 10 * params['test_frequence'] == 0:
                 save_records()
