@@ -116,18 +116,28 @@ def preprocess_raw_observation(observation, description_embedder, item_type_embe
     new_obs = dict()
     for thing_name, thing in observation.items():
         thing_obs = dict()
+        thing_description = thing.pop('description')
+        thing_description_embedding = description_embedder.get_description_embedding(thing_description)
         for channel_name, channel in thing.items():
             if channel['item_type'] == 'goal_string':
                 raise NotImplementedError
+
+            # Channel description embedding
             try:
                 description_embedding = channel['embedding']
             except KeyError:
                 description_embedding = description_embedder.get_description_embedding(channel['description'])
+
+            # Item embedding
             item_embedding = item_type_embedder.transform(
                 np.array(channel['item_type']).reshape(-1, 1)).flatten()
-            state_embedding = np.zeros(raw_state_size)
-            state_embedding[:len(channel['state'])] = channel['state']
-            channel_embedding = np.concatenate([description_embedding, item_embedding, state_embedding])
+
+            # Value embedding
+            value_embedding = np.zeros(raw_state_size)
+            value_embedding[:len(channel['state'])] = channel['state']
+
+            channel_embedding = np.concatenate(
+                [description_embedding, item_embedding, value_embedding, thing_description_embedding])
             if pytorch:
                 channel_embedding = torch.tensor(channel_embedding)
             thing_obs[channel_name] = channel_embedding.to(device)
