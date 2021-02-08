@@ -68,7 +68,7 @@ class GoalSampler:
 
         self.record = dict(nb_feedbacks=0,
                            nb_positive_feedbacks=0,
-                           target_goal_sequence=dict(),
+                           target_goal_sequence=[],
                            reached_goal_sequence=dict())
         self.language_model = language_model
 
@@ -80,27 +80,25 @@ class GoalSampler:
         else:
             raise TypeError("goals should be passed as a string or list of string")
         new_goals_str = list(s.difference(list(self.discovered_goals.keys()) + ['']))
-        logger.info(f'New goals discovered: {new_goals_str}')
+        if new_goals_str:
+            logger.info(f'New goals discovered: {new_goals_str}')
         for g in new_goals_str:
             assert len(g) > 0, 'goal string should be a non empty string'
             new_goal = TrainGoal(goal_string=g, episode_discovery=iter, language_model=self.language_model)
             self.discovered_goals.update({g: new_goal})
 
-    def update(self, target_goals, reached_goals_str, iter):
+    def update(self, reached_goals_str, iter):
         logger.debug('Updating Goal Sampler')
         self.update_discovered_goals(reached_goals_str, iter=iter)
-        self.update_records(target_goals, reached_goals_str)
+        self.update_records(reached_goals_str, iter)
 
-    def update_records(self, target_goals, reached_goals_str):
+    def update_records(self, reached_goals_str, iter):
         self.record['nb_feedbacks'] += len(self.discovered_goals)
         self.record['nb_positive_feedbacks'] += len(reached_goals_str)
         self.record['reached_goal_sequence'][iter] = reached_goals_str
-        self.record['target_goal_sequence'][iter] = [g.goal_string for g in target_goals]
 
         for g in reached_goals_str:
             self.discovered_goals[g].update_record(reached=True)
-        for g in target_goals:
-            g.update_record(targeted=True)
 
     def update_embedding(self):
         for g in self.discovered_goals.values():
@@ -115,6 +113,8 @@ class GoalSampler:
                 target = np.random.choice(list(self.discovered_goals.values()), 1).item()
             else:
                 raise NotImplementedError
+            target.update_record(targeted=True)
+            self.record['target_goal_sequence'].append(target.goal_string)
 
         return target
 
@@ -132,3 +132,12 @@ class GoalSampler:
                       goals_record={v.goal_string: v.record for v in self.discovered_goals.values()}
                       )
         joblib.dump(record, path)
+
+    def get_record(self):
+        d ={
+            g.goal_string: g.record for g in self.discovered_goals.values()
+        }
+        d['nb_feedbacks'] = self.record['nb_feedbacks'],
+        d['nb_positive_feedbacks'] = self.record['nb_positive_feedbacks'],
+        # d['overall'] = self.record
+        return d
