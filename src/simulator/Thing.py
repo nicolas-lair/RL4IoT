@@ -91,7 +91,9 @@ class Thing(ABC, DescriptionNode):
                                             'description': "...",
                                             'item_type': "..."
                                             },
-                            channel2_name: {...}
+                            channel2_name: {...},
+                            ...
+                            description: self.description
 
         """
         state = dict()
@@ -106,6 +108,7 @@ class Thing(ABC, DescriptionNode):
 
                 if c.node_embedding is not None:
                     state[c.name].update({'embedding': c.node_embedding})
+        state['description'] = self.description
         return state
 
     def get_state(self, oracle):
