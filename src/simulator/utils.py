@@ -4,14 +4,28 @@ color_list = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink']
 color_h_inf = [0, 18, 50, 64, 167, 252, 300, 335]
 color_h_sup = [17, 49, 63, 166, 251, 299, 334, 360]
 
-N_LEVELS = 5
-percent_bound_level = [0, 20, 40, 60, 80, 100]
-brightness_level = ['very dark', 'dark', 'average', 'bright', 'very bright']
-volume_level = ['very quiet', 'quiet', 'average', 'loud', 'very loud']
-temperature_level = ['very cold', 'cold', 'average', 'warm', 'very warm']
+N_LEVELS = 3
+if N_LEVELS == 5:
+    brightness_level = ['very dark', 'dark', 'average', 'bright', 'very bright']
+    volume_level = ['very quiet', 'quiet', 'average', 'loud', 'very loud']
+    temperature_level = ['very cold', 'cold', 'average', 'warm', 'very warm']
+elif N_LEVELS == 3:
+    brightness_level = ['dark', 'average', 'bright']
+    volume_level = ['quiet', 'average', 'loud']
+    temperature_level = ['cold', 'average', 'warm']
+else:
+    raise NotImplementedError
+
 levels_dict = {
     'brightness': brightness_level, 'volume': volume_level, 'temperature': temperature_level
 }
+
+
+def get_percent_bound_level(lvl_list, min_lvl=0, max_lvl=100):
+    n_lvl = len(lvl_list)
+    step = max_lvl / n_lvl
+    bound_level = [min_lvl + int(step * i) for i in range(n_lvl + 1)]
+    return bound_level
 
 
 def get_color_name_from_hsb(h, s, b):
@@ -47,6 +61,7 @@ def find_level_list(lvl):
 
 def level_to_percent(lvl):
     lvl_list = find_level_list(lvl)
+    percent_bound_level = get_percent_bound_level(lvl_list)
     idx = lvl_list.index(lvl)
     p = (percent_bound_level[idx] + percent_bound_level[idx + 1]) // 2
     return p
@@ -54,12 +69,15 @@ def level_to_percent(lvl):
 
 def percent_to_level(p, lvl_type):
     i = 0
+    lvl_list = levels_dict[lvl_type]
+    percent_bound_level = get_percent_bound_level(lvl_list)
+
     while i < len(percent_bound_level):
         if p <= percent_bound_level[i + 1]:
             break
         else:
             i += 1
-    return levels_dict[lvl_type][i]
+    return lvl_list[i]
 
 
 if __name__ == "__main__":
@@ -85,20 +103,22 @@ if __name__ == "__main__":
     #     c = get_color_name_from_hsb(h, 50, 50)
     #     print(h, c, c == true_color)
 
-    test_dict = {
-        0: "very dark",
-        10: "very dark",
-        20: "very dark",
-        30: "dark",
-        40: "dark",
-        50: "average",
-        60: "average",
-        70: "bright",
-        80: "bright",
-        90: "very bright",
-        100: "very bright",
-    }
+    print(get_percent_bound_level([1, 2, 3]))
 
-    for p, true_lvl in test_dict.items():
-        lvl = percent_to_level(p, lvl_type='brightness')
-        print(p, lvl, lvl == true_lvl)
+    # test_dict = {
+    #     0: "very dark",
+    #     10: "very dark",
+    #     20: "very dark",
+    #     30: "dark",
+    #     40: "dark",
+    #     50: "average",
+    #     60: "average",
+    #     70: "bright",
+    #     80: "bright",
+    #     90: "very bright",
+    #     100: "very bright",
+    # }
+    #
+    # for p, true_lvl in test_dict.items():
+    #     lvl = percent_to_level(p, lvl_type='brightness')
+    #     print(p, lvl, lvl == true_lvl)
