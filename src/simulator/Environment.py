@@ -184,7 +184,7 @@ class IoTEnv4ML(gym.Wrapper):
             self.previous_state = self.state
             self.state = self.preprocess_raw_observation(self.build_state(oracle=False))
             self.available_actions = self.get_root_actions()
-            done = self.episode_length < self.max_episode_length
+            done = self.episode_length >= self.max_episode_length
             reward = None if done else 0
             info = 'exec_action'
         elif isinstance(action, DoNothing):
