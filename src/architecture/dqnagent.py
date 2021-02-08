@@ -5,16 +5,12 @@ import numpy as np
 from torch.nn.utils import clip_grad_norm_
 
 from logger import rootLogger
-from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState
 from architecture.goal_sampler import GoalSampler
 from architecture.replay_buffer import get_replay_buffer, Transition
 from architecture.utils import dict_to_device
 from architecture.dqn import FullNet, ActionModel
 
 logger = rootLogger.getChild(__name__)
-
-
-# logger.setLevel(10)
 
 
 class DQNAgent:
@@ -62,6 +58,11 @@ class DQNAgent:
             list(self.policy_network.parameters()) + list(
                 self.language_model.parameters()) + list(self.action_model.parameters()),
             **params['optimizer_params'])
+
+        if params['lr_scheduler'] is not None:
+            self.lr_scheduler = params['lr_scheduler'](self.optimizer, **params['lr_scheduler_params'])
+        else:
+            self.lr_scheduler = None
 
         self.update_counter = 0
 
@@ -244,7 +245,7 @@ class DQNAgent:
         element_wise_loss = self.loss(expected_value.detach(), Q_sa.squeeze(), reduction='none')
         weights = torch.FloatTensor(weights).to(self.device)
         loss = torch.mean(element_wise_loss * weights)
-        logger.debug(f'Done: {loss}')
+        logger.info(f'Train loss : {loss}')
 
         logger.debug('Backward pass')
         loss.backward()
@@ -255,6 +256,8 @@ class DQNAgent:
 
         logger.debug('Optimising step')
         self.optimizer.step()
+        if self.lr_scheduler:
+            self.lr_scheduler.step(loss)
 
         if self.per:
             # Update PER priorities
