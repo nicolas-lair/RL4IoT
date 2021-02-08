@@ -14,7 +14,7 @@ from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, N_LEVELS
 from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState
 from simulator.Thing import PlugSwitch, LGTV
-from simulator.lighting_things import AdorneLightBulb, BigAssFanLightBulb, HueLightBulb
+from simulator.lighting_things import AdorneLightBulb, BigAssFanLightBulb, HueLightBulb, SimpleLight, AlwaysOnLight
 
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
 
@@ -22,7 +22,7 @@ word_embedding_size = 50
 instruction_embedding = 40
 description_embedding = 50
 state_encoding_size = 3  # size of the vector in which is encoded the value of a channel
-state_embedding_size = state_encoding_size + description_embedding + len(ITEM_TYPE)
+state_embedding_size = state_encoding_size + 2 * description_embedding + len(ITEM_TYPE)
 action_embedding = 50
 
 vector_cache = '/home/nicolas/PycharmProjects/RL4IoT/.vector_cache'
@@ -63,9 +63,12 @@ def generate_env_params():
             authorize_cache=True
         ),
         thing_params=[
-            ThingParam(AdorneLightBulb, dict()),
+            ThingParam(SimpleLight, dict(name='simple light', simple=True)),
+            # ThingParam(AlwaysOnLight, dict(name='bright light', simple=True)),
+            ThingParam(SimpleLight, dict(name='speaker', simple=True)),
+            # ThingParam(AdorneLightBulb, dict(simple=True)),
             # ThingParam(HueLightBulb, dict()),
-            ThingParam(BigAssFanLightBulb, dict())
+            # ThingParam(BigAssFanLightBulb, dict(simple=True))
 
             # ThingParam(PlugSwitch,
             #            dict(name='first plug',
@@ -248,6 +251,9 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
         loss=dqn_loss,
         optimizer=optim.Adam,
         optimizer_params=dict(),  # TODO optimize
+        # lr_scheduler=optim.lr_scheduler.ReduceLROnPlateau,
+        lr_scheduler=None,
+        lr_scheduler_params=dict(mode='min'),
         language_model_params=language_model_params,
         logger=dict(
             level=logging.INFO,
@@ -255,11 +261,11 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
             log_file=True,
         ),
         n_episode=100000,
-        target_update_frequence=10,
+        target_update_frequence=20,
         device=device,
         episode_reset=True,
-        test_frequence=300,
-        n_iter_test=30,
+        test_frequence=100,
+        n_iter_test=20,
         tqdm=False,
         save_directory=path_dir,
     )
