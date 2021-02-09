@@ -55,9 +55,11 @@ def label_increase_change(increase, type):
 
 
 def get_increase_change(previous_brightness, next_brightness, type):
-    if next_brightness - previous_brightness > INCREASE_DECREASE_STEP:
+    if (next_brightness - previous_brightness > INCREASE_DECREASE_STEP) \
+            or (previous_brightness + INCREASE_DECREASE_STEP > 100):
         return label_increase_change(increase=True, type=type)
-    elif previous_brightness - next_brightness > INCREASE_DECREASE_STEP:
+    elif (previous_brightness - next_brightness > INCREASE_DECREASE_STEP) \
+            or (previous_brightness - INCREASE_DECREASE_STEP < 0):
         return label_increase_change(increase=False, type=type)
     else:
         return None
@@ -192,7 +194,6 @@ class AdorneLightBulb(LightBulb):
         self.power.do_action('turnOn')
 
 
-
 class BigAssFanLightBulb(LightBulb):
     """
     Light Object from BigAssFan https://www.openhab.org/addons/bindings/bigassfan/
@@ -210,8 +211,9 @@ class BigAssFanLightBulb(LightBulb):
             self.power = PowerChannel(name='light_power', description='Power on / off the light')
             self.brightness = BrightnessChannel(name='light_level', description="Adjust the brightness of the light", )
             self.color_temperature = ColorTemperatureChannel(name='light_hue',
-                                                     description="Adjust the color temperature of the light",
-                                                     methods=dict(setPercent=True, increase=True, decrease=True))
+                                                             description="Adjust the color temperature of the light",
+                                                             methods=dict(setPercent=True, increase=True,
+                                                                          decrease=True))
         super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
                          is_visible=is_visible, location=location, goals_dict=Light_goals)
 
