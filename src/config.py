@@ -12,7 +12,8 @@ from logger import update_log_file_path
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, N_LEVELS
-from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState
+import architecture
+from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState, DoubleAttDeepSet
 from simulator.Thing import PlugSwitch, LGTV
 from simulator.lighting_things import AdorneLightBulb, BigAssFanLightBulb, HueLightBulb, SimpleLight, AlwaysOnLight
 
@@ -63,12 +64,12 @@ def generate_env_params():
             authorize_cache=True
         ),
         thing_params=[
-            ThingParam(SimpleLight, dict(name='simple light', simple=True)),
+            ThingParam(SimpleLight, dict(name='light', simple=True)),
             # ThingParam(AlwaysOnLight, dict(name='bright light', simple=True)),
-            ThingParam(SimpleLight, dict(name='speaker', simple=True)),
+            ThingParam(SimpleLight, dict(name='heater', simple=True)),
             # ThingParam(AdorneLightBulb, dict(simple=True)),
             # ThingParam(HueLightBulb, dict()),
-            # ThingParam(BigAssFanLightBulb, dict(simple=True))
+            ThingParam(BigAssFanLightBulb, dict(simple=True))
 
             # ThingParam(PlugSwitch,
             #            dict(name='first plug',
@@ -185,7 +186,8 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
     device = device
     # device = 'cpu'
 
-    policy_context_archi = DeepSetStateNet
+    # policy_context_archi = DeepSetStateNet
+    policy_context_archi = DoubleAttDeepSet
     reward_params = generate_reward_params(archi=policy_context_archi)
 
     simulation_name = simulation_name
@@ -199,13 +201,13 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
                               state_embedding=state_embedding_size,
                               hidden_state_size=action_embedding,
                               aggregate='mean')
-    if 'DeepSetStateNet' in str(policy_context_archi):
+    if issubclass(policy_context_archi, DeepSetStateNet):
         scaler_layer_params = dict(hidden1_out=256, latent_out=512, last_activation='relu')
         context_net_params.update(scaler_layer_params=scaler_layer_params)
     elif ('FlatStateNet' in str(policy_context_archi)) or ('AttentionFlatState' in str(policy_context_archi)):
         pass
     else:
-        raise NotImplementedError
+        raise NotImplementedError()
 
     # Instantiate the param dict
     params = dict(

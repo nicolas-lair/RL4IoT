@@ -147,6 +147,7 @@ class SimpleLight(LightBulb):
 class AlwaysOnLight(LightBulb):
     """
     Very simple light with only on and off
+    900 episodes to master
     """
 
     def __init__(self, name="bright light", description='This is a simple light bulb', init_type='random',
@@ -170,8 +171,8 @@ class AlwaysOnLight(LightBulb):
 class AdorneLightBulb(LightBulb):
     """
     Simple light bulb supporting just brightness adjustment
-
-    https://www.openhab.org/addons/bindings/adorne/
+    10000 episodes to master
+    https://www.openhab.org/addons/bindings/adorne/spo
     """
 
     def __init__(self, name="medium light", description='This is a simple light bulb', init_type='random',
