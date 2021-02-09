@@ -50,7 +50,7 @@ def run_episode(agent, env, target_goal, save_transitions=True):
 
     action = RootAction(children=available_actions, embedding=hidden_state.clone())
     done = False
-    logger.debug(f'State: \n {format_user_state_log(env.user_state)}')
+    logger.debug(f'State: \n {format_oracle_state_log(env.oracle_state)}')
 
     while not done:
         previous_action = action
@@ -65,12 +65,12 @@ def run_episode(agent, env, target_goal, save_transitions=True):
 
         (next_state, next_available_actions), reward, done, info = env.step(action=action)
         if info == 'exec_action':
-            logger.debug(f'State: \n {format_user_state_log(env.user_state)}')
+            logger.debug(f'State: \n {format_oracle_state_log(env.oracle_state)}')
 
         if save_transitions:
             if info in ['exec_action']:
                 logger.debug(f'Running action: {"/".join(action_record)}')
-                achieved_goals_str = oracle.get_state_change(env.previous_user_state, env.user_state)
+                achieved_goals_str = oracle.get_state_change(env.previous_oracle_state, env.oracle_state)
                 logger.debug(f'Achieved goals: {achieved_goals_str}')
                 agent.goal_sampler.update(reached_goals_str=achieved_goals_str, iter=j)
                 agent.store_transitions_with_oracle_feedback(achieved_goals_str=achieved_goals_str,
@@ -110,13 +110,13 @@ def test_agent(agent, test_env, oracle):
             for _ in range(params['n_iter_test']):
                 logger.debug('New test episode')
                 test_env.reset()
-                # while oracle.is_achieved(state=test_env.user_state, instruction=instruction):
+                # while oracle.is_achieved(state=test_env.oracle_state, instruction=instruction):
                 #     test_env.reset()
 
                 test_goal = Goal(goal_string=instruction, language_model=agent.language_model)
                 run_episode(agent=agent, env=test_env, target_goal=test_goal, save_transitions=False)
                 current_rewards += int(
-                    oracle.was_achieved(test_env.previous_user_state, test_env.user_state, instruction))
+                    oracle.was_achieved(test_env.previous_oracle_state, test_env.oracle_state, instruction))
             reward_table[thing][instruction] = round(current_rewards / params['n_iter_test'], 2)
         reward_table[thing][f'overall {thing}'] = round(sum(reward_table[thing].values()) / len(reward_table[thing]), 2)
         reward_table['overall'] += reward_table[thing].values()
@@ -162,7 +162,7 @@ if __name__ == "__main__":
                 raise NotImplementedError
             target_goal = agent.sample_goal()
             logger.info(f'Targeted goal: {target_goal.goal_string}')
-            # while oracle.is_achieved(state=env.user_state, instruction=target_goal.goal_string):
+            # while oracle.is_achieved(state=env.oracle_state, instruction=target_goal.goal_string):
             #     env.reset()
 
             run_episode(agent=agent, env=env, target_goal=target_goal, save_transitions=True)

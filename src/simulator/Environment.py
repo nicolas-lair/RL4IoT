@@ -47,8 +47,9 @@ class IoTEnv(gym.Env):
         # })
 
         self.discrete_params = discrete_parameters
-        self.previous_user_state = None
-        self.user_state = self.build_state(oracle=True)
+
+        self.oracle_state = self.build_state(oracle=True)
+        self.previous_oracle_state = self.oracle_state
 
     def get_thing_list(self):
         return list(self._things_lookup_table.values())
@@ -71,8 +72,8 @@ class IoTEnv(gym.Env):
         thing = self.get_thing(action["thing"])
         thing.do_action(action["channel"], action["action"], action["params"])
 
-        self.previous_user_state = self.user_state
-        self.user_state = self.build_state(oracle=True)
+        self.previous_oracle_state = self.oracle_state
+        self.oracle_state = self.build_state(oracle=True)
 
         reward = None
         done = None
@@ -82,7 +83,7 @@ class IoTEnv(gym.Env):
     def build_state(self, oracle, thing=None):
         """
 
-        :param thing: None means build user_state for all Things in the environment
+        :param thing: None means build oracle_state for all Things in the environment
         :return:
         """
         if thing is None:
@@ -103,9 +104,10 @@ class IoTEnv(gym.Env):
         thing_list = self.get_thing_list()
         for thing in thing_list:
             thing.reset()
-        self.user_state = self.build_state(oracle=True)
-        self.previous_user_state = self.user_state
-        return self.user_state
+        self.oracle_state = self.build_state(oracle=True)
+        self.previous_oracle_state = self.oracle_state
+
+        return self.oracle_state
 
     def render(self, mode='human'):
         raise NotImplementedError
@@ -160,13 +162,13 @@ class IoTEnv4ML(gym.Wrapper):
 
         self.ignore_exec_action = params['ignore_exec_action']
         self.allow_do_nothing = params['allow_do_nothing']
+        self.max_episode_length = params['max_episode_length']
 
         self.state = None
         self.previous_state = None
         self.available_actions = None
         self.previous_available_actions = None
 
-        self.max_episode_length = params['max_episode_length']
         self.episode_length = 0
 
         # # Compute node embedding
