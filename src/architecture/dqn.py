@@ -82,6 +82,12 @@ class FullNet(nn.Module):
         self.qnet_in_features = self.context_net.out_features + action_embedding_size
         self.q_network = BasicQnet(self.qnet_in_features, qnet_params=net_params['q_network'])
 
+    def compute_context(self, instruction, state, actions, hidden_state):
+        context = self.context_net(state=state, instruction=instruction, hidden_state=hidden_state)
+        context = context.unsqueeze(1).repeat_interleave(repeats=actions.size(1), dim=1)
+        context = torch.cat([context, actions], dim=2)
+        return context
+
     def forward(self, instruction, state, actions, hidden_state):
         """
 
@@ -98,10 +104,26 @@ class FullNet(nn.Module):
         embedded_actions : torch tensor containing the projection of the embedded actions in a common action space
         """
         # embedded_actions = self.action_projector(*actions)
-        context = self.context_net(state=state, instruction=instruction, hidden_state=hidden_state)
-        context = context.unsqueeze(1).repeat_interleave(repeats=actions.size(1), dim=1)
-        x = torch.cat([context, actions], dim=2)
-        x = self.q_network(x)
+        context = self.compute_context(instruction, state, actions, hidden_state)
+        x = self.q_network(context)
+        return x
+
+
+class FullNetWithAttention(FullNet):
+    def __init__(self, context_model, action_embedding_size, net_params, raw_action_size, discrete_params):
+        super().__init__(context_model, action_embedding_size, net_params, raw_action_size, discrete_params)
+        self.attention_layer = nn.Sequential(
+            nn.Linear(in_features=net_params['context_net']['instruction_embedding'],
+                      out_features=self.qnet_in_features
+                      ),
+            nn.Sigmoid()
+        )
+
+
+    def forward(self, instruction, state, actions, hidden_state):
+        context = self.compute_context(instruction, state, actions, hidden_state)
+        attention_vector = self.attention_layer(instruction)
+        x = self.q_network(attention_vector * context)
         return x
 
 
