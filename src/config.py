@@ -44,7 +44,8 @@ def prepare_simulation(simulation_name):
         sim_id = 0
     path_dir = base_path + f'{sim_id}/'
     os.mkdir(path_dir)
-    return path_dir
+    simulation_id = f'{simulation_name}_{sim_id}'
+    return path_dir, simulation_id
 
 
 def generate_env_params():
@@ -143,6 +144,7 @@ def get_data_collection_params(name='data_collection_'):
     from datetime import datetime
     env_params = generate_env_params()
     env_params['allow_do_nothing'] = True
+    _, simulation_id = prepare_simulation(name)
     params = dict(
         name=name + str(datetime.now()).split('.')[0],
         env_params=env_params,
@@ -150,6 +152,7 @@ def get_data_collection_params(name='data_collection_'):
             level=logging.INFO,
             console=True,
             log_file=False,
+            simulation_id=simulation_id,
         ),
     )
     return params
@@ -157,7 +160,7 @@ def get_data_collection_params(name='data_collection_'):
 
 def get_reward_training_params(name=None, device='cuda'):
     context_archi = DeepSetStateNet
-
+    _, simulation_id = prepare_simulation(name)
     env_params = generate_env_params()
     reward_params = generate_reward_params(archi=context_archi)
     language_model_params = generate_language_model_params(device=device, use_pretrained_model=False)
@@ -192,9 +195,9 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
 
     simulation_name = simulation_name
     if save_path:
-        path_dir = prepare_simulation(simulation_name)
+        path_dir, simulation_id = prepare_simulation(simulation_name)
     else:
-        path_dir = None
+        path_dir, simulation_id = simulation_name
 
     # Build context net parameters
     context_net_params = dict(instruction_embedding=instruction_embedding,
@@ -261,13 +264,14 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
             level=logging.INFO,
             console=True,
             log_file=True,
+            simulation_id=simulation_id
         ),
-        n_episode=100000,
+        n_episode=20000,
         target_update_frequence=20,
         device=device,
         episode_reset=True,
-        test_frequence=100,
-        n_iter_test=20,
+        test_frequence=200,
+        n_iter_test=30,
         tqdm=False,
         save_directory=path_dir,
     )
@@ -296,7 +300,8 @@ def save_config(config, file_name='simulation_params.jbl'):
     joblib.dump(out, os.path.join(out["save_directory"], file_name))
 
 
-def setup_new_simulation(logger, params):
-    path_dir = prepare_simulation(params['simulation_name'])
+def setup_new_simulation(params):
+    path_dir, simulation_id = prepare_simulation(params['simulation_name'])
     params['save_directory'] = path_dir
-    update_log_file_path(logger, log_path=path_dir)
+    update_logger(log_path=path_dir, simulation_id=simulation_id)
+    # adapter = update_log_file_path(log_path=path_dir, simulation_id=simulation_id)
