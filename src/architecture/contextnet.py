@@ -81,7 +81,39 @@ class DeepSetStateNet(nn.Module):
             pass
         else:
             raise NotImplementedError
+        return full_state
 
+    def forward(self, state, instruction, hidden_state=None):
+        # print(instruction.size())
+        full_state = flatten_state(state).float()
+        if hidden_state is not None:
+            hidden_state = hidden_state.unsqueeze(1).repeat_interleave(repeats=full_state.size(1), dim=1)
+            full_state = torch.cat([full_state, hidden_state], dim=2)
+        attention_vector = self.goal_attention_layer(instruction)
+        full_state = attention_vector.unsqueeze(1) * full_state
+        full_state = self.scaler_layer(full_state)
+        full_state = self._aggregate(full_state)
+        # print(full_state.size())
+        return full_state
+
+
+class DoubleAttDeepSet(DeepSetStateNet):
+    def __init__(self, instruction_embedding, state_embedding, scaler_layer_params, hidden_state_size=0,
+                 aggregate='mean'):
+        super(DoubleAttDeepSet, self).__init__(instruction_embedding, state_embedding, scaler_layer_params,
+                                               hidden_state_size=0, aggregate=aggregate)
+        self.hidden_state_attention_layer = nn.Sequential(
+            nn.Linear(hidden_state_size, state_embedding),
+            nn.Sigmoid()
+        )
+
+    def forward(self, state, instruction, hidden_state):
+        full_state = flatten_state(state).float()
+        goal_attention_vector = self.goal_attention_layer(instruction).unsqueeze(1)
+        hidden_state_attention_vector = self.hidden_state_attention_layer(hidden_state).unsqueeze(1)
+        full_state = hidden_state_attention_vector * goal_attention_vector * full_state
+        full_state = self.scaler_layer(full_state)
+        full_state = self._aggregate(full_state)
         # print(full_state.size())
         return full_state
 
