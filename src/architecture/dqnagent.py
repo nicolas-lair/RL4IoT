@@ -4,13 +4,14 @@ import torch
 import numpy as np
 from torch.nn.utils import clip_grad_norm_
 
-from logger import rootLogger
+from logger import get_logger
 from architecture.goal_sampler import GoalSampler
 from architecture.replay_buffer import get_replay_buffer, Transition
 from architecture.utils import dict_to_device
 from architecture.dqn import FullNet, ActionModel
+from architecture.state_embedder import StateEmbedder, get_description_embedder
 
-logger = rootLogger.getChild(__name__)
+logger = get_logger(__name__)
 
 
 class DQNAgent:

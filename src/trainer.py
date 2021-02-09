@@ -8,7 +8,7 @@ import torch
 import joblib
 import logging
 
-from logger import rootLogger, format_user_state_log, set_logger_handler
+from logger import get_logger, format_oracle_state_log, set_logger_handler
 from config import generate_params, save_config, format_config, setup_new_simulation
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
@@ -34,11 +34,13 @@ optim_loss = args.optim_loss
 
 params = generate_params(simulation_name=simulation_name, use_pretrained_language_model=use_pretrained_language_model,
                          device=device)
-set_logger_handler(rootLogger, **params['logger'], log_path=params['save_directory'])
-logger = rootLogger.getChild(__name__)
+# set_logger_handler(rootLogger, **params['logger'], log_path=params['save_directory'])
+# logger = rootLogger.getChild(__name__)
+set_logger_handler(**params['logger'], log_path=params['save_directory'])
+logger = get_logger(__name__)
 
 logger.info('begin')
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 def run_episode(agent, env, target_goal, save_transitions=True):
@@ -133,7 +135,7 @@ def save_records():
 if __name__ == "__main__":
     for i in range(N_SIMULATION):
         if i != 0:
-            setup_new_simulation(rootLogger, params)
+            setup_new_simulation(params)
 
         save_config(params)
         logger.info(f'Simulation params:\n {pformat(format_config(params))}')

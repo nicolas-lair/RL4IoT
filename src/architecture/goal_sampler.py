@@ -2,9 +2,9 @@ import numpy as np
 import torch
 import joblib
 
-from logger import rootLogger
+from logger import get_logger
 
-logger = rootLogger.getChild(__name__)
+logger = get_logger(__name__)
 
 
 class Goal:
