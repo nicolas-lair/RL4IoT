@@ -3,6 +3,7 @@ from torch import nn as nn
 
 from architecture.utils import flatten_state, differentiable_or
 
+
 class Net(nn.Module):
     def __init__(self, n_inputs):
         super(Net, self).__init__()
@@ -19,6 +20,7 @@ class Net(nn.Module):
         latent = latent.sum(dim=1)
         out = self.out_layer(latent)
         return out
+
 
 def build_scaler_layer(input_size, params):
     if params['last_activation'] == 'relu':
@@ -38,11 +40,12 @@ def build_scaler_layer(input_size, params):
 
     return scaler_layer
 
+
 class DeepSetStateNet(nn.Module):
     def __init__(self, instruction_embedding, state_embedding, scaler_layer_params, hidden_state_size=0,
                  aggregate='mean'):
         super().__init__()
-        self.state_attention_layer = nn.Sequential(
+        self.goal_attention_layer = nn.Sequential(
             nn.Linear(instruction_embedding, state_embedding + hidden_state_size),
             nn.Sigmoid()
         )
@@ -51,7 +54,8 @@ class DeepSetStateNet(nn.Module):
 
         self.out_features = scaler_layer_params['latent_out']
 
-        assert aggregate in ['mean', 'sum', 'diff_or', None], f'aggregate should be one of mean, sum or None, not {aggregate}'
+        assert aggregate in ['mean', 'sum', 'diff_or',
+                             None], f'aggregate should be one of mean, sum or None, not {aggregate}'
         self.aggregate = aggregate
         if self.aggregate == 'diff_or':
             self.diff_or = torch.load('/home/nicolas/PycharmProjects/imagineIoT/model/params_or.pk')
@@ -61,16 +65,7 @@ class DeepSetStateNet(nn.Module):
             for param in self.diff_or.parameters():
                 param.requires_grad = False
 
-    def forward(self, state, instruction, hidden_state=None):
-        # print(instruction.size())
-        full_state = flatten_state(state).float()
-        if hidden_state is not None:
-            hidden_state = hidden_state.unsqueeze(1).repeat_interleave(repeats=full_state.size(1), dim=1)
-            full_state = torch.cat([full_state, hidden_state], dim=2)
-        attention_vector = self.state_attention_layer(instruction)
-        full_state = attention_vector.unsqueeze(1) * full_state
-        full_state = self.scaler_layer(full_state)
-
+    def _aggregate(self, full_state):
         if self.aggregate == 'mean':
             full_state = full_state.mean(1)
         elif self.aggregate == 'sum':
