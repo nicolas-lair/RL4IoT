@@ -8,7 +8,6 @@ from logger import get_logger
 from architecture.goal_sampler import GoalSampler
 from architecture.replay_buffer import get_replay_buffer, Transition
 from architecture.utils import dict_to_device
-from architecture.dqn import FullNet
 from action_embedder import ActionModel
 from architecture.state_embedder import StateEmbedder, get_description_embedder
 
@@ -19,9 +18,9 @@ class DQNAgent:
     def __init__(self, language_model, params, env_discrete_params):
         self.device = params['device']
 
-        self.policy_network = FullNet(**params['model_params'], discrete_params=env_discrete_params)
+        self.policy_network = params['model_archi'](**params['model_params'], discrete_params=env_discrete_params)
 
-        self.target_network = FullNet(**params['model_params'], discrete_params=env_discrete_params)
+        self.target_network = params['model_archi'](**params['model_params'], discrete_params=env_discrete_params)
         self.target_network.load_state_dict(self.policy_network.state_dict())
         self.target_update_freq = params['target_update_frequence']
         self.target_network.eval()

@@ -14,6 +14,7 @@ from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, N_LEVELS
 import architecture
 from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState, DoubleAttDeepSet
+from architecture.dqn import FullNet, FullNetWithAttention
 from simulator.Thing import PlugSwitch, LGTV
 from simulator.lighting_things import AdorneLightBulb, BigAssFanLightBulb, HueLightBulb, SimpleLight, AlwaysOnLight
 
@@ -236,6 +237,7 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
     params = dict(
         simulation_name=simulation_name,
         env_params=env_params,
+        model_archi=FullNetWithAttention,
         model_params=dict(
             context_model=policy_context_archi,
             action_embedding_size=action_embedding,  # TODO
