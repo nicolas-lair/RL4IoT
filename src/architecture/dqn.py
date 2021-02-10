@@ -23,12 +23,8 @@ class BasicQnet(nn.Module):
 
 
 class FullNet(nn.Module):
-    def __init__(self, context_model, action_embedding_size, net_params, raw_action_size, discrete_params):
+    def __init__(self, context_model, action_embedding_size, net_params, **kwargs):
         super().__init__()
-
-        # self.action_projector = ActionProjector(in_features=max(raw_action_size.values()),
-        #                                         out_features=action_embedding_size,
-        #                                         env_discrete_params=discrete_params)
 
         self.context_net = context_model(**net_params['context_net'])
 
@@ -63,8 +59,8 @@ class FullNet(nn.Module):
 
 
 class FullNetWithAttention(FullNet):
-    def __init__(self, context_model, action_embedding_size, net_params, raw_action_size, discrete_params):
-        super().__init__(context_model, action_embedding_size, net_params, raw_action_size, discrete_params)
+    def __init__(self, context_model, action_embedding_size, net_params, **kwargs):
+        super().__init__(context_model, action_embedding_size, net_params, **kwargs)
         self.attention_layer = nn.Sequential(
             nn.Linear(in_features=net_params['context_net']['instruction_embedding'],
                       out_features=self.qnet_in_features
@@ -75,6 +71,7 @@ class FullNetWithAttention(FullNet):
     def forward(self, instruction, state, actions, hidden_state):
         context = self.compute_context(instruction, state, actions, hidden_state)
         attention_vector = self.attention_layer(instruction)
+        attention_vector = attention_vector.unsqueeze(1).repeat_interleave(repeats=actions.size(1), dim=1)
         x = self.q_network(attention_vector * context)
         return x
 
