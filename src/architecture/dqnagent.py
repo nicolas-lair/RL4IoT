@@ -8,7 +8,8 @@ from logger import get_logger
 from architecture.goal_sampler import GoalSampler
 from architecture.replay_buffer import get_replay_buffer, Transition
 from architecture.utils import dict_to_device
-from architecture.dqn import FullNet, ActionModel
+from architecture.dqn import FullNet
+from action_embedder import ActionModel
 from architecture.state_embedder import StateEmbedder, get_description_embedder
 
 logger = get_logger(__name__)
