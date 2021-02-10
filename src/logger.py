@@ -14,14 +14,13 @@ def set_logger_handler(level, console=True, log_file=True, log_path=None, simula
     assert level in [logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL]
     assert isinstance(console, bool)
     assert isinstance(log_file, bool)
-    global SIMULATION_ID
-    SIMULATION_ID = simulation_id
     rootLogger.setLevel(level)
     if log_file:
         assert isinstance(log_path, str)
         add_handler(rootLogger, log_path, type='file')
     if console:
         add_handler(rootLogger, log_path, type='stream')
+    extra_dict.update(dict(simulation_id=simulation_id))
 
 
 def add_handler(logger, log_path, type='stream'):
