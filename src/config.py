@@ -53,21 +53,10 @@ def generate_env_params():
         max_episode_length=2,
         ignore_exec_action=True,
         allow_do_nothing=True,
-        state_encoding_size=state_encoding_size,
-        description_embedder_params=dict(
-            embedding='glove',
-            word_embedding_params=dict(
-                name='6B',
-                dim=str(description_embedding),
-                cache=vector_cache
-            ),
-            reduction='mean',
-            authorize_cache=True
-        ),
         thing_params=[
-            ThingParam(SimpleLight, dict(name='light', simple=True)),
+            # ThingParam(SimpleLight, dict(name='light', simple=True)),
             # ThingParam(AlwaysOnLight, dict(name='bright light', simple=True)),
-            ThingParam(SimpleLight, dict(name='heater', simple=True)),
+            # ThingParam(SimpleLight, dict(name='heater', simple=True)),
             # ThingParam(AdorneLightBulb, dict(simple=True)),
             # ThingParam(HueLightBulb, dict()),
             ThingParam(BigAssFanLightBulb, dict(simple=True))
@@ -97,6 +86,38 @@ def generate_env_params():
     return env_params
 
 
+def generate_description_embedder_params(description_embedder_type='glove_mean'):
+    if description_embedder_type == 'glove_mean':
+        description_embedder_params = dict(
+            type=description_embedder_type,
+            embedding='glove',
+            word_embedding_params=dict(
+                name='6B',
+                dim=str(description_embedding),
+                cache=vector_cache
+            ),
+            reduction='mean',
+            authorize_cache=True
+        )
+    elif description_embedder_type == 'learned_lm':
+        description_embedder_params = dict(
+            type=description_embedder_type,
+            embedding_size=description_embedding,
+        )
+    else:
+        raise NotImplementedError
+    return description_embedder_params
+
+
+def generate_state_embedder_params():
+    state_embedder_params = dict(
+        item_type=ITEM_TYPE,
+        value_encoding_size=value_encoding_size,
+        use_cache=True
+    )
+    return state_embedder_params
+
+
 def generate_language_model_params(device='cuda', use_pretrained_model=False):
     if use_pretrained_model:
         # pretrained_model_path = '/home/nicolas/PycharmProjects/RL4IoT/results/learned_language_model.pth'
@@ -122,7 +143,7 @@ def generate_language_model_params(device='cuda', use_pretrained_model=False):
 def generate_reward_params(archi=DeepSetStateNet):
     reward_net_params = dict(instruction_embedding=instruction_embedding,
                              hidden_state_size=0,
-                             state_embedding=state_embedding_size + state_encoding_size,
+                             state_embedding=state_embedding_size + value_encoding_size,
                              aggregate='mean')
     if 'DeepSetStateNet' in str(archi):
         reward_net_params.update(scaler_layer_params=dict(hidden1_out=256, latent_out=512, last_activation='relu'))
@@ -161,18 +182,17 @@ def get_data_collection_params(name='data_collection_'):
 def get_reward_training_params(name=None, device='cuda'):
     context_archi = DeepSetStateNet
     _, simulation_id = prepare_simulation(name)
-    env_params = generate_env_params()
-    reward_params = generate_reward_params(archi=context_archi)
-    language_model_params = generate_language_model_params(device=device, use_pretrained_model=False)
     params = dict(
-        language_model_params=language_model_params,
-        description_embedder_params=env_params['description_embedder_params'],
+        language_model_params=generate_language_model_params(device=device, use_pretrained_model=False),
+        state_embedder_params=generate_state_embedder_params(),
+        description_embedder_params=generate_description_embedder_params(),
         context_archi=context_archi,
-        reward_params=reward_params,
+        reward_params=generate_reward_params(archi=context_archi),
         logger=dict(
             level=logging.INFO,
             console=True,
             log_file=False,
+            simulation_id=simulation_id,
         ),
         device=device,
         lm_save_path=f'/home/nicolas/PycharmProjects/RL4IoT/results/lm_{name}.pth'
@@ -189,8 +209,8 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
     device = device
     # device = 'cpu'
 
-    # policy_context_archi = DeepSetStateNet
-    policy_context_archi = DoubleAttDeepSet
+    policy_context_archi = DeepSetStateNet
+    # policy_context_archi = DoubleAttDeepSet
     reward_params = generate_reward_params(archi=policy_context_archi)
 
     simulation_name = simulation_name
@@ -231,8 +251,10 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
                     hidden2_out=256
                 ),
                 context_net=context_net_params,
-            )
+            ),
         ),
+        state_embedder_params=generate_state_embedder_params(),
+        description_embedder_params=generate_description_embedder_params(),
         reward_params=reward_params,
         goal_sampler_params=dict(
             goal_sampling_stategy='random',

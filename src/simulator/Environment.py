@@ -1,19 +1,13 @@
-from itertools import chain
-
-import numpy as np
-from sklearn.preprocessing import OneHotEncoder
-import torch
-
 import gym
 
-from simulator.Items import ITEM_TYPE
 from simulator.Thing import Thing
 from simulator.Channel import Channel
-from simulator.description_embedder import Description_embedder
 from simulator.Action import ExecAction, OpenHABAction, Params, DoNothing
 from simulator.TreeView import Node
 from simulator.discrete_parameters import discrete_parameters
+
 import json
+
 
 class State:
     def __init__(self, state):
@@ -79,6 +73,9 @@ class IoTEnv(gym.Env):
         self.oracle_state = self.build_state(oracle=True)
         self.previous_oracle_state = self.oracle_state
 
+        self.state = self.build_state(oracle=False)
+        self.previous_state = self.state
+
     def get_thing_list(self):
         return list(self._things_lookup_table.values())
 
@@ -103,10 +100,13 @@ class IoTEnv(gym.Env):
         self.previous_oracle_state = self.oracle_state
         self.oracle_state = self.build_state(oracle=True)
 
+        self.previous_state = self.state
+        self.build_state(oracle=False)
+
         reward = None
         done = None
         info = None
-        return self.user_state, reward, done, info
+        return self.state, reward, done, info
 
     def build_state(self, oracle, thing=None):
         """
@@ -135,69 +135,28 @@ class IoTEnv(gym.Env):
         self.oracle_state = self.build_state(oracle=True)
         self.previous_oracle_state = self.oracle_state
 
+        self.previous_state = self.state
+        self.state = self.build_state(oracle=False)
         return self.oracle_state
 
     def render(self, mode='human'):
         raise NotImplementedError
 
 
-def preprocess_raw_observation(observation, description_embedder, item_type_embedder, raw_state_size, pytorch=True,
-                               device='cpu'):
-    new_obs = dict()
-    for thing_name, thing in observation.items():
-        thing_obs = dict()
-        thing_description = thing.pop('description')
-        thing_description_embedding = description_embedder.get_description_embedding(thing_description)
-        for channel_name, channel in thing.items():
-            if channel['item_type'] == 'goal_string':
-                raise NotImplementedError
-
-            # Channel description embedding
-            try:
-                description_embedding = channel['embedding']
-            except KeyError:
-                description_embedding = description_embedder.get_description_embedding(channel['description'])
-
-            # Item embedding
-            item_embedding = item_type_embedder.transform(
-                np.array(channel['item_type']).reshape(-1, 1)).flatten()
-
-            # Value embedding
-            value_embedding = np.zeros(raw_state_size)
-            value_embedding[:len(channel['state'])] = channel['state']
-
-            channel_embedding = np.concatenate(
-                [description_embedding, item_embedding, value_embedding, thing_description_embedding])
-            if pytorch:
-                channel_embedding = torch.tensor(channel_embedding)
-            thing_obs[channel_name] = channel_embedding.to(device)
-        new_obs[thing_name] = thing_obs
-    return new_obs
-
-
 class IoTEnv4ML(gym.Wrapper):
     def __init__(self, params, env_class=IoTEnv):
         super().__init__(env=env_class(params['thing_params']))
-        self.description_embedder = Description_embedder(**params['description_embedder_params'])
-        self.item_type_embedder = OneHotEncoder(sparse=False)
-        self.item_type_embedder.fit(np.array(ITEM_TYPE).reshape(-1, 1))
-        self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
 
-        self.state_embedding_size = params['state_encoding_size']
-        self.channel_embedding_size = int(params['description_embedder_params']['word_embedding_params']['dim']) + len(
-            ITEM_TYPE) + params[
-                                          'state_encoding_size']
+        self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
 
         self.ignore_exec_action = params['ignore_exec_action']
         self.allow_do_nothing = params['allow_do_nothing']
         self.max_episode_length = params['max_episode_length']
 
-        self.state = None
-        self.previous_state = None
+        self.episode_length = 0
         self.available_actions = None
         self.previous_available_actions = None
-
-        self.episode_length = 0
+        self.reset()
 
         # # Compute node embedding
         # things_list = self.get_thing_list()
@@ -205,13 +164,6 @@ class IoTEnv4ML(gym.Wrapper):
         # for node in description_node_iterator:
         #     node.embed_node_description(self.description_embedder.get_description_embedding)
         # print(1)
-
-    def preprocess_raw_observation(self, observation, pytorch=True):
-        return preprocess_raw_observation(observation=observation,
-                                          description_embedder=self.description_embedder,
-                                          item_type_embedder=self.item_type_embedder,
-                                          raw_state_size=self.state_embedding_size,
-                                          pytorch=pytorch)
 
     # TODO Normalize the ouput of step
     def step(self, action):
@@ -221,8 +173,6 @@ class IoTEnv4ML(gym.Wrapper):
             super().step(self.running_action)
             self.reset_running_action()
             self.episode_length += 1
-            self.previous_state = self.state
-            self.state = self.preprocess_raw_observation(self.build_state(oracle=False))
             self.available_actions = self.get_root_actions()
             done = self.episode_length >= self.max_episode_length
             reward = None if done else 0
@@ -262,15 +212,12 @@ class IoTEnv4ML(gym.Wrapper):
         super().reset()
         self.episode_length = 0
 
-        # Cache node embedding
-        things_list = self.get_thing_list()
-        description_node_iterator = chain.from_iterable([things_list] + [t.get_channels() for t in things_list])
-        for node in description_node_iterator:
-            node.embed_node_description(embedder=self.description_embedder.get_description_embedding)
+        # # Cache node embedding
+        # things_list = self.get_thing_list()
+        # description_node_iterator = chain.from_iterable([things_list] + [t.get_channels() for t in things_list])
+        # for node in description_node_iterator:
+        #     node.embed_node_description(embedder=self.description_embedder.get_description_embedding)
 
-        raw_agent_state = self.build_state(oracle=False)
-        self.state = self.preprocess_raw_observation(raw_agent_state)
-        self.previous_state = None
         self.available_actions = self.get_root_actions()
         self.previous_available_actions = None
         self.reset_running_action()

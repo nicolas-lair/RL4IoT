@@ -34,6 +34,11 @@ class DQNAgent:
 
         self.goal_sampler = GoalSampler(language_model=language_model, **params['goal_sampler_params'])
 
+        self.node_description_embedder = get_description_embedder(
+            description_embedder_params=params['description_embedder_params'], language_model=language_model)
+        self.state_embedder = StateEmbedder(description_embedder=self.node_description_embedder, device=self.device,
+                                            **params['state_embedder_params'])
+
         self.action_model = ActionModel(raw_action_size=params['model_params']['raw_action_size'],
                                         out_features=params['model_params']['action_embedding_size'],
                                         env_discrete_params=env_discrete_params)
@@ -88,7 +93,10 @@ class DQNAgent:
         :param a: object of Node Type
         :return:
         """
-        embedding = a.get_node_embedding()
+        if a.has_description:
+            embedding = self.node_description_embedder.embed_descriptions(a.description)
+        else:
+            embedding = a.get_node_embedding()
         if not isinstance(embedding, torch.Tensor):
             embedding = torch.tensor(embedding)
         logger.debug(f'View debugging: {embedding.size()}')
@@ -140,11 +148,11 @@ class DQNAgent:
         :return:
         """
         sample = random.random() if exploration else 1
-
         embedded_actions = self.embed_actions(actions)
         if sample >= self.exploration_threshold:
             with torch.no_grad():
-                action_idx = self.get_greedy_action(state, instruction, embedded_actions, hidden_state)
+                embedded_state = self.state_embedder.embed_state(state)
+                action_idx = self.get_greedy_action(embedded_state, instruction, embedded_actions, hidden_state)
                 action_idx = action_idx.item()
                 # # t.max(1) will return largest column value of each row.
                 # # second column on max result is index of where max element was
@@ -192,14 +200,17 @@ class DQNAgent:
         actions = [[a] for a in transitions.action]
         embedded_actions = self.embed_actions(actions)
 
-        previous_action = [[a] for a in transitions.previous_action]
+        logger.debug('Embedding states')
+        embedded_states = self.state_embedder.embed_state(transitions.state)
+
         logger.debug('Embedding previous action')
+        previous_action = [[a] for a in transitions.previous_action]
         # TODO try detach the hidden state
         embedded_previous_action = self.embed_actions(previous_action).squeeze()
         # projected_previous_actions = self.policy_network.action_projector(*embedded_previous_action).squeeze()
 
         logger.debug('Computing Q(s,a)')
-        Q_sa = self.policy_network(state=dict_to_device(transitions.state, self.device),
+        Q_sa = self.policy_network(state=embedded_states,
                                    instruction=goals,
                                    actions=embedded_actions,
                                    hidden_state=embedded_previous_action)
@@ -210,7 +221,7 @@ class DQNAgent:
         maxQ = torch.zeros(batch_size, device=self.device)
         if not done.all():
             next_states, next_av_actions = zip(*transitions.next_state)
-            next_states = dict_to_device([s for s, mask in zip(next_states, done) if not mask], self.device)
+            next_states = self.state_embedder.embed_state([s for s, mask in zip(next_states, done) if not mask])
             next_av_actions = [a for a, mask in zip(next_av_actions, done) if not mask]
             logger.debug('Embedding next available actions')
             embedded_next_actions = self.embed_actions(next_av_actions)
@@ -219,7 +230,6 @@ class DQNAgent:
                                                          instruction=goals[~done],
                                                          actions=embedded_next_actions,
                                                          hidden_state=next_hidden_states[~done])
-
 
                 embedded_next_actions = embedded_next_actions.gather(dim=1, index=torch.stack(
                     [next_action_idx.view(-1)] * (embedded_next_actions.size(2)), dim=1).unsqueeze(dim=1))
