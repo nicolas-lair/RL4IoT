@@ -428,7 +428,7 @@ class SwitchItem(AbstractItem):
             raise NotImplementedError
 
     def get_state(self):
-        return np.array([self.onoff])
+        return [self.onoff]
 
     def set_state(self, value):
         self.set_attribute('onoff', value)
