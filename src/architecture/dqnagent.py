@@ -297,6 +297,7 @@ class DQNAgent:
         :return:
         """
         logger.debug('Update of policy net')
+        self.language_model.freeze_sometimes(episode)
         self.update_policy_net()
         logger.debug('done')
         self.goal_sampler.update_embedding()

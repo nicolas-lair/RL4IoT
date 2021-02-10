@@ -1,3 +1,5 @@
+import random
+
 from torch import nn
 import torch
 import torch.nn.functional as F
@@ -15,7 +17,7 @@ nlp = English()
 class LanguageModel(nn.Module):
     def __init__(self, type, embedding_size, linear1_out=256, out_features=100,
                  vocab=None, vocab_size=500, device='cuda' if torch.cuda.is_available() else 'cpu',
-                 pretrained_model=None):
+                 pretrained_model=None, freq_update=1):
         """
 
         :param type: string 'linear' or 'lstm'
@@ -26,6 +28,7 @@ class LanguageModel(nn.Module):
         """
         super().__init__()
         self.frozen = False
+        self.feq_update = freq_update
         self.out_features = out_features
         self.word_to_ix = dict()
         self.type = type
@@ -100,6 +103,22 @@ class LanguageModel(nn.Module):
         else:
             raise NotImplementedError('Language policy_network type should be linear or LSTM')
         return out
+
+    def freeze_sometimes(self, episode):
+        """
+        Unfreeze model for update one episode every self.freq_update
+        Parameters
+        ----------
+        episode : episode number
+
+        Returns None
+        -------
+
+        """
+        if episode % self.feq_update == 0:
+            self.unfreeze()
+        elif episode % self.feq_update == 1:
+            self.freeze()
 
     def freeze(self):
         freeze_model(self)

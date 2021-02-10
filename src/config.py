@@ -130,12 +130,12 @@ def generate_language_model_params(device='cuda', use_pretrained_model=False):
         embedding_size=word_embedding_size,
         linear1_out=256,
         out_features=instruction_embedding,
-        vocab=torchtext.vocab.GloVe(name='6B', dim=word_embedding_size,
-                                    cache=vector_cache
-                                    ),
+        vocab=torchtext.vocab.GloVe(name='6B', dim=word_embedding_size, cache=vector_cache),
+        # vocab=False,
         vocab_size=500,
         device=device,
-        pretrained_model=pretrained_model_path
+        pretrained_model=pretrained_model_path,
+        freq_update=1  # (one of every X episode : 1 means always)
     )
     return language_model_params
 
