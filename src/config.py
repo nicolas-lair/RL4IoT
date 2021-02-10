@@ -20,10 +20,10 @@ from simulator.lighting_things import AdorneLightBulb, BigAssFanLightBulb, HueLi
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
 
 word_embedding_size = 50
-instruction_embedding = 40
+instruction_embedding = 55
 description_embedding = 50
-state_encoding_size = 3  # size of the vector in which is encoded the value of a channel
-state_embedding_size = state_encoding_size + 2 * description_embedding + len(ITEM_TYPE)
+value_encoding_size = 3  # size of the vector in which is encoded the value of a channel
+state_embedding_size = value_encoding_size + 2 * description_embedding + len(ITEM_TYPE)
 action_embedding = 50
 
 vector_cache = '/home/nicolas/PycharmProjects/RL4IoT/.vector_cache'
@@ -263,7 +263,7 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
         exploration_params=dict(
             start_eps=0.9,
             min_eps=0.05,
-            eps_decay=200
+            eps_decay=500
         ),
         replay_buffer_params=dict(
             per=True,
@@ -288,12 +288,12 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
             log_file=True,
             simulation_id=simulation_id
         ),
-        n_episode=20000,
+        n_episode=30000,
         target_update_frequence=20,
         device=device,
         episode_reset=True,
-        test_frequence=200,
-        n_iter_test=30,
+        test_frequence=300,
+        n_iter_test=25,
         tqdm=False,
         save_directory=path_dir,
     )
