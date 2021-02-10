@@ -13,6 +13,34 @@ from simulator.description_embedder import Description_embedder
 from simulator.Action import ExecAction, OpenHABAction, Params, DoNothing
 from simulator.TreeView import Node
 from simulator.discrete_parameters import discrete_parameters
+import json
+
+class State:
+    def __init__(self, state):
+        self.state = state
+        # self.id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=32))
+        self.id = hash(self)
+
+    def __eq__(self, other):
+        return self.id == other.id
+
+    def __repr__(self):
+        return repr(self.state)
+
+    def __str__(self):
+        return str(self.state)
+
+    def __getitem__(self, item):
+        return self.state[item]
+
+    def __hash__(self):
+        return hash(json.dumps(self.state, sort_keys=True))
+
+    def copy(self):
+        return self.state.copy()
+
+    def items(self):
+        return self.state.items()
 
 
 class IoTEnv(gym.Env):
@@ -98,7 +126,7 @@ class IoTEnv(gym.Env):
         state = dict()
         for thing in thing_list:
             state[thing.name] = thing.get_state(oracle=oracle)
-        return state
+        return State(state)
 
     def reset(self):
         thing_list = self.get_thing_list()
