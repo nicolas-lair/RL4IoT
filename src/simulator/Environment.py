@@ -1,3 +1,6 @@
+from collections import OrderedDict
+import json
+
 import gym
 
 from simulator.Thing import Thing
@@ -6,12 +9,11 @@ from simulator.Action import ExecAction, OpenHABAction, Params, DoNothing
 from simulator.TreeView import Node
 from simulator.discrete_parameters import discrete_parameters
 
-import json
-
 
 class State:
     def __init__(self, state):
-        self.state = state
+        # Order object to be always the same, important for hierarchical DeepSet
+        self.state = OrderedDict(sorted(state.items()))
         # self.id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=32))
         self.id = hash(self)
 

@@ -61,7 +61,7 @@ class StateEmbedder:
 
         new_obs = dict()
         for thing_name, thing in observation.items():
-            thing_obs = dict()
+            thing_obs = []
             thing_description = thing['description']
             thing_description_embedding = self.description_embedder.embed_descriptions(thing_description)
             for channel_name, channel in thing.items():
@@ -86,8 +86,8 @@ class StateEmbedder:
                      thing_description_embedding.view(-1)])
                 # if self.pytorch:
                 #     channel_embedding = torch.tensor(channel_embedding)
-                thing_obs[channel_name] = channel_embedding.to(self.device)
-            new_obs[thing_name] = thing_obs
+                thing_obs.append(channel_embedding.to(self.device))
+            new_obs[thing_name] = torch.stack(thing_obs).float()
 
         if self.use_cache:
             self.cache[observation.id] = new_obs
