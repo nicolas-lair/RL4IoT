@@ -122,6 +122,54 @@ class DoubleAttDeepSet(DeepSetStateNet):
         return full_state
 
 
+class HierarchicalDeepSet(DeepSetStateNet):
+    def __init__(self, instruction_embedding, state_embedding, scaler_layer_params, hidden_state_size=0,
+                 aggregate='mean'):
+        super().__init__(instruction_embedding, state_embedding, scaler_layer_params, hidden_state_size, aggregate)
+        first_scaler_params = scaler_layer_params.copy()
+        first_scaler_params.update(dict(output_size=scaler_layer_params['hidden_size']))
+        self.scaler_layer = build_scaler_layer(state_embedding + hidden_state_size, **first_scaler_params)
+
+        self.second_scaler = build_scaler_layer(scaler_layer_params['hidden_size'], **scaler_layer_params)
+        self.second_attention_layer = nn.Sequential(
+            nn.Linear(instruction_embedding, scaler_layer_params['hidden_size']),
+            nn.Sigmoid()
+        )
+
+    def aggregate_by_thing(self, batch_vector, n_channels):
+        begin = 0
+        aggregated_vectors = []
+        for i in n_channels:
+            aggregated_vectors.append(self._aggregate(batch_vector[:, begin:(begin+i), :]))
+            begin = i
+        return torch.stack(aggregated_vectors, dim=1)
+
+    @staticmethod
+    def get_number_of_channels(state):
+        if isinstance(state, list):
+            state = state[0]
+        return [thing.size(0) for thing in state.values()]
+
+    def forward(self, state, instruction, hidden_state=None):
+        full_state = self.format_state(state)
+        n_channels = self.get_number_of_channels(state)
+        assert sum(n_channels, 0) == full_state.size(1)
+
+        if hidden_state is not None:
+            hidden_state = hidden_state.unsqueeze(1).repeat_interleave(repeats=full_state.size(1), dim=1)
+            full_state = torch.cat([full_state, hidden_state], dim=2)
+        attention_vector = self.goal_attention_layer(instruction)
+        full_state = attention_vector.unsqueeze(1) * full_state
+        full_state = self.scaler_layer(full_state)
+        full_state = self.aggregate_by_thing(full_state, n_channels)
+
+        second_attention_vector = self.second_attention_layer(instruction)
+        full_state = second_attention_vector.unsqueeze(1) * full_state
+        full_state = self.second_scaler(full_state)
+        full_state = self._aggregate(full_state)
+        return full_state
+
+
 class FlatStateNet(nn.Module):
     def __init__(self, instruction_embedding, state_embedding, hidden_state_size=0):
         super().__init__()

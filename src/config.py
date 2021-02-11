@@ -207,8 +207,9 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
     device = device
     # device = 'cpu'
 
-    policy_context_archi = DeepSetStateNet
-    # policy_context_archi = DoubleAttDeepSet
+    # policy_context_archi = DeepSetStateNet
+    policy_context_archi = DoubleAttDeepSet
+    # policy_context_archi = HierarchicalDeepSet
     reward_params = generate_reward_params(archi=policy_context_archi)
 
     simulation_name = simulation_name
@@ -234,6 +235,7 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
     params = dict(
         simulation_name=simulation_name,
         env_params=env_params,
+        # model_archi=FullNet,
         model_archi=FullNetWithAttention,
         model_params=dict(
             context_model=policy_context_archi,
