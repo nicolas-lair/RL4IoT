@@ -1,5 +1,5 @@
 import os
-import glob
+import re
 import logging
 from collections import namedtuple
 
@@ -12,7 +12,6 @@ from logger import update_logger
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.utils import color_list, N_LEVELS
-import architecture
 from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState, DoubleAttDeepSet
 from architecture.dqn import FullNet, FullNetWithAttention
 from simulator.Thing import PlugSwitch, LGTV
@@ -31,21 +30,19 @@ vector_cache = '/home/nicolas/PycharmProjects/RL4IoT/.vector_cache'
 
 
 def prepare_simulation(simulation_name):
-    if simulation_name == '':
-        base_path = '../results/simulation_'
-    else:
-        base_path = f'../results/simulation_{simulation_name}_'
+    base_folder = '../results/'
+    base_name = f'simulation_{simulation_name}' + (len(simulation_name) > 0) * '_'
 
-    l = glob.glob(base_path + '*')
-    l = [name.split('_')[-1] for name in l if name.split('_')[-1].isdigit()]
-    if l:
-        sim_id = max([int(id) for id in l]) + 1
-        # sim_id = max([int(name.split('_')[-1]) for name in l]) + 1
+    simulation_list = [name for name in os.listdir(base_folder) if re.match(base_name + r"[0-9]+", name)]
+    if simulation_list:
+        simulation_list = [int(name.split('_')[-1]) for name in simulation_list]
+        sim_id = max([int(id) for id in simulation_list]) + 1
+
     else:
         sim_id = 0
-    path_dir = base_path + f'{sim_id}/'
-    os.mkdir(path_dir)
     simulation_id = f'{simulation_name}_{sim_id}'
+    path_dir = os.path.join(base_folder, base_name + f'{sim_id}/')
+    os.mkdir(path_dir)
     return path_dir, simulation_id
 
 
