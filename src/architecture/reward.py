@@ -16,7 +16,7 @@ class RewardModel(nn.Module):
         # self.linear_attn = nn.Linear(in_features=self.language_model.out_features, out_features=observation_size)
         # self.hidden_layer = nn.Linear(in_features=observation_size, out_features=hidden_layer_size)
 
-        self.prelearned_or = (self.context_net.aggregate == 'diff_or')
+        self.prelearned_or = (self.context_net.aggregation == 'diff_or')
 
         if not self.prelearned_or:
             self.reward_layer = nn.Sequential(
