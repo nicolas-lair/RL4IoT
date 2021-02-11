@@ -226,7 +226,7 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
                               hidden_state_size=action_embedding,
                               aggregate='mean')
     if issubclass(policy_context_archi, DeepSetStateNet):
-        scaler_layer_params = dict(hidden1_out=256, latent_out=512, last_activation='relu')
+        scaler_layer_params = dict(hidden_size=256, output_size=512, last_activation='relu')
         context_net_params.update(scaler_layer_params=scaler_layer_params)
     elif ('FlatStateNet' in str(policy_context_archi)) or ('AttentionFlatState' in str(policy_context_archi)):
         pass

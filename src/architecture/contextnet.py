@@ -22,19 +22,19 @@ class Net(nn.Module):
         return out
 
 
-def build_scaler_layer(input_size, params):
-    if params['last_activation'] == 'relu':
+def build_scaler_layer(input_size, hidden_size, output_size, last_activation):
+    if last_activation == 'relu':
         last_activation_layer = nn.ReLU()
-    elif params['last_activation'] == 'sigmoid':
+    elif last_activation == 'sigmoid':
         last_activation_layer = nn.Sigmoid()
     else:
         raise NotImplementedError(
-            f'last_scaler_activation should be one of relu or sigmoid, not {params["last_activation"]}')
+            f'last_scaler_activation should be one of relu or sigmoid, not {last_activation}')
 
     scaler_layer = nn.Sequential(
-        nn.Linear(input_size, params['hidden1_out']),
+        nn.Linear(input_size, hidden_size),
         nn.ReLU(),
-        nn.Linear(params['hidden1_out'], params['latent_out']),
+        nn.Linear(hidden_size, output_size),
         last_activation_layer
     )
 
@@ -50,14 +50,14 @@ class DeepSetStateNet(nn.Module):
             nn.Sigmoid()
         )
 
-        self.scaler_layer = build_scaler_layer(state_embedding + hidden_state_size, scaler_layer_params)
+        self.scaler_layer = build_scaler_layer(state_embedding + hidden_state_size, **scaler_layer_params)
 
-        self.out_features = scaler_layer_params['latent_out']
+        self.out_features = scaler_layer_params['output_size']
 
         assert aggregate in ['mean', 'sum', 'diff_or',
                              None], f'aggregate should be one of mean, sum or None, not {aggregate}'
-        self.aggregate = aggregate
-        if self.aggregate == 'diff_or':
+        self.aggregation = aggregate
+        if self.aggregation == 'diff_or':
             self.diff_or = torch.load('/home/nicolas/PycharmProjects/imagineIoT/model/params_or.pk')
             # self.diff_or = Net(n_inputs=3)
             # self.diff_or.load_state_dict(torch.load('/home/nicolas/PycharmProjects/imagineIoT/model/params_or.pk'))
