@@ -65,14 +65,15 @@ class DeepSetStateNet(nn.Module):
             for param in self.diff_or.parameters():
                 param.requires_grad = False
 
-    def _aggregate(self, full_state):
-        if self.aggregate == 'mean':
+    def _aggregate(self, full_state, aggregation=None):
+        aggregation = aggregation if aggregation else self.aggregation
+        if aggregation == 'mean':
             full_state = full_state.mean(1)
-        elif self.aggregate == 'sum':
+        elif aggregation == 'sum':
             full_state = full_state.sum(1)
-        elif self.aggregate == 'diff_or':
+        elif aggregation == 'diff_or':
             full_state = self.diff_or(full_state)
-        elif self.aggregate is None:
+        elif aggregation is None:
             pass
         else:
             raise NotImplementedError
