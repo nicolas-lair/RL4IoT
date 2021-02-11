@@ -216,13 +216,6 @@ class IoTEnv4ML(gym.Wrapper):
     def reset(self):
         super().reset()
         self.episode_length = 0
-
-        # # Cache node embedding
-        # things_list = self.get_thing_list()
-        # description_node_iterator = chain.from_iterable([things_list] + [t.get_channels() for t in things_list])
-        # for node in description_node_iterator:
-        #     node.embed_node_description(embedder=self.description_embedder.get_description_embedding)
-
         self.available_actions = self.get_root_actions()
         self.previous_available_actions = None
         self.reset_running_action()
