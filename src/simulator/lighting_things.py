@@ -77,7 +77,7 @@ class PowerChannel(Channel):
 
 
 class BrightnessChannel(Channel):
-    def __init__(self, name='brightness', description='increase and decrease brightness',
+    def __init__(self, name='brightness', description='brightness',
                  methods=dict(setPercent=True, increase=True, decrease=True)):
         super().__init__(name=name,
                          description=description,
@@ -90,7 +90,7 @@ class BrightnessChannel(Channel):
 
 
 class ColorTemperatureChannel(Channel):
-    def __init__(self, name='color_temperature', description='increase and decrease color temperature',
+    def __init__(self, name='color_temperature', description='temperature',
                  methods=dict(setPercent=True, increase=True, decrease=True)):
         super().__init__(name=name,
                          description=description,
@@ -103,7 +103,7 @@ class ColorTemperatureChannel(Channel):
 
 
 class ColorChannel(Channel):
-    def __init__(self, name='color', description='choose color'):
+    def __init__(self, name='color', description='color'):
         super().__init__(name=name,
                          description=description,
                          item=ColorItem(turnOn=True, turnOff=True, increase=True, decrease=True, setPercent=True,
