@@ -26,6 +26,8 @@ value_encoding_size = 3  # size of the vector in which is encoded the value of a
 state_embedding_size = value_encoding_size + 2 * description_embedding + len(ITEM_TYPE)
 action_embedding = 50
 
+filter_state_during_episode = True
+
 vector_cache = '/home/nicolas/PycharmProjects/RL4IoT/.vector_cache'
 
 
@@ -51,6 +53,7 @@ def generate_env_params():
         max_episode_length=2,
         ignore_exec_action=True,
         allow_do_nothing=True,
+        filter_state_during_episode=filter_state_during_episode,
         thing_params=[
             # ThingParam(SimpleLight, dict(name='light', simple=True)),
             # ThingParam(AlwaysOnLight, dict(name='bright light', simple=True)),

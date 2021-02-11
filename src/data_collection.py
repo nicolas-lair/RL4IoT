@@ -57,7 +57,7 @@ def save_episodes():
 
 if __name__ == "__main__":
 
-    env = IoTEnv4ML(params=params['env_params'])
+    env = IoTEnv4ML(**params['env_params'])
     oracle = Oracle(thing_list=env.get_thing_list())
     num_episodes = 60000
 

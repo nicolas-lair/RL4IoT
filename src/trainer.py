@@ -42,7 +42,6 @@ logger = get_logger(__name__)
 logger.info('begin')
 # logger.setLevel(logging.DEBUG)
 
-
 def run_episode(agent, env, target_goal, save_transitions=True):
     action_record = []
     hidden_state = torch.zeros(1, deep_action_space_embedding_size).to(agent.device)
@@ -142,8 +141,8 @@ if __name__ == "__main__":
 
         test_record = {}
         best_result = (-1, {'overall': 0})
-        env = IoTEnv4ML(params=params['env_params'])
-        test_env = IoTEnv4ML(params=params['env_params'])
+        env = IoTEnv4ML(**params['env_params'])
+        test_env = IoTEnv4ML(**params['env_params'])
 
         oracle = Oracle(thing_list=env.get_thing_list())
         language_model = LanguageModel(**params['language_model_params'])

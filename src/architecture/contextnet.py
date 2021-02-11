@@ -141,7 +141,7 @@ class HierarchicalDeepSet(DeepSetStateNet):
         begin = 0
         aggregated_vectors = []
         for i in n_channels:
-            aggregated_vectors.append(self._aggregate(batch_vector[:, begin:(begin+i), :]))
+            aggregated_vectors.append(self._aggregate(batch_vector[:, begin:(begin + i), :]))
             begin = i
         return torch.stack(aggregated_vectors, dim=1)
 

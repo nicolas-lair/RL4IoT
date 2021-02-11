@@ -146,19 +146,22 @@ class IoTEnv(gym.Env):
 
 
 class IoTEnv4ML(gym.Wrapper):
-    def __init__(self, params, env_class=IoTEnv):
-        super().__init__(env=env_class(params['thing_params']))
+    def __init__(self, thing_params, ignore_exec_action, allow_do_nothing, max_episode_length,
+                 filter_state_during_episode, env_class=IoTEnv):
+        super().__init__(env=env_class(thing_params))
 
         self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
 
-        self.ignore_exec_action = params['ignore_exec_action']
-        self.allow_do_nothing = params['allow_do_nothing']
-        self.max_episode_length = params['max_episode_length']
+        self.ignore_exec_action = ignore_exec_action
+        self.allow_do_nothing = allow_do_nothing
+        self.max_episode_length = max_episode_length
 
         self.episode_length = 0
         self.available_actions = None
         self.previous_available_actions = None
         self.reset()
+
+        self.filter_state_during_episode = filter_state_during_episode
 
         # # Compute node embedding
         # things_list = self.get_thing_list()
