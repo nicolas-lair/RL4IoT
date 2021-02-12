@@ -1,25 +1,5 @@
 from itertools import cycle
 
-color_list = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink']
-color_h_inf = [0, 18, 50, 64, 167, 252, 300, 335]
-color_h_sup = [17, 49, 63, 166, 251, 299, 334, 360]
-
-N_LEVELS = 3
-if N_LEVELS == 5:
-    brightness_level = ['very dark', 'dark', 'average', 'bright', 'very bright']
-    volume_level = ['very quiet', 'quiet', 'average', 'loud', 'very loud']
-    temperature_level = ['very cold', 'cold', 'average', 'warm', 'very warm']
-elif N_LEVELS == 3:
-    brightness_level = ['dark', 'average', 'bright']
-    volume_level = ['quiet', 'average', 'loud']
-    temperature_level = ['cold', 'average', 'warm']
-else:
-    raise NotImplementedError
-
-levels_dict = {
-    'brightness': brightness_level, 'volume': volume_level, 'temperature': temperature_level
-}
-
 
 def get_percent_bound_level(lvl_list, min_lvl=0, max_lvl=100):
     n_lvl = len(lvl_list)
@@ -28,7 +8,7 @@ def get_percent_bound_level(lvl_list, min_lvl=0, max_lvl=100):
     return bound_level
 
 
-def get_color_name_from_hsb(h, s, b):
+def _get_color_name_from_hsb(h, s, b, color_list, color_h_inf, color_h_sup):
     assert isinstance(h, int) and (0 <= h <= 360), 'hue should be a int between 0 and 360'
     assert isinstance(s, int) and (0 <= s <= 100), 'saturation should be a int between 0 and 100'
     assert isinstance(b, int) and (0 <= b <= 100), 'brightness should be a int between 0 and 100'
@@ -42,15 +22,15 @@ def get_color_name_from_hsb(h, s, b):
     raise EOFError
 
 
-def color_to_hsb(string_color):
+def color_to_hsb(string_color, color_list, color_h_inf, color_h_sup):
     idx = color_list.index(string_color)
     h = (color_h_inf[idx] + color_h_sup[idx]) // 2
     return h, 75, 70
 
 
-def find_level_list(lvl):
+def find_level_list(lvl, lvl_dict):
     right_list = None
-    for list_ in levels_dict.values():
+    for list_ in lvl_dict.values():
         right_list = list_ if lvl in list_ else None
         if right_list:
             break
@@ -59,17 +39,17 @@ def find_level_list(lvl):
     return right_list
 
 
-def level_to_percent(lvl):
-    lvl_list = find_level_list(lvl)
+def level_to_percent(lvl, lvl_dict):
+    lvl_list = find_level_list(lvl, lvl_dict)
     percent_bound_level = get_percent_bound_level(lvl_list)
     idx = lvl_list.index(lvl)
     p = (percent_bound_level[idx] + percent_bound_level[idx + 1]) // 2
     return p
 
 
-def percent_to_level(p, lvl_type):
+def _percent_to_level(p, lvl_type, lvl_dict):
     i = 0
-    lvl_list = levels_dict[lvl_type]
+    lvl_list = lvl_dict[lvl_type]
     percent_bound_level = get_percent_bound_level(lvl_list)
 
     while i < len(percent_bound_level):

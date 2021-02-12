@@ -11,7 +11,7 @@ import torch.nn as nn
 from logger import update_logger
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
-from simulator.utils import color_list, N_LEVELS
+from simulator.discrete_parameters import color_list, N_LEVELS, TVchannels_list
 from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState, DoubleAttDeepSet
 from architecture.dqn import FullNet, FullNetWithAttention
 from simulator.Thing import PlugSwitch, LGTV

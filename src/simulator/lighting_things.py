@@ -5,7 +5,7 @@ from simulator.Channel import Channel
 from simulator.Items import ColorItem, DimmerItem, SwitchItem, INCREASE_DECREASE_STEP
 from simulator.Thing import Thing
 from simulator.instructions import GoalDescription
-from simulator.utils import color_list, levels_dict, get_color_name_from_hsb, percent_to_level
+from simulator.discrete_parameters import color_list, levels_dict, get_color_name_from_hsb, percent_to_level
 
 Light_description = {
     'turn_on': GoalDescription(sentences=["Turn on {name} {location}",
@@ -84,7 +84,8 @@ class BrightnessChannel(Channel):
                          item=DimmerItem(**methods, discretization={'setPercent': 'brightness'}),
                          read=True,
                          write=True,
-                         associated_state_description=lambda p: f'lum_level_{percent_to_level(p, "brightness")}',
+                         associated_state_description=lambda
+                             p: f'lum_level_{percent_to_level(p, lvl_type="brightness")}',
                          associated_state_change=partial(get_increase_change, type='brightness')
                          )
 
@@ -97,7 +98,8 @@ class ColorTemperatureChannel(Channel):
                          item=DimmerItem(**methods, discretization={'setPercent': 'temperature'}),
                          read=True,
                          write=True,
-                         associated_state_description=lambda p: f'temp_level_{percent_to_level(p, "temperature")}',
+                         associated_state_description=lambda
+                             p: f'temp_level_{percent_to_level(p, lvl_type="temperature")}',
                          associated_state_change=partial(get_increase_change, type="temperature")
                          )
 

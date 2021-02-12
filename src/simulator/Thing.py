@@ -2,10 +2,10 @@ from abc import ABC, abstractmethod
 
 from simulator.Items import *
 from simulator.Channel import Channel
-from simulator.utils import percent_to_level, levels_dict
+from simulator.discrete_parameters import levels_dict
 from simulator.TreeView import DescriptionNode
 from simulator.instructions import GoalDescription, initialize_instruction
-from discrete_parameters import TVchannels_list
+from simulator.discrete_parameters import TVchannels_list, percent_to_level
 
 
 class Thing(ABC, DescriptionNode):
