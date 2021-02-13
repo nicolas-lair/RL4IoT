@@ -9,7 +9,8 @@ from architecture.goal_sampler import GoalSampler
 from architecture.replay_buffer import get_replay_buffer, Transition
 from architecture.utils import dict_to_device
 from action_embedder import ActionModel
-from architecture.state_embedder import StateEmbedder, get_description_embedder
+from architecture.state_embedder import StateEmbedder, get_description_embedder, PreTrainedDescriptionEmbedder, \
+    LMBasedDescriptionEmbedder
 
 logger = get_logger(__name__)
 
@@ -59,10 +60,15 @@ class DQNAgent:
         else:
             raise NotImplementedError
 
-        self.optimizer = params['optimizer'](
-            list(self.policy_network.parameters()) + list(
-                self.language_model.parameters()) + list(self.action_model.parameters()),
-            **params['optimizer_params'])
+        try:
+            description_embedder_params = list(self.node_description_embedder.parameters())
+        except AttributeError:
+            description_embedder_params = []
+        self.optimizer = params['optimizer'](list(self.policy_network.parameters()) +
+                                             list(self.language_model.parameters()) +
+                                             list(self.action_model.parameters()) +
+                                             list(description_embedder_params),
+                                             **params['optimizer_params'])
 
         if params['lr_scheduler'] is not None:
             self.lr_scheduler = params['lr_scheduler'](self.optimizer, **params['lr_scheduler_params'])
@@ -189,7 +195,7 @@ class DQNAgent:
         embedded_actions, _ = self.embed_actions(actions)
 
         logger.debug('Embedding states')
-        embedded_states = self.state_embedder.embed_state(transitions.state)
+        embedded_states = self.state_embedder.embed_state(transitions.state, use_cache=False)
 
         logger.debug('Embedding previous action')
         previous_action = [[a] for a in transitions.previous_action]
@@ -209,7 +215,8 @@ class DQNAgent:
         maxQ = torch.zeros(batch_size, device=self.device)
         if not done.all():
             next_states, next_av_actions = zip(*transitions.next_state)
-            next_states = self.state_embedder.embed_state([s for s, mask in zip(next_states, done) if not mask])
+            next_states = self.state_embedder.embed_state([s for s, mask in zip(next_states, done) if not mask],
+                                                          use_cache=False)
             next_av_actions = [a for a, mask in zip(next_av_actions, done) if not mask]
             logger.debug('Embedding next available actions')
             embedded_next_actions, next_action_types = self.embed_actions(next_av_actions)
@@ -281,6 +288,7 @@ class DQNAgent:
         """
         logger.debug('Update of policy net')
         self.language_model.freeze_sometimes(episode)
+        self.state_embedder.empty_cache()
         self.update_policy_net()
         logger.debug('done')
         self.goal_sampler.update_embedding()

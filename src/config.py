@@ -95,18 +95,18 @@ def generate_env_params():
     return env_params
 
 
-def generate_description_embedder_params(description_embedder_type='glove_mean'):
+def generate_description_embedder_params(description_embedder_type=description_embedder_type):
     if description_embedder_type == 'glove_mean':
         description_embedder_params = dict(
             type=description_embedder_type,
-            embedding='glove',
-            word_embedding_params=dict(
-                name='6B',
-                dim=str(description_embedding),
-                cache=vector_cache
-            ),
+            vocab=vocab_for_word_embedding,
             reduction='mean',
-            authorize_cache=True
+        )
+    elif description_embedder_type == 'projection':
+        description_embedder_params = dict(
+            type=description_embedder_type,
+            vocab=vocab_for_word_embedding,
+            embedding_size=description_embedding,
         )
     elif description_embedder_type == 'learned_lm':
         description_embedder_params = dict(
