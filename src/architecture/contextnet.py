@@ -1,5 +1,6 @@
 import torch
 from torch import nn as nn
+from torch.nn.utils.rnn import pad_sequence
 
 from architecture.utils import flatten_state, differentiable_or
 
@@ -85,7 +86,8 @@ class DeepSetStateNet(nn.Module):
         if isinstance(state, dict):
             state = [state]
         full_state = [torch.cat(list(s.values())) for s in state]  # cat all channels from state
-        full_state = torch.stack(full_state)  # stack batch state
+        # full_state = torch.stack(full_state)  # stack batch state
+        full_state = pad_sequence(full_state, batch_first=True)
         return full_state
 
     def forward(self, state, instruction, hidden_state=None):

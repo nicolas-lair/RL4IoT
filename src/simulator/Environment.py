@@ -11,11 +11,13 @@ from simulator.discrete_parameters import discrete_parameters
 
 
 class State:
-    def __init__(self, state):
+    def __init__(self, state, type="Full_State"):
         # Order object to be always the same, important for hierarchical DeepSet
         self.state = OrderedDict(sorted(state.items()))
         # self.id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=32))
         self.id = hash(self)
+        # if isinstance(state
+        self.type = type
 
     def __eq__(self, other):
         return self.id == other.id
@@ -37,6 +39,9 @@ class State:
 
     def items(self):
         return self.state.items()
+
+    def values(self):
+        return self.state.values()
 
 
 class IoTEnv(gym.Env):
@@ -184,6 +189,8 @@ class IoTEnv4ML(gym.Wrapper):
         else:
             self.save_running_action(action)
             self.available_actions = action.get_children_nodes()
+            if self.filter_state_during_episode:
+                self.filter_state(action)
             assert self.available_actions is not None
             reward = 0
             done = False
@@ -195,6 +202,15 @@ class IoTEnv4ML(gym.Wrapper):
         available_actions = self.available_actions if not done else []
         # state = self.state if not done else []
         return (self.state, available_actions), reward, done, info
+
+    def filter_state(self, action):
+        self.previous_state = self.state
+        if isinstance(action, Thing):
+            self.state = State(self.state[action.name], type='Thing')
+        elif isinstance(action, Channel):
+            new_state = self.state[action.name]
+            new_state.update(dict(thing_description=self.state['description']))
+            self.state = State(new_state, type='Channel')
 
     def save_running_action(self, action):
         if isinstance(action, Thing):
@@ -230,10 +246,9 @@ class IoTEnv4ML(gym.Wrapper):
     def reset_running_action(self):
         self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
 
+    if __name__ == "__main__":
+        env2 = IoTEnv()
+        initial_state2 = env2.reset()
 
-if __name__ == "__main__":
-    env2 = IoTEnv()
-    initial_state2 = env2.reset()
-
-    env = IoTEnv4ML(env_class=IoTEnv, params={})
-    initial_state = env.reset()
+        env = IoTEnv4ML(env_class=IoTEnv, params={})
+        initial_state = env.reset()

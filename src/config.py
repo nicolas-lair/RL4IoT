@@ -247,8 +247,9 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
             raw_action_size=dict(
                 description_node=description_embedding,
                 openHAB_action=len(ACTION_SPACE),
-                color_params=len(color_list),
-                level_params=N_LEVELS,
+                setPercent_params=N_LEVELS,
+                setHSB_params=len(color_list),
+                setString_params=len(TVchannels_list),
             ),
             net_params=dict(
                 q_network=dict(

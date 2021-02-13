@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 
 from simulator.Items import *
 from simulator.Channel import Channel
@@ -109,6 +110,7 @@ class Thing(ABC, DescriptionNode):
                 if c.node_embedding is not None:
                     state[c.name].update({'embedding': c.node_embedding})
         state['description'] = self.description
+        state = OrderedDict(sorted(state.items()))
         return state
 
     def get_state(self, oracle):
