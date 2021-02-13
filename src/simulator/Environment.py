@@ -75,9 +75,6 @@ class IoTEnv(gym.Env):
         self.oracle_state = self.build_state(oracle=True)
         self.previous_oracle_state = self.oracle_state
 
-        self.state = self.build_state(oracle=False)
-        self.previous_state = self.state
-
     def get_thing_list(self):
         return list(self._things_lookup_table.values())
 
@@ -102,13 +99,10 @@ class IoTEnv(gym.Env):
         self.previous_oracle_state = self.oracle_state
         self.oracle_state = self.build_state(oracle=True)
 
-        self.previous_state = self.state
-        self.build_state(oracle=False)
-
         reward = None
         done = None
         info = None
-        return self.state, reward, done, info
+        return self.oracle_state, reward, done, info
 
     def build_state(self, oracle, thing=None):
         """
@@ -136,9 +130,6 @@ class IoTEnv(gym.Env):
             thing.reset()
         self.oracle_state = self.build_state(oracle=True)
         self.previous_oracle_state = self.oracle_state
-
-        self.previous_state = self.state
-        self.state = self.build_state(oracle=False)
         return self.oracle_state
 
     def render(self, mode='human'):
@@ -159,6 +150,8 @@ class IoTEnv4ML(gym.Wrapper):
         self.episode_length = 0
         self.available_actions = None
         self.previous_available_actions = None
+        self.state = None
+        self.previous_state = None
         self.reset()
 
         self.filter_state_during_episode = filter_state_during_episode
@@ -176,6 +169,8 @@ class IoTEnv4ML(gym.Wrapper):
         self.previous_available_actions = self.available_actions
         if isinstance(action, ExecAction):
             super().step(self.running_action)
+            self.previous_state = self.state
+            self.state = self.build_state(oracle=False)
             self.reset_running_action()
             self.episode_length += 1
             self.available_actions = self.get_root_actions()
@@ -215,6 +210,8 @@ class IoTEnv4ML(gym.Wrapper):
 
     def reset(self):
         super().reset()
+        self.previous_state = self.state
+        self.state = self.build_state(oracle=False)
         self.episode_length = 0
         self.available_actions = self.get_root_actions()
         self.previous_available_actions = None
