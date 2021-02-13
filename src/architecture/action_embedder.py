@@ -5,23 +5,27 @@ from torch.nn.utils import rnn as rnn_utils
 
 
 class ActionModel(nn.Module):
-    def __init__(self, raw_action_size, out_features, env_discrete_params):
+    def __init__(self, raw_action_size, out_features):
         super().__init__()
-        self.in_features = max(raw_action_size.values())
+        self.in_features = raw_action_size
         self.action_embedding_size = out_features
 
         # Dictionnary of projection layer for normalizing the action embedding. The projector should be defined as
         # attributes of the current module to ensure that they are passed to cuda
         self.action_embedding_layers = nn.ModuleDict({
-            'root': nn.Identity(),
-            'description_node': nn.Linear(in_features=self.in_features, out_features=self.action_embedding_size),
-            'openHAB_action': nn.Linear(in_features=self.in_features, out_features=self.action_embedding_size),
+            k: nn.Linear(in_features=v, out_features=self.action_embedding_size) for k, v in self.in_features.items()
         })
-        self.action_embedding_layers.update(
-            nn.ModuleDict(
-                {k + '_params': nn.Linear(in_features=self.in_features, out_features=self.action_embedding_size)
-                 for k in env_discrete_params})
-        )
+        self.action_embedding_layers.update(nn.ModuleDict({'root': nn.Identity()}))
+        # self.action_embedding_layers = nn.ModuleDict({
+        #     'root': nn.Identity(),
+        #     'description_node': nn.Linear(in_features=self.in_features, out_features=self.action_embedding_size),
+        #     'openHAB_action': nn.Linear(in_features=self.in_features, out_features=self.action_embedding_size),
+        # })
+        # self.action_embedding_layers.update(
+        #     nn.ModuleDict(
+        #         {k + '_params': nn.Linear(in_features=self.in_features, out_features=self.action_embedding_size)
+        #          for k in env_discrete_params})
+        # )
 
     def forward(self, actions, action_type):
         """
@@ -33,19 +37,25 @@ class ActionModel(nn.Module):
                         ]
         :return: torch tensor of size (BATCH_SIZE, longest_sequence, PROJECTED_ACTION_EMBEDDING)
         """
-        with torch.no_grad():
-            action_type_list = list(self.action_embedding_layers.keys())
-            action_type_indices = [torch.tensor([action_type_list.index(t) for t in seq]) for seq in action_type]
-            action_type_indices = rnn_utils.pad_sequence(action_type_indices, batch_first=True)
-            action_type_mask = torch.zeros(*action_type_indices.size(), len(action_type_list))
-            action_type_mask = action_type_mask.scatter_(-1, action_type_indices.unsqueeze(dim=-1), 1.).unsqueeze(
-                -1).detach()
+        batch = []
+        for action_batch, action_type_batch in zip(actions, action_type):
+            embedded_batch = [self.action_embedding_layers[t](a) for a, t in zip(action_batch, action_type_batch)]
+            batch.append(torch.cat(embedded_batch))
+        return rnn_utils.pad_sequence(batch, batch_first=True)
 
-            actions = [torch.cat([F.pad(a, pad=(0, self.in_features - a.size(1), 0, 0)) for a in seq], dim=0)
-                       for seq in actions]
-            actions = rnn_utils.pad_sequence(actions, batch_first=True).detach()
-
-        projection = [v(actions) for v in self.action_embedding_layers.values()]
-        p = torch.stack(projection, dim=-2)
-        embedded_actions = (action_type_mask.to(p.device) * p).sum(dim=-2, keepdim=False)
-        return embedded_actions
+        # with torch.no_grad():
+        #     action_type_list = list(self.action_embedding_layers.keys())
+        #     action_type_indices = [torch.tensor([action_type_list.index(t) for t in seq]) for seq in action_type]
+        #     action_type_indices = rnn_utils.pad_sequence(action_type_indices, batch_first=True)
+        #     action_type_mask = torch.zeros(*action_type_indices.size(), len(action_type_list))
+        #     action_type_mask = action_type_mask.scatter_(-1, action_type_indices.unsqueeze(dim=-1), 1.).unsqueeze(
+        #         -1).detach()
+        #
+        #     actions = [torch.cat([F.pad(a, pad=(0, self.in_features - a.size(1), 0, 0)) for a in seq], dim=0)
+        #                for seq in actions]
+        #     actions = rnn_utils.pad_sequence(actions, batch_first=True).detach()
+        #
+        # projection = [v(actions) for v in self.action_embedding_layers.values()]
+        # p = torch.stack(projection, dim=-2)
+        # embedded_actions = (action_type_mask.to(p.device) * p).sum(dim=-2, keepdim=False)
+        # return embedded_actions

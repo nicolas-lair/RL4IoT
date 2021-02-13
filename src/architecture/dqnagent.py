@@ -15,12 +15,12 @@ logger = get_logger(__name__)
 
 
 class DQNAgent:
-    def __init__(self, language_model, params, env_discrete_params):
+    def __init__(self, language_model, params):
         self.device = params['device']
 
-        self.policy_network = params['model_archi'](**params['model_params'], discrete_params=env_discrete_params)
+        self.policy_network = params['model_archi'](**params['model_params'])
 
-        self.target_network = params['model_archi'](**params['model_params'], discrete_params=env_discrete_params)
+        self.target_network = params['model_archi'](**params['model_params'])
         self.target_network.load_state_dict(self.policy_network.state_dict())
         self.target_update_freq = params['target_update_frequence']
         self.target_network.eval()
@@ -39,8 +39,7 @@ class DQNAgent:
                                             **params['state_embedder_params'])
 
         self.action_model = ActionModel(raw_action_size=params['model_params']['raw_action_size'],
-                                        out_features=params['model_params']['action_embedding_size'],
-                                        env_discrete_params=env_discrete_params)
+                                        out_features=params['model_params']['action_embedding_size'])
         self.action_model.to(self.device)
 
         self.language_model = language_model.to(self.device)
@@ -116,20 +115,38 @@ class DQNAgent:
         temp = [[self._embed_one_action(a) for a in action_list] for action_list in actions]
         action_embedding, action_type = zip(*[zip(*t) for t in temp])
         embedded_actions = self.action_model(action_embedding, action_type)
-        return embedded_actions
+        return embedded_actions, action_type
 
+    def _filter_Q_values(self, Q_values, action_types, type):
+        """
+        For a batch of Q_values that were computed on different size of action set, only keep relevant action and
+        remove the padded one
+        Parameters
+        ----------
+        Q_values :
+        action_types :
 
-        # return action_embedding, action_type
+        Returns
+        -------
 
-    def get_greedy_action(self, state, instruction, actions, hidden_state):
+        """
+        value = []
+        n_action_by_batch = [len(b) for b in action_types]
+        for i, n in zip(range(len(n_action_by_batch)), n_action_by_batch):
+            if type == 'argmax':
+                value.append(Q_values[i, :(n+1)].argmax(0))
+            elif type == 'max':
+                value.append(Q_values[i, :(n+1)].max(0).values)
+        value_tensor = torch.cat(value)
+        return value_tensor
+
+    def get_greedy_action(self, state, instruction, actions, hidden_state, action_types=None):
         Q_values = self.policy_network(state=state,
-        Q_values = self.policy_network(state=dict_to_device(state, self.device),
                                        instruction=instruction.to(self.device),
                                        actions=actions,
                                        hidden_state=hidden_state.to(self.device))
-        action_idx = Q_values.argmax(1)
+        action_idx = Q_values.argmax(1) if action_types is None else self._filter_Q_values(Q_values, action_types,
                                                                                            type='argmax')
-        # new_hidden_state = actions[:, action_idx]
         return action_idx
 
     def select_action(self, state, instruction, actions, hidden_state, exploration):
@@ -141,7 +158,7 @@ class DQNAgent:
         :return:
         """
         sample = random.random() if exploration else 1
-        embedded_actions = self.embed_actions(actions)
+        embedded_actions, _ = self.embed_actions(actions)
         if sample >= self.exploration_threshold:
             with torch.no_grad():
                 embedded_state = self.state_embedder.embed_state(state)
@@ -169,7 +186,7 @@ class DQNAgent:
 
         logger.debug('Embedding actions')
         actions = [[a] for a in transitions.action]
-        embedded_actions = self.embed_actions(actions)
+        embedded_actions, _ = self.embed_actions(actions)
 
         logger.debug('Embedding states')
         embedded_states = self.state_embedder.embed_state(transitions.state)
@@ -177,14 +194,14 @@ class DQNAgent:
         logger.debug('Embedding previous action')
         previous_action = [[a] for a in transitions.previous_action]
         # TODO try detach the hidden state
-        embedded_previous_action = self.embed_actions(previous_action).squeeze()
+        embedded_previous_action, _ = self.embed_actions(previous_action)
         # projected_previous_actions = self.policy_network.action_projector(*embedded_previous_action).squeeze()
 
         logger.debug('Computing Q(s,a)')
         Q_sa = self.policy_network(state=embedded_states,
                                    instruction=goals,
                                    actions=embedded_actions,
-                                   hidden_state=embedded_previous_action)
+                                   hidden_state=embedded_previous_action.squeeze())
         logger.debug(f'Done: {Q_sa.squeeze()}')
         next_hidden_states = embedded_actions.squeeze()
 
@@ -195,22 +212,26 @@ class DQNAgent:
             next_states = self.state_embedder.embed_state([s for s, mask in zip(next_states, done) if not mask])
             next_av_actions = [a for a, mask in zip(next_av_actions, done) if not mask]
             logger.debug('Embedding next available actions')
-            embedded_next_actions = self.embed_actions(next_av_actions)
+            embedded_next_actions, next_action_types = self.embed_actions(next_av_actions)
             if self.double_dqn:
                 next_action_idx = self.get_greedy_action(state=next_states,
                                                          instruction=goals[~done],
                                                          actions=embedded_next_actions,
-                                                         hidden_state=next_hidden_states[~done])
+                                                         hidden_state=next_hidden_states[~done],
+                                                         action_types=next_action_types)
 
-                embedded_next_actions = embedded_next_actions.gather(dim=1, index=torch.stack(
-                    [next_action_idx.view(-1)] * (embedded_next_actions.size(2)), dim=1).unsqueeze(dim=1))
+                embedded_next_actions = embedded_next_actions.gather(
+                    dim=1,
+                    index=next_action_idx.unsqueeze(-1).repeat(1, embedded_next_actions.size(2)).unsqueeze(1))
 
             next_q = self.target_network(state=next_states,
                                          instruction=goals[~done],
                                          actions=embedded_next_actions,
                                          hidden_state=next_hidden_states[~done])
             if self.double_dqn:
-            maxQ[~done] = next_q.max(1).values.squeeze()
+                maxQ[~done] = next_q.max(1).values.squeeze()
+            else:
+                maxQ[~done] = self._filter_Q_values(next_q, next_action_types, type='max')
             logger.debug(f'Done: {maxQ}')
 
         logger.debug('Computing loss')
