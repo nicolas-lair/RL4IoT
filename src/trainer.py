@@ -34,13 +34,13 @@ optim_loss = args.optim_loss
 
 params = generate_params(simulation_name=simulation_name, use_pretrained_language_model=use_pretrained_language_model,
                          device=device)
-# set_logger_handler(rootLogger, **params['logger'], log_path=params['save_directory'])
-# logger = rootLogger.getChild(__name__)
+
 set_logger_handler(**params['logger'], log_path=params['save_directory'])
 logger = get_logger(__name__)
 
 logger.info('begin')
 # logger.setLevel(logging.DEBUG)
+
 
 def run_episode(agent, env, target_goal, save_transitions=True):
     action_record = []
@@ -59,10 +59,13 @@ def run_episode(agent, env, target_goal, save_transitions=True):
                                                    actions=available_actions, hidden_state=hidden_state,
                                                    exploration=save_transitions)
         # logger.debug(f'available_actions{[a.name for a in available_actions]}')
-        # logger.debug(action.name)
+
+        logger.debug(action.name)
         action_record.append(action.name)
 
         (next_state, next_available_actions), reward, done, info = env.step(action=action)
+        logger.debug(f'Agent state \n {format_oracle_state_log(next_state)}')
+
         if info == 'exec_action':
             logger.debug(f'State: \n {format_oracle_state_log(env.oracle_state)}')
 
@@ -167,16 +170,6 @@ if __name__ == "__main__":
             run_episode(agent=agent, env=env, target_goal=target_goal, save_transitions=True)
 
             agent.update(episode=j, max_episodes=num_episodes)
-            # logger.debug('Update of policy net')
-            # agent.update_policy_net()
-            # logger.debug('done')
-            #
-            # agent.update_exploration_function(n=i + 1)
-            #
-            # if i % params['target_update_frequence'] == 0:
-            #     logger.debug('Update of target net')
-            #     agent.update_target_net()
-            #     logger.debug('done')
 
             if j > 0 and j % params['test_frequence'] == 0:
                 test_record[j] = test_agent(agent=agent, test_env=test_env, oracle=oracle)
@@ -185,7 +178,8 @@ if __name__ == "__main__":
                     best_result = (j, test_record[j])
                     logger.info('This is best result!')
                 else:
-                    logger.info("%" * 5 + f" Best result after {best_result[0]} episodes " + "%" * 5 + "\n" + yaml.dump(best_result[1]))
+                    logger.info("%" * 5 + f" Best result after {best_result[0]} episodes " + "%" * 5 + "\n" + yaml.dump(
+                        best_result[1]))
                 logger.info(f"Goal sampler record: \n {pformat(agent.goal_sampler.get_record())}")
 
             if j > 0 and j % 10 * params['test_frequence'] == 0:

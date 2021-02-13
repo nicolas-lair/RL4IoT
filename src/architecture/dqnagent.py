@@ -117,24 +117,18 @@ class DQNAgent:
         action_embedding, action_type = zip(*[zip(*t) for t in temp])
         embedded_actions = self.action_model(action_embedding, action_type)
         return embedded_actions
-        # if isinstance(actions[0], list):
-        #     action_embedding, action_type = zip(*[self.embed_actions(a) for a in actions])
-        #     return action_embedding, action_type
-        # else:
-        #     action_embeddings = [self._embed_one_action(a) for a in actions]
-        #     action_embedding, action_type = zip(*action_embeddings)
+
 
         # return action_embedding, action_type
 
     def get_greedy_action(self, state, instruction, actions, hidden_state):
-        # embedded_actions, action_type = self.embed_actions(actions)
+        Q_values = self.policy_network(state=state,
         Q_values = self.policy_network(state=dict_to_device(state, self.device),
                                        instruction=instruction.to(self.device),
-                                       # actions=(embedded_actions, action_type),
                                        actions=actions,
                                        hidden_state=hidden_state.to(self.device))
         action_idx = Q_values.argmax(1)
-        # action = actions[action_idx]
+                                                                                           type='argmax')
         # new_hidden_state = actions[:, action_idx]
         return action_idx
 
@@ -153,33 +147,11 @@ class DQNAgent:
                 embedded_state = self.state_embedder.embed_state(state)
                 action_idx = self.get_greedy_action(embedded_state, instruction, embedded_actions, hidden_state)
                 action_idx = action_idx.item()
-                # # t.max(1) will return largest column value of each row.
-                # # second column on max result is index of where max element was
-                # # found, so we pick action with the larger expected reward.
-                # embedded_actions, action_type = self.embed_actions(actions)
-                #
-                # Q, normalized_action_embedding = self.policy_network(state=dict_to_device(state, self.device),
-                #                                                      instruction=instruction.to(self.device),
-                #                                                      actions=(embedded_actions, action_type),
-                #                                                      hidden_state=hidden_state.to(self.device))
-                # action_idx = Q.argmax(1).item()
-                # # hidden_state += hidden_state.view(*self.hidden_state.size())
         else:
             action_idx = random.randint(0, len(actions) - 1)
 
         action = actions[action_idx]
         hidden_state = embedded_actions[:, action_idx]
-        # embedded_actions, action_type = self.embed_actions(actions)
-        # normalized_action_embedding = self.policy_network.action_projector([embedded_actions],
-        #                                                                    [action_type])
-
-        # if isinstance(self.policy_network.context_net, (FlatStateNet, AttentionFlatState, DeepSetStateNet)):
-        #     hidden_state = hidden_state.to(self.device)
-        #     # hidden_state += normalized_action_embedding.squeeze()[action_idx]  # TODO Check
-        #     hidden_state = normalized_action_embedding[:, action_idx]
-        # else:
-        #     raise NotImplementedError
-
         return action, hidden_state
 
     def update_policy_net(self, batch_size=None):
@@ -237,16 +209,7 @@ class DQNAgent:
                                          instruction=goals[~done],
                                          actions=embedded_next_actions,
                                          hidden_state=next_hidden_states[~done])
-
-            # next_states = dict_to_device([s for s, mask in zip(next_states, done) if not mask], self.device)
-            # next_av_actions_embedded = self.embed_actions([a for a, mask in zip(next_av_actions, done) if not mask])
-            #
-            # logger.debug('Computing max(Q(s`, a)) over a')
-            # with torch.no_grad():
-            #     next_q = self.target_network(state=next_states,
-            #                                  instruction=goals[~done],
-            #                                  actions=next_av_actions_embedded,
-            #                                  hidden_state=next_hidden_states[~done])
+            if self.double_dqn:
             maxQ[~done] = next_q.max(1).values.squeeze()
             logger.debug(f'Done: {maxQ}')
 

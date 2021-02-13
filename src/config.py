@@ -18,17 +18,25 @@ from simulator.Thing import PlugSwitch, LGTV
 from simulator.lighting_things import AdorneLightBulb, BigAssFanLightBulb, HueLightBulb, SimpleLight, AlwaysOnLight
 
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
+vector_cache = '/home/nicolas/PycharmProjects/RL4IoT/.vector_cache'
 
 word_embedding_size = 50
-instruction_embedding = 55
-description_embedding = 50
+instruction_embedding = 50
+description_embedding = 26
 value_encoding_size = 3  # size of the vector in which is encoded the value of a channel
+action_embedding = 30
+
+vocab_for_word_embedding = torchtext.vocab.GloVe(name='6B', dim=word_embedding_size, cache=vector_cache)
+
+description_embedder_type = 'glove_mean'
+if description_embedder_type == 'glove_mean':
+    description_embedding = word_embedding_size
+
 state_embedding_size = value_encoding_size + 2 * description_embedding + len(ITEM_TYPE)
-action_embedding = 50
 
+policy_context_archi = DeepSetStateNet
+model_archi = FullNet
 filter_state_during_episode = True
-
-vector_cache = '/home/nicolas/PycharmProjects/RL4IoT/.vector_cache'
 
 
 def prepare_simulation(simulation_name):
@@ -131,7 +139,7 @@ def generate_language_model_params(device='cuda', use_pretrained_model=False):
         embedding_size=word_embedding_size,
         linear1_out=256,
         out_features=instruction_embedding,
-        vocab=torchtext.vocab.GloVe(name='6B', dim=word_embedding_size, cache=vector_cache),
+        vocab=vocab_for_word_embedding,
         # vocab=False,
         vocab_size=500,
         device=device,
@@ -208,13 +216,7 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
                                                            use_pretrained_model=use_pretrained_language_model)
 
     device = device
-    # device = 'cpu'
-
-    # policy_context_archi = DeepSetStateNet
-    policy_context_archi = DoubleAttDeepSet
-    # policy_context_archi = HierarchicalDeepSet
     reward_params = generate_reward_params(archi=policy_context_archi)
-
     simulation_name = simulation_name
     if save_path:
         path_dir, simulation_id = prepare_simulation(simulation_name)
@@ -238,8 +240,7 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
     params = dict(
         simulation_name=simulation_name,
         env_params=env_params,
-        # model_archi=FullNet,
-        model_archi=FullNetWithAttention,
+        model_archi=model_archi,
         model_params=dict(
             context_model=policy_context_archi,
             action_embedding_size=action_embedding,  # TODO
