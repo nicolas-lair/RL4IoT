@@ -1,9 +1,10 @@
 import random
 from collections import namedtuple
 import numpy as np
-from typing import List, Tuple
+from typing import List
 import torch
 
+from architecture.goal_sampler import TrainGoal
 from sumtree import SumSegmentTree, MinSegmentTree
 
 Transition = namedtuple('Transition',
@@ -31,18 +32,20 @@ class ReplayBuffer:
         return transition
 
     def store(self, **kwargs):
-        # Build the list of size self.max_size and then replace the transitions by new ones
-        if len(self) < self.max_size:
-            self.memory.append(Transition(**kwargs))
-        else:
-            self.memory[self.ptr] = Transition(**kwargs)
-            self.ptr = (self.ptr + 1) % self.max_size
+        goal = kwargs['goal']
+        # Keep only real goal not random ones
+        if isinstance(goal, TrainGoal):
+            # Build the list of size self.max_size and then replace the transitions by new ones
+            if len(self) < self.max_size:
+                self.memory.append(Transition(**kwargs))
+            else:
+                self.memory[self.ptr] = Transition(**kwargs)
+                self.ptr = (self.ptr + 1) % self.max_size
 
     def sample(self, n_sample):
         indices = random.sample(range(len(self)), n_sample)
         samples = [self.memory[i] for i in indices]
         return indices, samples, torch.ones(n_sample)
-        # return random.sample(self.memory, n_sample), torch.ones(n_sample)
 
 
 class PrioritizedReplayBuffer(ReplayBuffer):
