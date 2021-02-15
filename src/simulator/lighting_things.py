@@ -103,27 +103,33 @@ class ColorTemperatureChannel(Channel):
 
 
 class ColorChannel(Channel):
-    def __init__(self, name='color', description='color'):
+    def __init__(self, name='color', description='color',
+                 methods=None, associated_state_description=None, associated_state_change=None):
+
+        if methods is None:
+            methods = dict(turnOn=True, turnOff=True, increase=True, decrease=True, setPercent=True, setHSB=True)
+
+        if associated_state_description is None:
+            associated_state_description = [
+                lambda h, s, b: 'turn_on' if b > 0 else 'turn_off',
+                lambda h, s, b: f'{get_color_name_from_hsb(h, s, b)}_color',
+                lambda h, s, b: f'lum_level_{percent_to_level(b, "brightness")}',
+            ]
+        if associated_state_change is None:
+            def func(h1, s1, b1, h2, s2, b2): return get_increase_change(b1, b2, type='brightness')
+
         super().__init__(name=name,
                          description=description,
-                         item=ColorItem(turnOn=True, turnOff=True, increase=True, decrease=True, setPercent=True,
-                                        setHSB=True, discretization={'setHSB': 'colors', 'setPercent': 'brightness'}),
-                         associated_state_description=[
-                             lambda h, s, b: 'turn_on' if b > 0 else 'turn_off',
-                             lambda h, s, b: f'{get_color_name_from_hsb(h, s, b)}_color',
-                             lambda h, s, b: f'lum_level_{percent_to_level(b, "brightness")}',
-                         ],
-                         associated_state_change=lambda h1, s1, b1, h2, s2, b2: get_increase_change(b1, b2,
-                                                                                                    type='brightness'),
+                         item=ColorItem(**methods, discretization={'setHSB': 'colors', 'setPercent': 'brightness'}),
+                         associated_state_description=associated_state_description,
+                         associated_state_change=associated_state_change,
                          )
 
 
 class LightBulb(Thing):
     def is_powered(self, state=None):
         state = self.power.get_state() if state is None else state['power']['state']
-        # state2 = self.get_state(oracle=True) if state is None else state
-        # assert state == state2
-        return bool(state)
+        return bool(state[0])
 
 
 class SimpleLight(LightBulb):
@@ -146,7 +152,7 @@ class SimpleLight(LightBulb):
         self.power.do_action('turnOn')
 
 
-class AlwaysOnLight(LightBulb):
+class AlwaysOnLight(Thing):
     """
     Very simple light with only on and off
     900 episodes to master
@@ -154,6 +160,7 @@ class AlwaysOnLight(LightBulb):
 
     def __init__(self, name="bright light", description='This is a simple light bulb', init_type='random',
                  init_params=None, is_visible=True, location=None, simple=False):
+        print('hello')
         if simple:
             description = name
             self.brightness = BrightnessChannel()
@@ -170,7 +177,7 @@ class AlwaysOnLight(LightBulb):
         pass
 
 
-class AdorneLightBulb(LightBulb):
+class AdorneLightBulb(LightBulb, AlwaysOnLight):
     """
     Simple light bulb supporting just brightness adjustment
     10000 episodes to master
@@ -182,13 +189,11 @@ class AdorneLightBulb(LightBulb):
         if simple:
             description = name
             self.power = PowerChannel()
-            self.brightness = BrightnessChannel()
         else:
             self.power = PowerChannel(name='power', description='Turn device on and off')
-            self.brightness = BrightnessChannel(name='brightness', description="Set device's brightness", )
 
         super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
-                         is_visible=is_visible, location=location, goals_dict=Light_goals)
+                         is_visible=is_visible, location=location, simple=simple)
 
     def power_on(self):
         self.power.do_action('turnOn')
@@ -253,135 +258,208 @@ class HueLightBulb(LightBulb):
                          is_visible=is_visible, location=location, goals_dict=Light_goals)
 
     def is_powered(self, state=None):
-        state = self.get_state(oracle=True) if state is None else state
+        state = self.color.get_state() if state is None else state
         return state['color']['state'][2] > 0
 
     def power_on(self):
-        pass
+        raise NotImplementedError
+
+
+class AlwaysOnStructuredHueLight(Thing):
+    def __init__(self, name="colored light bulb", description='This is a colored light bulb', init_type='random',
+                 init_params=None, is_visible=True, location=None, simple=False):
+        if simple:
+            description = name
+        self.color = ColorChannel(
+            methods=dict(turnOn=False, turnOff=False, increase=False, decrease=False, setPercent=False,
+                         setHSB=True),
+            associated_state_description=[
+                lambda h, s, b: f'{get_color_name_from_hsb(h, s, b)}_color',
+            ],
+            associated_state_change=lambda *args: None
+        )
+        self.brightness = BrightnessChannel()
+        self.color_temperature = ColorTemperatureChannel()
+
+        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
+                         is_visible=is_visible, location=location, goals_dict=Light_goals)
+
+    def is_powered(self, state=None):
+        return True
+
+
+class StructuredHueLight(LightBulb, AlwaysOnStructuredHueLight):
+    def __init__(self, name="colored light bulb", description='This is a colored light bulb', init_type='random',
+                 init_params=None, is_visible=True, location=None, simple=False):
+        if simple:
+            description = name
+        self.power = PowerChannel()
+
+        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
+                         is_visible=is_visible, location=location, simple=simple)
+
 
 
 if __name__ == "__main__":
-    from oracle import Oracle
+    from simulator.discrete_parameters import params_interpreters
 
-    adorne = AdorneLightBulb()
-    bigassfan = BigAssFanLightBulb()
-    hue = HueLightBulb()
+    adorne = AdorneLightBulb(simple=True)
+    bigassfan = BigAssFanLightBulb(simple=True)
+    hue = HueLightBulb(simple=True)
+
+
+    def test(thing, test_name, init_params, action, debug=False):
+        print('     ' + '*' * 3 + f'{test_name}' + '*' * 3)
+        s1 = thing.init(is_visible=True, init_type='custom', init_params=init_params)
+        action = action if isinstance(action, list) else [action]
+        if debug: print(s1)
+        for a in action:
+            thing.do_action(*a)
+            s2 = thing.get_state(oracle=True)
+            print(sorted(thing.get_state_change(s1, s2)))
+            if debug: print(s2)
+            s1 = s2
+
 
     ########### ADORNE ###############
-    thing = adorne
-    oracle = Oracle([adorne])
-    print('*' * 10 + thing.name + '*' * 10)
-    print('     ' + '*' * 3 + 'Turn on' + '*' * 3)
-    s1 = thing.init(is_visible=True, init_type='custom', init_params=dict(power=0, brightness=0))
-    thing.do_action('power', 'turnOn')
-    s2 = thing.get_state(oracle=True)
-    print(thing.get_state_change(s1, s2))
+    print('*' * 10 + adorne.name + '*' * 10)
 
-    print('     ' + '*' * 3 + 'Turn off' + '*' * 3)
-    s1 = thing.init(is_visible=True, init_type='custom', init_params=dict(power=1, brightness=0))
-    thing.do_action('power', 'turnOff')
-    s2 = thing.get_state(oracle=True)
-    print(thing.get_state_change(s1, s2))
+    test(adorne, test_name="Turn on",
+         init_params=dict(power=0, brightness=0),
+         action=('power', 'turnOn')
+         )
 
-    print('     ' + '*' * 3 + 'Change brightness while off' + '*' * 3)
-    s1 = thing.init(is_visible=True, init_type='custom', init_params=dict(power=0, brightness=0))
-    thing.do_action('brightness', 'setPercent', 50)
-    s2 = thing.get_state(oracle=True)
-    print(thing.get_state_change(s1, s2))
+    test(adorne, test_name="Turn off",
+         init_params=dict(power=1, brightness=50),
+         action=('power', 'turnOff')
+         )
 
-    print('     ' + '*' * 3 + 'Change brightness while on' + '*' * 3)
-    s1 = thing.init(is_visible=True, init_type='custom', init_params=dict(power=1, brightness=0))
-    thing.do_action('brightness', 'setPercent', 50)
-    s2 = thing.get_state(oracle=True)
-    print(thing.get_state_change(s1, s2))
+    test(adorne, test_name="Change brightness while off",
+         init_params=dict(power=0, brightness=50),
+         action=('brightness', 'setPercent', 50)
+         )
 
-    print('     ' + '*' * 3 + 'Unchange brightness while on' + '*' * 3)
-    s1 = thing.init(is_visible=True, init_type='custom', init_params=dict(power=1, brightness=50))
-    thing.do_action('brightness', 'setPercent', 50)
-    s2 = thing.get_state(oracle=True)
-    print(thing.get_state_change(s1, s2))
-    assert oracle.was_achieved({thing.name: s1}, {thing.name: s2},
-                               'the luminosity of level one light bulb is now average')
+    test(adorne, test_name="Change brightness while on",
+         init_params=dict(power=1, brightness=80),
+         action=[('brightness', 'setPercent', params_interpreters['setPercent'](b)) for b in levels_dict['brightness']]
+         )
+
+    test(adorne, test_name="Unchange brightness while on",
+         init_params=dict(power=1, brightness=80),
+         action=('brightness', 'setPercent', 80)
+         )
+
+    test(adorne, test_name="increase function",
+         init_params=dict(power=1, brightness=50),
+         action=('brightness', 'increase')
+         )
+
+    test(adorne, test_name="decrease function",
+         init_params=dict(power=1, brightness=50),
+         action=('brightness', 'decrease')
+         )
 
     ########### BIGASSFAN LIGHTBULB ###############
-    thing = bigassfan
-    print('*' * 10 + thing.name + '*' * 10)
-    print('     ' + '*' * 3 + 'Turn on' + '*' * 3)
-    s1 = thing.init(is_visible=True, init_type='custom', init_params=dict(light_power=0, light_level=0, light_hue=0))
-    thing.do_action('light_power', 'turnOn')
-    s2 = thing.get_state(oracle=True)
-    print(thing.get_state_change(s1, s2))
+    print('*' * 10 + bigassfan.name + '*' * 10)
 
-    print('     ' + '*' * 3 + 'Turn off' + '*' * 3)
-    s1 = thing.init(is_visible=True, init_type='custom', init_params=dict(light_power=1, light_level=0, light_hue=0))
-    thing.do_action('light_power', 'turnOff')
-    s2 = thing.get_state(oracle=True)
-    print(thing.get_state_change(s1, s2))
+    test(bigassfan, test_name='Turn on',
+         init_params=dict(power=0, brightness=0, color_temperature=0),
+         action=('power', 'turnOn')
+         )
+    test(bigassfan, test_name='Turn on while already on',
+         init_params=dict(power=1, brightness=50, color_temperature=50),
+         action=('power', 'turnOn')
+         )
 
-    print('     ' + '*' * 3 + 'Change brightness while off' + '*' * 3)
-    s1 = thing.init(is_visible=True, init_type='custom', init_params=dict(light_power=0, light_level=0, light_hue=0))
-    thing.do_action('light_level', 'setPercent', 50)
-    s2 = thing.get_state(oracle=True)
-    print(thing.get_state_change(s1, s2))
+    test(bigassfan, test_name='Turn off',
+         init_params=dict(power=1, brightness=50, color_temperature=50),
+         action=('power', 'turnOff')
+         )
 
-    print('     ' + '*' * 3 + 'Change brightness while on' + '*' * 3)
-    s1 = thing.init(is_visible=True, init_type='custom', init_params=dict(light_power=1, light_level=0, light_hue=0))
-    thing.do_action('light_level', 'setPercent', 50)
-    s2 = thing.get_state(oracle=True)
-    print(thing.get_state_change(s1, s2))
+    test(bigassfan, test_name='Turn off while already off',
+         init_params=dict(power=0, brightness=50, color_temperature=50),
+         action=('power', 'turnOff')
+         )
 
-    print('     ' + '*' * 3 + 'Turn off while off while off' + '*' * 3)
-    s1 = thing.init(is_visible=True, init_type='custom', init_params=dict(light_power=0, light_level=0, light_hue=0))
-    thing.do_action('light_power', 'turnOff')
-    s2 = thing.get_state(oracle=True)
-    print(thing.get_state_change(s1, s2))
+    test(bigassfan, test_name="Change brightness while off",
+         init_params=dict(power=0, brightness=50, color_temperature=0),
+         action=('brightness', 'setPercent', 50)
+         )
 
-    print('     ' + '*' * 3 + 'Turn on while off while on' + '*' * 3)
-    s1 = thing.init(is_visible=True, init_type='custom', init_params=dict(light_power=1, light_level=0, light_hue=0))
-    thing.do_action('light_power', 'turnOn')
-    s2 = thing.get_state(oracle=True)
-    print(thing.get_state_change(s1, s2))
+    test(bigassfan, test_name="Change brightness while on",
+         init_params=dict(power=1, brightness=80, color_temperature=50),
+         action=[('brightness', 'setPercent', params_interpreters['setPercent'](b)) for b in levels_dict['brightness']]
+         )
 
-    # s1 = hue.init(is_visible=True, init_type='custom', init_params=dict(color=(0, 0, 0), color_temperature=0))
-    # hue.do_action('color', 'turnOn')
-    # s2 = hue.get_state(oracle=True)
-    # print(hue.get_state_change(s1, s2))
-    #
-    # a = AdorneLightBulb(location='the kitchen', init_type='random')
-    #
-    # a.reset()
-    # state1 = a.get_state(oracle=True)
-    # descriptionstate1 = a.get_state_description()
-    # print(state1)
-    # print([d.get_instruction() for d in descriptionstate1])
-    #
-    # a.reset()
-    # state2 = a.get_state(oracle=True)
-    # descriptionstate2 = a.get_state_description(state2)
-    # print(state2)
-    # print([d.get_instruction() for d in descriptionstate2])
-    #
-    # a.reset()
-    # state3 = a.get_state(oracle=True)
-    # descriptionstate3 = a.get_state_description(state3)
-    # print(state3)
-    # print([d.get_instruction() for d in descriptionstate3])
-    #
-    # a.reset()
-    # state4 = a.get_state(oracle=True)
-    # descriptionstate4 = a.get_state_description(state4)
-    # print(state4)
-    # print([d.get_instruction() for d in descriptionstate4])
-    #
-    # a.reset()
-    # state5 = a.get_state(oracle=True)
-    # descriptionstate5 = a.get_state_description(state5)
-    # print(state5)
-    # print([d.get_instruction() for d in descriptionstate5])
-    #
-    # print('*' * 5 + 'STATE CHANGE' + '*' * 5)
-    # print(a.get_state_change(state1, state1))
-    # print(a.get_state_change(state1, state2))
-    # print(a.get_state_change(state1, state3))
-    # print(a.get_state_change(state1, state4))
-    # print(a.get_state_change(state1, state5))
+    test(bigassfan, test_name="Change temperature while on",
+         init_params=dict(power=1, brightness=80, color_temperature=50),
+         action=[('color_temperature', 'setPercent', params_interpreters['setPercent'](b)) for b in
+                 levels_dict['temperature']]
+         )
+
+    test(bigassfan, test_name="Unchange brightness while on",
+         init_params=dict(power=1, brightness=80, color_temperature=50),
+         action=('brightness', 'setPercent', 80)
+         )
+
+    test(bigassfan, test_name="increase function",
+         init_params=dict(power=1, brightness=50, color_temperature=50),
+         action=[('brightness', 'increase'), ('color_temperature', 'increase')]
+         )
+
+    test(bigassfan, test_name="decrease function",
+         init_params=dict(power=1, brightness=50, color_temperature=50),
+         action=[('brightness', 'decrease'), ('color_temperature', 'decrease')]
+         )
+
+    ########### Hue LIGHTBULB ###############
+    print('*' * 10 + hue.name + '*' * 10)
+
+    test(hue, test_name='Turn on',
+         init_params=dict(color=(0, 0, 0), color_temperature=0),
+         action=('color', 'turnOn')
+         )
+    test(hue, test_name='Turn on while already on',
+         init_params=dict(color=(0, 0, 100), color_temperature=0),
+         action=('color', 'turnOn')
+         )
+
+    test(hue, test_name='Turn off',
+         init_params=dict(color=(0, 0, 100), color_temperature=0),
+         action=('color', 'turnOff')
+         )
+
+    test(hue, test_name='Turn off while already off',
+         init_params=dict(color=(0, 0, 0), color_temperature=0),
+         action=('color', 'turnOff')
+         )
+
+    test(hue, test_name="Change brightness while off",
+         init_params=dict(color=(0, 0, 0), color_temperature=0),
+         action=('color', 'setPercent', 50),
+         )
+
+    test(hue, test_name="Change brightness while on",
+         init_params=dict(color=(0, 0, 100), color_temperature=0),
+         action=('color', 'setPercent', 50), debug=True
+         )
+
+    test(hue, test_name="Unchange brightness while on",
+         init_params=dict(color=(0, 0, 100), color_temperature=0),
+         action=('color', 'setPercent', 100), debug=True
+         )
+
+    test(hue, test_name="increase function",
+         init_params=dict(color=(0, 0, 50), color_temperature=50),
+         action=[('color', 'increase'), ('color_temperature', 'increase')]
+         )
+
+    test(hue, test_name="decrease function",
+         init_params=dict(color=(0, 0, 50), color_temperature=50),
+         action=[('color', 'decrease'), ('color_temperature', 'decrease')]
+         )
+
+    test(hue, test_name="rotate color",
+         init_params=dict(color=(180, 0, 50), color_temperature=50),
+         action=[('color', 'setHSB', params_interpreters['setHSB'](c)) for c in color_list]
+         )
