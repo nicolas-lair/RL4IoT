@@ -15,8 +15,8 @@ Light_description = {
 }
 
 for color in color_list:
-    s_list = ["Set {{name}} {{location}} to {color}",
-              "You set the color of {{name}} {{location}} to {color}"]
+    s_list = ["Change {{name}} {{location}} to {color}",
+              "You changed the color of {{name}} {{location}} to {color}"]
     Light_description[f'{color}_color'] = GoalDescription(sentences=[s.format(color=color) for s in s_list])
 
 for level in levels_dict['brightness']:
