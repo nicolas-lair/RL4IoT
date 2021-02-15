@@ -22,15 +22,12 @@ class Thing(ABC, DescriptionNode):
         init value
         """
         super().__init__(name=name, description=description, children=self.get_action_channels())
-        # self.name = name #TODO check if necessary
         self.goals_dict = initialize_instruction(goal_dict=goals_dict, name=name, location=location)
 
         # self.observation_space, self.action_space = self.build_observation_and_action_space()
         self._channels = self.get_channels()
         self.initial_values = {'is_visible': is_visible, 'init_type': init_type,
                                'init_params': init_params if init_params is not None else dict()}
-        # self.description_embedding = None
-        # self.item_type = None
 
         self.is_visible = None
         self.init(**self.initial_values)
