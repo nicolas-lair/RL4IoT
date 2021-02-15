@@ -124,7 +124,10 @@ class ColorItem(AbstractItem):
         self.set_state((self.hue, self.saturation, percent))
 
     @check_method_availability
-    def setHSB(self, h, s, b):
+    def setHSB(self, h=None, s=None, b=None):
+        h = self.hue if h is None else h
+        s = self.saturation if s is None else s
+        b = self.brightness if b is None else b
         self.set_state((h, s, b))
 
 

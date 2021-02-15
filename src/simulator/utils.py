@@ -22,9 +22,14 @@ def _get_color_name_from_hsb(h, s, b, color_list, color_h_inf, color_h_sup):
     raise EOFError
 
 
-def color_to_hsb(string_color, color_list, color_h_inf, color_h_sup):
+def color_to_hue(string_color, color_list, color_h_inf, color_h_sup):
     idx = color_list.index(string_color)
     h = (color_h_inf[idx] + color_h_sup[idx]) // 2
+    return h
+
+
+def color_to_hsb(string_color, color_list, color_h_inf, color_h_sup):
+    h = color_to_hue(string_color, color_list, color_h_inf, color_h_sup)
     return h, 75, 70
 
 

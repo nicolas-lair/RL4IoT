@@ -1,5 +1,5 @@
 from functools import partial
-from simulator.utils import level_to_percent, color_to_hsb, _get_color_name_from_hsb, _percent_to_level
+from simulator.utils import level_to_percent, color_to_hsb, _get_color_name_from_hsb, _percent_to_level, color_to_hue
 
 color_list = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink']
 color_h_inf = [0, 18, 50, 64, 167, 252, 300, 335]
@@ -41,7 +41,7 @@ discrete_parameters = {
 
 params_interpreters = {
     'setPercent': partial(level_to_percent, lvl_dict=levels_dict),
-    'setHSB': partial(color_to_hsb, color_list=color_list, color_h_inf=color_h_inf, color_h_sup=color_h_sup),
+    'setHSB': partial(color_to_hue, color_list=color_list, color_h_inf=color_h_inf, color_h_sup=color_h_sup),
     'setString': lambda x: x,
 }
 
