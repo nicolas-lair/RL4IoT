@@ -55,11 +55,9 @@ def label_increase_change(increase, type):
 
 
 def get_increase_change(previous_brightness, next_brightness, type):
-    if (next_brightness - previous_brightness > INCREASE_DECREASE_STEP) \
-            or (previous_brightness + INCREASE_DECREASE_STEP > 100):
+    if next_brightness > previous_brightness:
         return label_increase_change(increase=True, type=type)
-    elif (previous_brightness - next_brightness > INCREASE_DECREASE_STEP) \
-            or (previous_brightness - INCREASE_DECREASE_STEP < 0):
+    elif previous_brightness > next_brightness:
         return label_increase_change(increase=False, type=type)
     else:
         return None
