@@ -7,6 +7,10 @@ from torch.nn.utils.rnn import pad_sequence
 import numpy as np
 import torchtext as text
 from sklearn.preprocessing import OneHotEncoder
+from logger import get_logger
+
+logger = get_logger(__name__)
+logger.setLevel(10)
 
 
 def get_description_embedder(description_embedder_params, language_model):
@@ -24,17 +28,32 @@ def get_description_embedder(description_embedder_params, language_model):
 
 
 def deal_with_cache(data, cache, func, use_cache=True):
+    """
+    Identify data that needs to be computed
+    Update the cache with the new computed data
+    Get computed data from the cache
+    Parameters
+    ----------
+    data :
+    cache :
+    func :
+    use_cache :
+
+    Returns
+    -------
+
+    """
     if use_cache:
         new_data = [d for d in data if cache.get(d, None) is None]
     else:
         new_data = data
 
-    computed_data = func(new_data) if new_data else None
+    computed_data = func(new_data) if new_data else []
 
     if use_cache:
         new_res = {new_data[i]: computed_data[i] for i in range(len(new_data))}
         cache.update(new_res)
-        computed_data = torch.stack([cache[d] for d in data])
+        computed_data = [cache[d] for d in data]
 
     return computed_data
 
@@ -51,11 +70,26 @@ class FixSizeOrderedDict(OrderedDict):
                 self.popitem(False)
 
 
+class ItemEmbedder:
+    def __init__(self, item_type, device, use_cache=True):
+        self.item_type_embedder = OneHotEncoder(sparse=False)
+        self.item_type_embedder.fit(np.array(item_type).reshape(-1, 1))
+        if use_cache:
+            self.cache = {
+                item: torch.tensor(self.item_type_embedder.transform(np.array(item).reshape(-1, 1))).to(device).view(-1)
+                for item in item_type
+            }
+        else:
+            self.cache = None
+
+    def embed(self, item):
+        return self.cache[item]
+
+
 class StateEmbedder:
     def __init__(self, description_embedder, item_type, value_encoding_size, device, use_cache=True):
         self.description_embedder = description_embedder
-        self.item_type_embedder = OneHotEncoder(sparse=False)
-        self.item_type_embedder.fit(np.array(item_type).reshape(-1, 1))
+        self.item_embedder = ItemEmbedder(item_type=item_type, device=device)
         self.value_embedding_size = value_encoding_size
 
         self.device = device
@@ -63,9 +97,9 @@ class StateEmbedder:
 
         self.use_cache = use_cache
         if self.use_cache:
-            self.cache = FixSizeOrderedDict(max=5000)
+            self.cache = FixSizeOrderedDict(max=10000)
 
-        self.cached_state = None
+        self.always_use_cache = self.use_cache and not isinstance(self.description_embedder, LearnedDescriptionEmbedder)
 
     def _compute_description_embedding_in_batch(self, observations, use_description_cache):
         """
@@ -103,10 +137,7 @@ class StateEmbedder:
         return descriptions_embeddings, (thing_description_index, channel_description_index)
 
     def _build_item_and_value_embedding(self, channel):
-        # Item embedding
-        item_embedding = self.item_type_embedder.transform(
-            np.array(channel['item_type']).reshape(-1, 1)).flatten()
-        item_embedding = torch.tensor(item_embedding).to(self.device)
+        item_embedding = self.item_embedder.embed(channel['item_type'])
 
         # Value embedding
         value_embedding = torch.zeros(self.value_embedding_size).to(self.device)
@@ -130,7 +161,6 @@ class StateEmbedder:
 
         embedded_observations = []
         for obs in observations:
-            obs_id = obs.id
             new_obs = dict()
             if obs.type == "Channel":
                 obs = dict(thing=dict(channel=obs.state))
@@ -156,12 +186,20 @@ class StateEmbedder:
                              thing_description_embedding.view(-1)])
                         thing_obs.append(channel_embedding.to(self.device))
                 new_obs[thing_name] = torch.stack(thing_obs).float()
+                assert len(new_obs[thing_name].size()) == 2
             embedded_observations.append(new_obs)
         return embedded_observations
 
     def embed_state(self, observations, use_cache=None):
         if not isinstance(observations, (tuple, list)):
             observations = [observations]
+
+        if self.always_use_cache:
+            if not use_cache:
+                logger.debug('State embedder using the cache due to always_use_cache attr. while use_cache is False')
+            use_cache = True
+        else:
+            use_cache = self.use_cache if use_cache is None else use_cache
 
         observation_embedding = deal_with_cache(observations, self.cache, self._compute_state_embedding,
                                                 use_cache=use_cache)
