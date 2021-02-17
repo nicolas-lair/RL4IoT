@@ -1,12 +1,17 @@
 from abc import ABC, abstractmethod
-from collections import OrderedDict
 
 from simulator.Items import *
-from simulator.Channel import Channel
+from simulator.Channel import Channel, ChannelState
 from simulator.discrete_parameters import levels_dict
 from simulator.TreeView import DescriptionNode
 from simulator.instructions import GoalDescription, initialize_instruction
 from simulator.discrete_parameters import TVchannels_list, percent_to_level
+
+
+class ThingState(ChannelState):
+    def __init__(self, state, description):
+        state['description'] = description
+        super().__init__(state)
 
 
 class Thing(ABC, DescriptionNode):
@@ -98,16 +103,8 @@ class Thing(ABC, DescriptionNode):
         channels = self.get_channels()
         for c in channels:
             if oracle or c.read:
-                state[c.name] = {
-                    'state': c.get_state(),
-                    'description': c.description,
-                    'item_type': c.item.type
-                }
-
-                if c.node_embedding is not None:
-                    state[c.name].update({'embedding': c.node_embedding})
-        state['description'] = self.description
-        state = OrderedDict(sorted(state.items()))
+                state[c.name] = c.get_state()
+        state = ThingState(state, description=self.description)
         return state
 
     def get_state(self, oracle):

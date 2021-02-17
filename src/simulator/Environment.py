@@ -1,47 +1,18 @@
-from collections import OrderedDict
+from collections import OrderedDict, UserDict
 import json
 
 import gym
 
-from simulator.Thing import Thing
-from simulator.Channel import Channel
+from simulator.Thing import Thing, ThingState
+from simulator.Channel import Channel, ChannelState
 from simulator.Action import ExecAction, OpenHABAction, Params, DoNothing
 from simulator.TreeView import Node
 from simulator.discrete_parameters import discrete_parameters
 
 
-class State:
-    def __init__(self, state, type="Full_State"):
-        # Order object to be always the same, important for hierarchical DeepSet
-        self.state = OrderedDict(sorted(state.items()))
-        # self.id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=32))
-        self.id = hash(self)
-        # if isinstance(state
-        self.type = type
-
-    def __eq__(self, other):
-        return self.id == other.id
-
-    def __repr__(self):
-        return repr(self.state)
-
-    def __str__(self):
-        return str(self.state)
-
-    def __getitem__(self, item):
-        return self.state[item]
-
-    def __hash__(self):
-        return hash(json.dumps(self.state, sort_keys=True))
-
+class State(ChannelState):
     def copy(self):
-        return self.state.copy()
-
-    def items(self):
-        return self.state.items()
-
-    def values(self):
-        return self.state.values()
+        return State(self)
 
 
 class IoTEnv(gym.Env):
@@ -206,11 +177,13 @@ class IoTEnv4ML(gym.Wrapper):
     def filter_state(self, action):
         self.previous_state = self.state
         if isinstance(action, Thing):
-            self.state = State(self.state[action.name], type='Thing')
+            self.state = State({action.name: self.state[action.name]})
         elif isinstance(action, Channel):
-            new_state = self.state[action.name]
-            new_state.update(dict(thing_description=self.state['description']))
-            self.state = State(new_state, type='Channel')
+            assert len(self.state) == 1
+            thing_name = list(self.state.keys())[0]
+            channel_state = self.state[thing_name][action.name]
+            thing_state = ThingState({action.name : channel_state}, description=self.state[thing_name]['description'])
+            self.state = State({thing_name: thing_state})
 
     def save_running_action(self, action):
         if isinstance(action, Thing):

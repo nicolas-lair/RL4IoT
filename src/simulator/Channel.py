@@ -1,7 +1,18 @@
+from collections import OrderedDict
 from collections.abc import Iterable
+
+import json
 
 from simulator.Action import OpenHABAction
 from simulator.TreeView import DescriptionNode
+
+
+class ChannelState(OrderedDict):
+    def __init__(self, state):
+        super().__init__(sorted(state.items()))
+
+    def __hash__(self):
+        return hash(json.dumps(self, sort_keys=True))
 
 
 class Channel(DescriptionNode):
@@ -35,7 +46,13 @@ class Channel(DescriptionNode):
             self.associated_state_change = [associated_state_change]
 
     def get_state(self):
-        return self.item.get_state()
+        item_state = self.item.get_state()
+        state = {'state': item_state,
+                 'description': self.description,
+                 'item_type': self.item.type
+                 }
+        if self.node_embedding is not None: state.update({'embedding': self.node_embedding})
+        return ChannelState(state)
 
     # def set_state(self, value):
     #     return self.item.set_state(value)

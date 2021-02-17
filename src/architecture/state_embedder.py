@@ -10,7 +10,7 @@ from sklearn.preprocessing import OneHotEncoder
 from logger import get_logger
 
 logger = get_logger(__name__)
-logger.setLevel(10)
+logger.setLevel(20)
 
 
 def get_description_embedder(description_embedder_params, language_model):
@@ -27,7 +27,7 @@ def get_description_embedder(description_embedder_params, language_model):
     return description_embedder
 
 
-def deal_with_cache(data, cache, func, use_cache=True):
+def deal_with_cache(data, cache, func, use_cache=True, **kwargs):
     """
     Identify data that needs to be computed
     Update the cache with the new computed data
@@ -48,13 +48,15 @@ def deal_with_cache(data, cache, func, use_cache=True):
     else:
         new_data = data
 
-    computed_data = func(new_data) if new_data else []
+    computed_data = func(new_data, **kwargs) if new_data else []
 
     if use_cache:
         new_res = {new_data[i]: computed_data[i] for i in range(len(new_data))}
         cache.update(new_res)
         computed_data = [cache[d] for d in data]
+        cache.truncate()
 
+    assert len(computed_data) == len(data)
     return computed_data
 
 
@@ -63,11 +65,11 @@ class FixSizeOrderedDict(OrderedDict):
         self._max = max
         super().__init__(*args, **kwargs)
 
-    def __setitem__(self, key, value):
-        OrderedDict.__setitem__(self, key, value)
+    def truncate(self):
         if self._max > 0:
-            if len(self) > self._max:
-                self.popitem(False)
+            while len(self) > self._max:
+                oldest = next(iter(self))
+                del self[oldest]
 
 
 class ItemEmbedder:
@@ -97,7 +99,7 @@ class StateEmbedder:
 
         self.use_cache = use_cache
         if self.use_cache:
-            self.cache = FixSizeOrderedDict(max=10000)
+            self.channel_cache = FixSizeOrderedDict(max=10000)
 
         self.always_use_cache = self.use_cache and not isinstance(self.description_embedder, LearnedDescriptionEmbedder)
 
@@ -115,19 +117,9 @@ class StateEmbedder:
         """
         thing_descriptions, channels_descriptions = [], []
         for obs in observations:
-            # Compute all descriptions in batch
-            if obs.type == 'Full_State':
-                thing_descriptions.extend([t['description'] for t in obs.values()])
-                channels_descriptions.extend(
-                    [c['description'] for t in obs.values() for c in t.values() if isinstance(c, dict)])
-            elif obs.type == 'Thing':
-                thing_descriptions.extend([obs['description']])
-                channels_descriptions.extend([c['description'] for c in obs.values() if isinstance(c, dict)])
-            elif obs.type == 'Channel':
-                thing_descriptions.extend([obs['thing_description']])
-                channels_descriptions.extend([obs['description']])
-            else:
-                raise NotImplementedError
+            thing_descriptions.extend([t['description'] for t in obs.values()])
+            channels_descriptions.extend(
+                [c['description'] for t in obs.values() for c in t.values() if isinstance(c, dict)])
 
         descriptions_embeddings = self.description_embedder.embed_descriptions(
             thing_descriptions + channels_descriptions, use_cache=use_description_cache)
@@ -136,7 +128,7 @@ class StateEmbedder:
         channel_description_index = len(thing_descriptions)
         return descriptions_embeddings, (thing_description_index, channel_description_index)
 
-    def _build_item_and_value_embedding(self, channel):
+    def _build_channel_embedding(self, channel):
         item_embedding = self.item_embedder.embed(channel['item_type'])
 
         # Value embedding
@@ -144,7 +136,7 @@ class StateEmbedder:
         value_embedding[:len(channel['state'])] = torch.tensor(channel['state'])
         return item_embedding, value_embedding
 
-    def _compute_state_embedding(self, observations, use_description_cache=True):
+    def _compute_state_embedding(self, observations, use_cache=True):
         """
 
         Parameters
@@ -157,35 +149,35 @@ class StateEmbedder:
 
         """
         descr_embeddings, (thing_index, channel_index) = self._compute_description_embedding_in_batch(
-            observations=observations, use_description_cache=use_description_cache)
+            observations=observations, use_description_cache=use_cache)
 
         embedded_observations = []
         for obs in observations:
             new_obs = dict()
-            if obs.type == "Channel":
-                obs = dict(thing=dict(channel=obs.state))
-            elif obs.type == 'Thing':
-                obs = dict(thing=obs.state)
-
             for thing_name, thing in obs.items():
                 thing_obs = []
-                thing_description_embedding = descr_embeddings[thing_index]
+                thing_description_embedding = descr_embeddings[thing_index].view(-1)
                 thing_index += 1
-                for _, channel in thing.items():
-                    if isinstance(channel, (dict, OrderedDict)):
+                for channel_name, channel in thing.items():
+                    if channel_name != 'description':
                         if channel['item_type'] == 'goal_string':
                             raise NotImplementedError
-
-                        channel_descriptions_embedding = descr_embeddings[channel_index]
+                        channel_descriptions_embedding = descr_embeddings[channel_index].view(-1)
                         channel_index += 1
 
-                        item_embedding, value_embedding = self._build_item_and_value_embedding(channel)
+                        channel_embedding = None
+                        if use_cache:
+                            channel_embedding = self.channel_cache.get(channel, None)
+                        if not use_cache or channel_embedding is None:
+                            item_embedding, value_embedding = self._build_channel_embedding(channel)
+                            channel_embedding = torch.cat(
+                                [channel_descriptions_embedding, item_embedding, value_embedding,
+                                 thing_description_embedding]).to(self.device).float()
+                            if use_cache:
+                                self.channel_cache[channel] = channel_embedding
+                        thing_obs.append(channel_embedding)
 
-                        channel_embedding = torch.cat(
-                            [channel_descriptions_embedding.view(-1), item_embedding, value_embedding,
-                             thing_description_embedding.view(-1)])
-                        thing_obs.append(channel_embedding.to(self.device))
-                new_obs[thing_name] = torch.stack(thing_obs).float()
+                new_obs[thing_name] = torch.stack(thing_obs)
                 assert len(new_obs[thing_name].size()) == 2
             embedded_observations.append(new_obs)
         return embedded_observations
@@ -201,8 +193,10 @@ class StateEmbedder:
         else:
             use_cache = self.use_cache if use_cache is None else use_cache
 
-        observation_embedding = deal_with_cache(observations, self.cache, self._compute_state_embedding,
-                                                use_cache=use_cache)
+        # TODO deal with cache size
+        observation_embedding = self._compute_state_embedding(observations, use_cache=use_cache)
+        # observation_embedding = deal_with_cache(observations, self.cache, self._compute_state_embedding,
+        #                                         use_cache=use_cache)
 
         if len(observation_embedding) == 1:
             observation_embedding = observation_embedding[0]
@@ -210,7 +204,8 @@ class StateEmbedder:
 
     def empty_cache(self):
         if isinstance(self.description_embedder, LearnedDescriptionEmbedder):
-            self.cache.clear()
+            # self.cache.clear()
+            self.channel_cache.clear()
             self.description_embedder.clear_cache()
 
 
