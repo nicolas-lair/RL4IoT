@@ -53,7 +53,7 @@ class FullNet(nn.Module):
         embedded_actions : torch tensor containing the projection of the embedded actions in a common action space
         """
         # embedded_actions = self.action_projector(*actions)
-        context = self.compute_context(instruction, state, actions, hidden_state)
+        context = self.compute_context(instruction=instruction, state=state, actions=actions, hidden_state=hidden_state)
         x = self.q_network(context)
         return x
 

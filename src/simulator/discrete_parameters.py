@@ -54,3 +54,7 @@ params_interpreters = {
 get_color_name_from_hsb = partial(_get_color_name_from_hsb, color_list=color_list, color_h_inf=color_h_inf,
                                   color_h_sup=color_h_sup)
 percent_to_level = partial(_percent_to_level, lvl_dict=levels_dict)
+
+if __name__ == '__main__':
+    for c in color_list:
+        print(c, params_interpreters['setHSB'](c))
