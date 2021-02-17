@@ -1,9 +1,15 @@
 from functools import partial
-from simulator.utils import level_to_percent, color_to_hsb, _get_color_name_from_hsb, _percent_to_level, color_to_hue
+from simulator.utils import level_to_percent, _get_color_name_from_hsb, _percent_to_level, color_to_hue
 
-color_list = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink']
-color_h_inf = [0, 18, 50, 64, 167, 252, 300, 335]
-color_h_sup = [17, 49, 63, 166, 251, 299, 334, 360]
+N_COLORS = 3
+if N_COLORS == 3:
+    color_list = ['red', 'yellow', 'blue']
+    color_h_inf = [0, 121, 241]
+    color_h_sup = [120, 240, 360]
+else:
+    color_list = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink']
+    color_h_inf = [0, 18, 50, 64, 167, 252, 300, 335]
+    color_h_sup = [17, 49, 63, 166, 251, 299, 334, 360]
 
 N_LEVELS = 3
 if N_LEVELS == 5:
