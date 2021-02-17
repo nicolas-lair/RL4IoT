@@ -1,6 +1,7 @@
 import random
 
 import torch
+from torch.nn.utils.rnn import pad_sequence
 
 
 def differentiable_or(proba_tensor):
@@ -90,3 +91,13 @@ def freeze_model(model):
 def unfreeze_model(model):
     for param in model.parameters():
         param.requires_grad = True
+
+
+def format_state(state, batch_first=True):
+    if isinstance(state, torch.Tensor):
+        return state
+    if isinstance(state, dict):
+        state = [state]
+    full_state = [torch.cat(list(s.values())) for s in state] # cat all channels from state
+    full_state = pad_sequence(full_state, batch_first=batch_first)
+    return full_state

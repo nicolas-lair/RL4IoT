@@ -2,7 +2,7 @@ import torch
 from torch import nn as nn
 from torch.nn.utils.rnn import pad_sequence
 
-from architecture.utils import flatten_state, differentiable_or
+from architecture.utils import flatten_state, differentiable_or, format_state
 
 
 class Net(nn.Module):
@@ -80,18 +80,8 @@ class DeepSetStateNet(nn.Module):
             raise NotImplementedError
         return full_state
 
-    @staticmethod
-    def format_state(state):
-        # full_state = flatten_state(state).float()
-        if isinstance(state, dict):
-            state = [state]
-        full_state = [torch.cat(list(s.values())) for s in state]  # cat all channels from state
-        # full_state = torch.stack(full_state)  # stack batch state
-        full_state = pad_sequence(full_state, batch_first=True)
-        return full_state
-
     def forward(self, state, instruction, hidden_state=None):
-        full_state = self.format_state(state)
+        full_state = format_state(state)
         if hidden_state is not None:
             hidden_state = hidden_state.unsqueeze(1).repeat_interleave(repeats=full_state.size(1), dim=1)
             full_state = torch.cat([full_state, hidden_state], dim=2)
@@ -115,7 +105,7 @@ class DoubleAttDeepSet(DeepSetStateNet):
 
     def forward(self, state, instruction, hidden_state):
         # full_state = flatten_state(state).float()
-        full_state = self.format_state(state)
+        full_state = format_state(state)
         goal_attention_vector = self.goal_attention_layer(instruction).unsqueeze(1)
         hidden_state_attention_vector = self.hidden_state_attention_layer(hidden_state).unsqueeze(1)
         full_state = hidden_state_attention_vector * goal_attention_vector * full_state
@@ -154,7 +144,7 @@ class HierarchicalDeepSet(DeepSetStateNet):
         return [thing.size(0) for thing in state.values()]
 
     def forward(self, state, instruction, hidden_state=None):
-        full_state = self.format_state(state)
+        full_state = format_state(state)
         n_channels = self.get_number_of_channels(state)
         assert sum(n_channels, 0) == full_state.size(1)
 
