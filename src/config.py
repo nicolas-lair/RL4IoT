@@ -13,22 +13,23 @@ from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.discrete_parameters import color_list, N_LEVELS, TVchannels_list
 from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState, DoubleAttDeepSet
-from architecture.dqn import FullNet, FullNetWithAttention
+from architecture.dqn import FullNet, FullNetWithGatedAttention
 from simulator.Thing import PlugSwitch, LGTV
-from simulator.lighting_things import AdorneLightBulb, BigAssFanLightBulb, HueLightBulb, SimpleLight, AlwaysOnLight
+from simulator.lighting_things import AdorneLightBulb, BigAssFanLightBulb, HueLightBulb, SimpleLight, \
+    StructuredHueLight
 
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
 vector_cache = '/home/nicolas/PycharmProjects/RL4IoT/.vector_cache'
 
 word_embedding_size = 50
 instruction_embedding = 50
-description_embedding = 26
+description_embedding = 25
 value_encoding_size = 3  # size of the vector in which is encoded the value of a channel
 action_embedding = 30
 
 vocab_for_word_embedding = torchtext.vocab.GloVe(name='6B', dim=word_embedding_size, cache=vector_cache)
 
-description_embedder_type = 'glove_mean'
+description_embedder_type = 'projection'
 if description_embedder_type == 'glove_mean':
     description_embedding = word_embedding_size
 
@@ -56,42 +57,41 @@ def prepare_simulation(simulation_name):
     return path_dir, simulation_id
 
 
-def generate_env_params():
-    env_params = dict(
-        max_episode_length=2,
-        ignore_exec_action=True,
-        allow_do_nothing=True,
-        filter_state_during_episode=filter_state_during_episode,
-        thing_params=[
-            # ThingParam(SimpleLight, dict(name='light', simple=True)),
-            # ThingParam(AlwaysOnLight, dict(name='bright light', simple=True)),
-            # ThingParam(SimpleLight, dict(name='heater', simple=True)),
-            # ThingParam(AdorneLightBulb, dict(simple=True)),
-            # ThingParam(HueLightBulb, dict()),
-            ThingParam(BigAssFanLightBulb, dict(simple=True))
+env_params = dict(
+    max_episode_length=2,
+    ignore_exec_action=True,
+    allow_do_nothing=True,
+    filter_state_during_episode=filter_state_during_episode,
+    thing_params=[
+        # ThingParam(SimpleLight, dict(name='plug', simple=True)),
+        # ThingParam(SimpleLight, dict(name='switch', simple=True)),
+        # ThingParam(AdorneLightBulb, dict(name="light", simple=True, always_on=False)),
+        ThingParam(BigAssFanLightBulb, dict(name="light", simple=True, always_on=False)),
+        # ThingParam(StructuredHueLight, dict(name="colored light", simple=True, always_on=False)),
 
-            # ThingParam(PlugSwitch,
-            #            dict(name='first plug',
-            #                 description='This is a plug',
-            #                 is_visible=True,
-            #                 init_type='random',
-            #                 init_params=dict())
-            #            ),
-            # ThingParam(LightBulb,
-            #            dict(name='first light bulb',
-            #                 description='This is a light bulb',
-            #                 is_visible=True,
-            #                 init_type='random',
-            #                 init_params=dict())
-            #            ),
-            # ThingParam(LGTV, dict(name='television',
-            #                       description='This is a television',
-            #                       is_visible=True,
-            #                       init_type='random',
-            #                       init_params=dict())
-            #            )
-        ],
-    )
+        # ThingParam(PlugSwitch,
+        #            dict(name='first plug',
+        #                 description='This is a plug',
+        #                 is_visible=True,
+        #                 init_type='random',
+        #                 init_params=dict())
+        #            ),
+        # ThingParam(LightBulb,
+        #            dict(name='first light bulb',
+        #                 description='This is a light bulb',
+        #                 is_visible=True,
+        #                 init_type='random',
+        #                 init_params=dict())
+        #            ),
+        # ThingParam(LGTV, dict(name='television',
+        #                       description='This is a television',
+        #                       is_visible=True,
+        #                       init_type='random',
+        #                       init_params=dict())
+        #            )
+    ],
+)
+def generate_env_params():
     return env_params
 
 

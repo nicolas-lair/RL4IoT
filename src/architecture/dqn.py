@@ -58,7 +58,7 @@ class FullNet(nn.Module):
         return x
 
 
-class FullNetWithAttention(FullNet):
+class FullNetWithGatedAttention(FullNet):
     def __init__(self, context_model, action_embedding_size, net_params, **kwargs):
         super().__init__(context_model, action_embedding_size, net_params, **kwargs)
         self.attention_layer = nn.Sequential(

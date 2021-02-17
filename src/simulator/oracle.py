@@ -63,9 +63,7 @@ class Oracle:
                                                 state_description_set[thing.name]]
             else:
                 raise NotImplementedError(f'mode should be one of all or first, was {mode}')
-            # thing_instruction = itertools.chain.from_iterable(thing.instruction.values())
-            # instructions[thing.name] = {i.format(color=c, level=l, name=thing.name) for i, c, l in
-            #                             itertools.product(thing_instruction, color_list, percent_level)}
-            # instructions[thing.name] = sorted(instructions[thing.name])
+
+            str_instructions[thing.name] = sorted(str_instructions[thing.name])
 
         return state_description_set, str_instructions
