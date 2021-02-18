@@ -10,7 +10,7 @@ rootLogger = logging.getLogger('root')
 extra_dict = dict(simulation_id="")
 
 
-def set_logger_handler(level, console=True, log_file=True, log_path=None, simulation_id=""):
+def set_logger_handler(level=logging.INFO, console=True, log_file=True, log_path=None, simulation_id=""):
     assert level in [logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL]
     assert isinstance(console, bool)
     assert isinstance(log_file, bool)

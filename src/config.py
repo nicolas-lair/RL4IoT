@@ -170,6 +170,15 @@ def generate_reward_params(archi=DeepSetStateNet):
     return reward_params
 
 
+def generate_logger_params(simulation_id):
+    return dict(
+        level=logging.INFO,
+        console=True,
+        log_file=True,
+        simulation_id=simulation_id
+    )
+
+
 def get_data_collection_params(name='data_collection_'):
     from datetime import datetime
     env_params = generate_env_params()
@@ -288,17 +297,12 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
         lr_scheduler=None,
         lr_scheduler_params=dict(mode='min'),
         language_model_params=language_model_params,
-        logger=dict(
-            level=logging.INFO,
-            console=True,
-            log_file=True,
-            simulation_id=simulation_id
-        ),
-        n_episode=30000,
+        logger=generate_logger_params(simulation_id),
+        n_episode=15000,
         target_update_frequence=20,
         device=device,
         episode_reset=True,
-        test_frequence=300,
+        test_frequence=250,
         n_iter_test=25,
         tqdm=False,
         save_directory=path_dir,
