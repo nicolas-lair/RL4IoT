@@ -14,8 +14,9 @@ from simulator.Action import ACTION_SPACE
 from simulator.discrete_parameters import color_list, N_LEVELS, TVchannels_list
 from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState, DoubleAttDeepSet
 from architecture.dqn import FullNet, FullNetWithGatedAttention
-from simulator.Thing import PlugSwitch, LGTV
-from simulator.lighting_things import AdorneLightBulb, BigAssFanLightBulb, HueLightBulb, SimpleLight, \
+from simulator.Thing import PlugSwitch
+from TV_thing import LGTV
+from simulator.lighting_things import AdorneLight, BigAssFan, HueLightBulb, SimpleLight, \
     StructuredHueLight
 
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))

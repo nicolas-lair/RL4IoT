@@ -1,153 +1,13 @@
-from abc import ABC, abstractmethod
-from functools import partial
+from simulator.Thing import Thing, PowerThing
+from simulator.discrete_parameters import get_color_name_from_hsb
+from simulator.standard_channels import PowerChannel, BrightnessChannel, ColorTemperatureChannel, ColorChannel, \
+    build_description_and_change_dicts
 
-from simulator.Channel import Channel
-from simulator.Items import ColorItem, DimmerItem, SwitchItem, MethodUnavailableError
-from simulator.Thing import Thing
-from simulator.instructions import GoalDescription
-from simulator.discrete_parameters import color_list, levels_dict, get_color_name_from_hsb, percent_to_level
-
-Light_description = {
-    'turn_on': GoalDescription(sentences=["Turn on {name} {location}",
-                                          "You turned on the {name} {location}"], need_power=False),
-    'turn_off': GoalDescription(sentences=["Turn off {name} {location}",
-                                           "You turned off the {name} {location}"], need_power=False)
-}
-
-for color in color_list:
-    s_list = ["Change {{name}} color {{location}} to {color}",
-              "You changed the color of {{name}} {{location}} to {color}"]
-    Light_description[f'{color}_color'] = GoalDescription(sentences=[s.format(color=color) for s in s_list])
-
-for level in levels_dict['brightness']:
-    s_list = ["Set {{name}} brightness {{location}} to {level}",
-              "{{location}} the brightness of {{name}} is now {level}"]
-    Light_description[f'lum_level_{level}'] = GoalDescription(sentences=[s.format(level=level) for s in s_list])
-
-for level in levels_dict['temperature']:
-    s_list = ["Set {{name}} temperature {{location}} to {level}",
-              "{{location}} the light temperature of {{name}} is now {level}"]
-    Light_description[f'temp_level_{level}'] = GoalDescription(sentences=[s.format(level=level) for s in s_list])
-
-Light_change = {
-    'increase_lum': GoalDescription(sentences=["Increase brightness of {name} {location}",
-                                               "You increased the brightness of {name} {location}"]),
-    'decrease_lum': GoalDescription(sentences=["Decrease brightness of {name} {location}",
-                                               "You decreased the brightness of {name} {location}"]),
-    'warmer_color': GoalDescription(sentences=["Increase temperature of {name} {location}",
-                                               "You made the light of {name} warmer {location}"]),
-    'colder_color': GoalDescription(sentences=["Decrease temperature of {name} {location}",
-                                               "You made the light of {name} colder {location}"]),
-}
-
-Light_goals = {
-    'description': Light_description,
-    'change': Light_change
-}
+description_keys = ['power', 'brightness', 'temperature', 'color']
+goals = build_description_and_change_dicts(description_keys)
 
 
-def label_increase_change(increase, type):
-    assert isinstance(increase, bool)
-    if type == 'brightness':
-        return 'increase_lum' if increase else 'decrease_lum'
-    elif type == 'temperature':
-        return 'warmer_color' if increase else 'colder_color'
-
-
-def get_increase_change(previous_brightness, next_brightness, type):
-    if next_brightness > previous_brightness:
-        return label_increase_change(increase=True, type=type)
-    elif previous_brightness > next_brightness:
-        return label_increase_change(increase=False, type=type)
-    else:
-        return None
-
-
-class PowerChannel(Channel):
-    def __init__(self, name='power', description='switch on and off'):
-        super().__init__(name=name,
-                         description=description,
-                         item=SwitchItem(turnOn=True, turnOff=True),
-                         read=True,
-                         write=True,
-                         associated_state_description=lambda x: 'turn_on' if x else 'turn_off',
-                         associated_state_change=None)
-
-
-class BrightnessChannel(Channel):
-    def __init__(self, name='brightness', description='brightness',
-                 methods=dict(setPercent=True, increase=True, decrease=True)):
-        super().__init__(name=name,
-                         description=description,
-                         item=DimmerItem(**methods, discretization={'setPercent': 'brightness'}),
-                         read=True,
-                         write=True,
-                         associated_state_description=lambda
-                             p: f'lum_level_{percent_to_level(p, lvl_type="brightness")}',
-                         associated_state_change=partial(get_increase_change, type='brightness')
-                         )
-
-
-class ColorTemperatureChannel(Channel):
-    def __init__(self, name='color_temperature', description='temperature',
-                 methods=dict(setPercent=True, increase=True, decrease=True)):
-        super().__init__(name=name,
-                         description=description,
-                         item=DimmerItem(**methods, discretization={'setPercent': 'temperature'}),
-                         read=True,
-                         write=True,
-                         associated_state_description=lambda
-                             p: f'temp_level_{percent_to_level(p, lvl_type="temperature")}',
-                         associated_state_change=partial(get_increase_change, type="temperature")
-                         )
-
-
-class ColorChannel(Channel):
-    def __init__(self, name='color', description='color',
-                 methods=None, associated_state_description=None, associated_state_change=None):
-
-        if methods is None:
-            methods = dict(turnOn=True, turnOff=True, increase=True, decrease=True, setPercent=True, setHSB=True)
-
-        if associated_state_description is None:
-            associated_state_description = [
-                lambda h, s, b: 'turn_on' if b > 0 else 'turn_off',
-                lambda h, s, b: f'{get_color_name_from_hsb(h, s, b)}_color',
-                lambda h, s, b: f'lum_level_{percent_to_level(b, "brightness")}',
-            ]
-        if associated_state_change is None:
-            def associated_state_change(h1, s1, b1, h2, s2, b2): return get_increase_change(b1, b2, type='brightness')
-
-        super().__init__(name=name,
-                         description=description,
-                         item=ColorItem(**methods, discretization={'setHSB': 'colors', 'setPercent': 'brightness'}),
-                         associated_state_description=associated_state_description,
-                         associated_state_change=associated_state_change,
-                         )
-
-
-class LightBulb(Thing):
-    def __init__(self, always_on=False, **kwargs):
-        self.always_on = always_on
-        if not self.always_on:
-            assert self.power is not None
-        else:
-            self.power = None
-        super().__init__(**kwargs)
-
-    def is_powered(self, state=None):
-        if self.always_on:
-            return True
-        else:
-            state = self.power.get_state() if state is None else state['power']['state']
-            return bool(state[0])
-
-    def power_on(self):
-        if not self.is_powered():
-            self.power.do_action('turnOn')
-
-
-class SimpleLight(LightBulb):
+class SimpleLight(PowerThing):
     """
     Very simple light with only on and off
     """
@@ -161,10 +21,10 @@ class SimpleLight(LightBulb):
             self.power = PowerChannel(name='power', description='Turn device on and off')
 
         super().__init__(always_on=False, name=name, description=description, init_type=init_type,
-                         init_params=init_params, is_visible=is_visible, location=location, goals_dict=Light_goals)
+                         init_params=init_params, is_visible=is_visible, location=location, goals_dict=goals)
 
 
-class AdorneLightBulb(LightBulb):
+class AdorneLight(PowerThing):
     """
     Simple light bulb supporting just brightness adjustment
     10000 episodes to master
@@ -182,10 +42,10 @@ class AdorneLightBulb(LightBulb):
             self.brightness = BrightnessChannel(name='brightness', description="Set device's brightness", )
 
         super().__init__(always_on=always_on, name=name, description=description, init_type=init_type,
-                         init_params=init_params, is_visible=is_visible, location=location, goals_dict=Light_goals)
+                         init_params=init_params, is_visible=is_visible, location=location, goals_dict=goals)
 
 
-class BigAssFanLightBulb(LightBulb):
+class BigAssFan(PowerThing):
     """
     Light Object from BigAssFan https://www.openhab.org/addons/bindings/bigassfan/
     """
@@ -206,7 +66,7 @@ class BigAssFanLightBulb(LightBulb):
                                                              methods=dict(setPercent=True, increase=True,
                                                                           decrease=True))
         super().__init__(always_on=always_on, name=name, description=description, init_type=init_type,
-                         init_params=init_params, is_visible=is_visible, location=location, goals_dict=Light_goals)
+                         init_params=init_params, is_visible=is_visible, location=location, goals_dict=goals)
 
 
 class HueLightBulb(Thing):
@@ -234,7 +94,7 @@ class HueLightBulb(Thing):
             )
 
         super().__init__(name=name, description=description, init_type=init_type,
-                         init_params=init_params, is_visible=is_visible, location=location, goals_dict=Light_goals)
+                         init_params=init_params, is_visible=is_visible, location=location, goals_dict=goals)
 
     def is_powered(self, state=None):
         state = self.color.get_state() if state is None else state
@@ -244,7 +104,7 @@ class HueLightBulb(Thing):
         raise NotImplementedError
 
 
-class StructuredHueLight(LightBulb):
+class StructuredHueLight(PowerThing):
     def __init__(self, name="colored light bulb", description='This is a colored light bulb', init_type='random',
                  init_params=None, is_visible=True, location=None, simple=False, always_on=False):
         if simple:
@@ -260,40 +120,22 @@ class StructuredHueLight(LightBulb):
         self.color_temperature = ColorTemperatureChannel()
 
         super().__init__(always_on=always_on, name=name, description=description, init_type=init_type,
-                         init_params=init_params, is_visible=is_visible, location=location, goals_dict=Light_goals)
+                         init_params=init_params, is_visible=is_visible, location=location, goals_dict=goals)
 
 
 if __name__ == "__main__":
     import yaml
-    from simulator.discrete_parameters import params_interpreters
+    from simulator.discrete_parameters import params_interpreters, color_list, dimmers_levels_dict
     from simulator.oracle import Oracle
-
-
-    def test_action_effect(thing, test_name, init_params, action, debug=False):
-        print('     ' + '*' * 3 + f'{test_name}' + '*' * 3)
-        s1 = thing.init(is_visible=True, init_type='custom', init_params=init_params)
-        action = action if isinstance(action, list) else [action]
-        if debug: print(s1)
-        for a in action:
-            try:
-                thing.do_action(*a)
-                s2 = thing.get_state(oracle=True)
-                print(f"{sorted(thing.get_state_change(s1, s2))} after action {a}")
-                if debug: print(s2)
-                s1 = s2
-            except MethodUnavailableError:
-                s2 = thing.get_state(oracle=True)
-                print(f'Action {a} is not available for {thing.name}', sorted(thing.get_state_change(s1, s2)))
-                if debug: print(s2)
-                s1 = s2
+    from test_utils import test_action_effect
 
 
     def test_goals():
-        adorne = AdorneLightBulb(name='adorne', simple=True)
-        adorne_on = AdorneLightBulb(name='adorne_on', always_on=True, simple=True)
+        adorne = AdorneLight(name='adorne', simple=True)
+        adorne_on = AdorneLight(name='adorne_on', always_on=True, simple=True)
 
-        bigass = BigAssFanLightBulb(name='bigass', simple=True)
-        bigass_on = BigAssFanLightBulb(name='bigass_on', always_on=True, simple=True)
+        bigass = BigAssFan(name='bigass', simple=True)
+        bigass_on = BigAssFan(name='bigass_on', always_on=True, simple=True)
 
         hue = HueLightBulb(name='hue')
 
@@ -309,7 +151,7 @@ if __name__ == "__main__":
 
     ########### ADORNE ###############
     def test_adorne():
-        adorne = AdorneLightBulb(name="adorne", simple=True)
+        adorne = AdorneLight(name="adorne", simple=True)
         print('*' * 10 + adorne.name + '*' * 10)
 
         test_action_effect(adorne, test_name="Turn on",
@@ -330,7 +172,7 @@ if __name__ == "__main__":
         test_action_effect(adorne, test_name="Change brightness while on",
                            init_params=dict(power=1, brightness=80),
                            action=[('brightness', 'setPercent', params_interpreters['setPercent'](b)) for b in
-                                   levels_dict['brightness']]
+                                   dimmers_levels_dict['brightness']]
                            )
 
         test_action_effect(adorne, test_name="Unchange brightness while on",
@@ -351,7 +193,7 @@ if __name__ == "__main__":
 
     ########### BIGASSFAN LIGHTBULB ###############
     def test_bigass():
-        bigassfan = BigAssFanLightBulb(name='bigass', simple=True)
+        bigassfan = BigAssFan(name='bigass', simple=True)
         print('*' * 10 + bigassfan.name + '*' * 10)
 
         test_action_effect(bigassfan, test_name='Turn on',
@@ -375,19 +217,19 @@ if __name__ == "__main__":
 
         test_action_effect(bigassfan, test_name="Change brightness while off",
                            init_params=dict(power=0, brightness=50, color_temperature=0),
-                           action=('brightness', 'setPercent', 50)
+                           action=('brightness', 'setPercent', 80)
                            )
 
         test_action_effect(bigassfan, test_name="Change brightness while on",
                            init_params=dict(power=1, brightness=80, color_temperature=50),
                            action=[('brightness', 'setPercent', params_interpreters['setPercent'](b)) for b in
-                                   levels_dict['brightness']]
+                                   dimmers_levels_dict['brightness']]
                            )
 
         test_action_effect(bigassfan, test_name="Change temperature while on",
                            init_params=dict(power=1, brightness=80, color_temperature=50),
                            action=[('color_temperature', 'setPercent', params_interpreters['setPercent'](b)) for b in
-                                   levels_dict['temperature']]
+                                   dimmers_levels_dict['temperature']]
                            )
 
         test_action_effect(bigassfan, test_name="Unchange brightness while on",

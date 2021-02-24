@@ -302,7 +302,7 @@ class PlayerItem(AbstractItem):  # TODO Check user_state of players
             raise NotImplementedError
 
     def get_state(self):
-        return [self.playpause]
+        return [int(self.playpause)]
 
     def set_state(self, value):
         self.set_attribute('playpause', value)
@@ -348,7 +348,10 @@ class RollerShutterItem(AbstractItem):
         if init == 'default':
             self.percent = 0
         elif init == 'random':
-            self.percent = random.randint(0, 100)
+            if 'setPercent' in self.methods:
+                self.percent = random.randint(0, 100)
+            else:
+                self.percent = random.choice([0, 100])
         elif init in range(0, 101):
             self.set_state(init)
         else:
@@ -362,11 +365,11 @@ class RollerShutterItem(AbstractItem):
 
     @check_method_availability
     def up(self):
-        raise NotImplementedError
+        self.set_state(0)
 
     @check_method_availability
     def down(self):
-        raise NotImplementedError
+        self.set_state(100)
 
     @check_method_availability
     def stop(self):
@@ -394,7 +397,9 @@ class StringItem(AbstractItem):
         if init == 'default':
             self.string = ""
         elif init == 'random':
-            self.string = random.choice([str(i) for i in range(5)]) #TODO Fix Hack
+            from simulator.discrete_parameters import discrete_parameters
+            self.string = random.choice(discrete_parameters['setString'][self.discretization['setString']])
+            # self.string = random.choice([str(i) for i in range(5)])  # TODO Fix Hack
         elif isinstance(init, str):
             self.set_state(init)
         else:

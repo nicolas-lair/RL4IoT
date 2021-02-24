@@ -23,13 +23,13 @@ elif N_LEVELS == 3:
 else:
     raise NotImplementedError
 
-levels_dict = {
+dimmers_levels_dict = {
     'brightness': brightness_level, 'volume': volume_level, 'temperature': temperature_level
 }
 
-TVchannels_list = [str(i) for i in range(6)]
+TVchannels_list = ['one', 'two', 'three', 'four']
 
-setPercent_params = levels_dict
+setPercent_params = dimmers_levels_dict
 
 setString_params = dict(
     TVchannels=TVchannels_list
@@ -46,14 +46,14 @@ discrete_parameters = {
 }
 
 params_interpreters = {
-    'setPercent': partial(level_to_percent, lvl_dict=levels_dict),
+    'setPercent': partial(level_to_percent, lvl_dict=dimmers_levels_dict),
     'setHSB': partial(color_to_hue, color_list=color_list, color_h_inf=color_h_inf, color_h_sup=color_h_sup),
     'setString': lambda x: x,
 }
 
 get_color_name_from_hsb = partial(_get_color_name_from_hsb, color_list=color_list, color_h_inf=color_h_inf,
                                   color_h_sup=color_h_sup)
-percent_to_level = partial(_percent_to_level, lvl_dict=levels_dict)
+percent_to_level = partial(_percent_to_level, lvl_dict=dimmers_levels_dict)
 
 if __name__ == '__main__':
     for c in color_list:

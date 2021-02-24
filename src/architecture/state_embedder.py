@@ -210,7 +210,7 @@ class StateEmbedder:
 
 
 class AbstractDescriptionEmbedder(ABC):
-    cache = dict()
+    cache = FixSizeOrderedDict(max=2000)
 
     @abstractmethod
     def embed_descriptions(self, descriptions, use_cache=True):

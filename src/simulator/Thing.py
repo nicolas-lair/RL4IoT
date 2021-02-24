@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
 
-from simulator.Items import *
+from gym import spaces
+
 from simulator.Channel import Channel, ChannelState
-from simulator.discrete_parameters import levels_dict
 from simulator.TreeView import DescriptionNode
 from simulator.instructions import GoalDescription, initialize_instruction
-from simulator.discrete_parameters import TVchannels_list, percent_to_level
 
 
 class ThingState(ChannelState):
@@ -181,6 +180,27 @@ class Thing(ABC, DescriptionNode):
         raise NotImplementedError
 
 
+class PowerThing(Thing):
+    def __init__(self, always_on=False, **kwargs):
+        self.always_on = always_on
+        if not self.always_on:
+            assert self.power is not None
+        else:
+            self.power = None
+        super().__init__(**kwargs)
+
+    def is_powered(self, state=None):
+        if self.always_on:
+            return True
+        else:
+            state = self.power.get_state() if state is None else state['power']['state']
+            return bool(state[0])
+
+    def power_on(self):
+        if not self.is_powered():
+            self.power.do_action('turnOn')
+
+
 class PlugSwitch(Thing):
     """
     https://www.openhab.org/addons/bindings/zwave/thing.html?manufacturer=everspring&file=an180_0_0.html
@@ -233,218 +253,6 @@ class PlugSwitch(Thing):
     def get_state_change(self, previous_state, next_state):
         return super().get_state_change(previous_state, next_state)
 
-
-class LGTV(Thing):
-    """
-    https://www.openhab.org/addons/bindings/lgwebos/
-
-    See also PanasonicTV and SamsungTV
-    """
-
-    def __init__(self, name, description, init_type='default', init_params=None, is_visible=True):
-        self.name = name
-
-        self.power = Channel(
-            name='power',
-            description="Current power setting. TV can only be powered off, not on.",
-            item=SwitchItem(turnOff=True),
-        )
-
-        self.mute = Channel(
-            name="mute",
-            description="Current mute setting.",
-            item=SwitchItem(turnOnOff=True)
-        )
-
-        self.volume = Channel(
-            name="volume",
-            description="Current volume setting. Setting and reporting absolute percent values only works when using "
-                        "internal speakers. When connected to an external amp, the volume should be controlled using "
-                        "increase and decrease commands.",
-            item=DimmerItem(increase=True, decrease=True, setPercent=True, discretization={'setPercent': 'volume'})
-        )
-
-        self.channel = Channel(
-            name="channel",
-            description="Current channel. Use only the channel number as command to update the channel.",
-            item=StringItem(setString=True, discretization={'setString': 'TVchannels'}),
-            read=False  # TODO Fix Hack
-        )
-
-        # TODO cannot handle right now, maybe copy paste
-        # self.toast = Channel(
-        #     name='toast',
-        #     description="Displays a short message on the TV screen. See also rules section.",
-        #     item=StringItem(setString=True
-        #     read=False)
-        # )
-
-        self.mediaPlayer = Channel(
-            name="mediaPlayer",
-            description="Media control player",
-            item=PlayerItem(PlayPause=True, next=False, previous=False),  # TODO how to visualize state ?
-            read=False
-        )
-
-        self.mediaStop = Channel(
-            name="mediaStop",
-            description="Media control stop",
-            item=SwitchItem(turnOff=True),
-            read=False
-        )
-
-        # TODO cannot handle this one for now
-        # self.appLauncher = Channel(
-        #     name='applauncher',
-        #     description="Application ID of currently running application. This also allows to start applications on the TV by sending a specific Application ID to this channel.",
-        #     item=StringItem(setString=True)
-        # )
-
-        self.instruction = {
-            'turn_on': GoalDescription(sentences=[f'You turned on the {self.name}']),
-            'turn_off': GoalDescription(sentences=[f'You turned off {self.name}']),
-            'mute': GoalDescription(sentences=[f'You muted the {self.name}']),
-            'unmute': GoalDescription(sentences=[f'You restored the sound on {self.name}']),
-            'increased_volume': GoalDescription(sentences=[f'You increased the volume of {self.name}']),
-            'decreased_volume': GoalDescription(sentences=[f'You decreased the volume of {self.name}']),
-            'play': GoalDescription(sentences=[f'You played the film on {self.name}']),
-            'pause': GoalDescription(sentences=[f'You paused the film on {self.name}']),
-            # 'next': StateDescription(sentences=[f'You changed the {self.name} to the next channel']),
-            # 'previous': StateDescription(sentences=[f'You changed the {self.name} to the previous channel']),
-            'stop': GoalDescription(sentences=[f'You stopped the film on {self.name}']),
-        }
-
-        for level in levels_dict['volume']:
-            self.instruction[f'volume_level_{level}'] = GoalDescription(
-                sentences=[f"The volume of {self.name} is now {level}"])
-        for channel in TVchannels_list:
-            self.instruction[f'TVchannel_{channel}'] = GoalDescription(
-                sentences=[f"{self.name} is now on channel {channel}"])
-
-        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
-                         is_visible=is_visible)
-
-        # Ignore this for now
-        # self.rcButton = Channel(
-        #     name='rcButton',
-        #     description="Simulates pressing of a button on the TV's remote control. See below for a list of button names.",
-        #     item=StringItem(setString=True),
-        #     read=False
-        # )
-
-    def get_state_description(self, current_state):
-        matching_instructions = []
-
-        # power
-        if current_state["power"]["state"] == 0:
-            matching_instructions.append(self.instruction['turn_off'])
-        else:
-            matching_instructions.append(self.instruction['turn_on'])
-
-        # mute
-        if current_state["mute"]["state"] == 0:
-            matching_instructions.append(self.instruction['mute'])
-        else:
-            matching_instructions.append(self.instruction['unmute'])
-
-        # volume level
-        volume = current_state['volume']['state'][0]
-        if volume != 0:
-            volume_lvl = percent_to_level(volume, lvl_type='volume')
-            matching_instructions.append(self.instruction[f'volume_level_{volume_lvl}'])
-
-        # channel
-        channel = current_state['channel']['state'][0]
-        matching_instructions.append(self.instruction[f'TVchannel_{channel}'])
-
-        # mediaplayer
-        player_status = current_state['mediaPlayer']['state'][0]
-        if player_status == 1:
-            matching_instructions.append(self.instruction[f'play'])
-        else:
-            matching_instructions.append(self.instruction[f'pause'])
-
-        # stop_status = current_state['mediastop']['state'][0]
-        # if stop_status == 0:
-        #     matching_instructions.append(self.instruction['stop'])
-
-        return matching_instructions
-
-    def get_state_change(self, previous_state, next_state):
-        achieved_descriptions = super().get_state_change(previous_state, next_state)
-
-        achieved_state_transition = []
-
-        previous_volume = previous_state["volume"]["state"][0]
-        next_volume = next_state["volume"]["state"][0]
-        # Check volume change
-        ### INCREASE_DECREASE_STEP is like a threshold for the oracle to detect a change
-        if next_volume >= INCREASE_DECREASE_STEP + previous_volume:
-            achieved_state_transition.append(self.instruction['increased_volume'])
-        if next_volume + INCREASE_DECREASE_STEP <= previous_volume:
-            achieved_state_transition.append(self.instruction['decreased_volume'])
-
-        # Check Stop
-        previous_stop = previous_state["mediaStop"]["state"][0]
-        next_stop = next_state["mediaStop"]["state"][0]
-        if previous_stop != next_stop:
-            achieved_state_transition.append(self.instruction['stop'])
-
-        achieved_str_instructions = achieved_descriptions + [i.get_instruction() for i in
-                                                             achieved_state_transition]
-        return achieved_str_instructions
-
-
-class Speaker(Thing):
-    """
-    https://www.openhab.org/addons/bindings/sonyaudio/
-    HT-CT800, SRS-ZR5, HT-ST5000, HT-ZF9, HT-Z9F, HT-MT500
-
-    maybe compare with Sonos or check STR-1080 for multiple zone compatibility
-    """
-
-    def __init__(self, name, description, init_type='default', init_params=None, is_visible=True):
-        self.power = Channel(
-            name="power",
-            description="Main power on/off",
-            item=SwitchItem(turnOn=True, turnOff=True)
-        )
-
-        # TODO Discretize this
-        self.input = Channel(
-            name="input",
-            description="Set or get the input source",
-            item=SwitchItem(turnOn=True, turnOff=True)
-        )
-
-        self.volume = Channel(
-            name="volume",
-            description="Set or get the master volume",
-            item=DimmerItem(increase=True, decrease=True, setPercent=True)
-        )
-
-        self.mute = Channel(
-            name="mute",
-            description="Set or get the mute state of the master volume",
-            item=SwitchItem(turnOnOff=True)
-        )
-
-        super().__init__(name=name, description=description, init_type=init_type, init_params=init_params,
-                         is_visible=is_visible)
-
-        # TODO check what is sound Field, for now disable
-        # self.soundField = Channel(
-        #     name="soundField",
-        #     description="Sound Field",
-        #     item=StringItem(setString=True)
-        # )
-
-
-#
-# class Store(Thing):
-#     def __init__(self, name="store", connected_things=None, is_visible=True):
-#         super().__init__(name=name, connected_things=connected_things, is_visible=is_visible)
-#
 
 class Chromecast(Thing):
     def __init__(self, name, description, init_type='default', init_params=None, is_visible=True):
@@ -523,16 +331,3 @@ class Chromecast(Thing):
                          is_visible=is_visible)
 
         # TODO See what to to with available metadata: Not necessary maybe?
-
-
-if __name__ == "__main__":
-    Env = {
-        'plug': PlugSwitch(),
-        'light': LightBulb(),
-        'TV': LGTV(),
-        'speaker': Speaker(),
-        'chromecast': Chromecast(),
-    }
-
-    for k, v in Env.items():
-        print(k, v.get_action_space())
