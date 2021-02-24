@@ -27,7 +27,7 @@ dimmers_levels_dict = {
     'brightness': brightness_level, 'volume': volume_level, 'temperature': temperature_level
 }
 
-TVchannels_list = ['one', 'two', 'three', 'four']
+TVchannels_list = ['1', '2', '3']
 
 setPercent_params = dimmers_levels_dict
 

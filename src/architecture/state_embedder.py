@@ -133,7 +133,10 @@ class StateEmbedder:
 
         # Value embedding
         value_embedding = torch.zeros(self.value_embedding_size).to(self.device)
-        value_embedding[:len(channel['state'])] = torch.tensor(channel['state'])
+        if isinstance(channel['state'][0], str):
+            value_embedding[:len(channel['state'])] = torch.tensor([int(channel['state'][0])])
+        else:
+            value_embedding[:len(channel['state'])] = torch.tensor(channel['state'])
         return item_embedding, value_embedding
 
     def _compute_state_embedding(self, observations, use_cache=True):

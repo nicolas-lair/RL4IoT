@@ -185,7 +185,7 @@ class TVSourceChannel(Channel):
             name=name,
             description=description,
             item=StringItem(setString=True, discretization={'setString': 'TVchannels'}),
-            read=False,  # TODO Fix Hack
+            read=True,  # TODO Fix Hack
             write=True,
             associated_state_description=lambda s: f'{s}_TVsource',
             associated_state_change=None
