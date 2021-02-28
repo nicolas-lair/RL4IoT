@@ -127,13 +127,13 @@ class GoalSampler:
 
         return failed_goals
 
-    def save_records(self, path):
+    def get_records(self):
         record = dict(goal_sampler_record=self.record,
                       goals_record={v.goal_string: v.record for v in self.discovered_goals.values()}
                       )
-        joblib.dump(record, path)
+        return record
 
-    def get_record(self):
+    def get_record_for_logging(self):
         d ={
             g.goal_string: g.record for g in self.discovered_goals.values()
         }

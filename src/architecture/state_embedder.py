@@ -145,7 +145,7 @@ class StateEmbedder:
         Parameters
         ----------
         observations : list of observation (State object)
-        use_description_cache : boolean
+        use_cache : boolean
 
         Returns
         -------

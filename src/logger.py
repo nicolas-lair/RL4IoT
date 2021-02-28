@@ -1,4 +1,3 @@
-import os
 import logging
 from pprint import pformat
 
@@ -16,7 +15,6 @@ def set_logger_handler(level=logging.INFO, console=True, log_file=True, log_path
     assert isinstance(log_file, bool)
     rootLogger.setLevel(level)
     if log_file:
-        assert isinstance(log_path, str)
         add_handler(rootLogger, log_path, type='file')
     if console:
         add_handler(rootLogger, log_path, type='stream')
@@ -27,7 +25,7 @@ def add_handler(logger, log_path, type='stream'):
     if type == 'stream':
         handler = logging.StreamHandler()
     elif type == 'file':
-        handler = logging.FileHandler(os.path.join(log_path, "log.log"))
+        handler = logging.FileHandler(log_path.joinpath("log.log"))
     else:
         raise NotImplementedError
     handler.setFormatter(FORMATTER)

@@ -14,7 +14,7 @@ class MethodUnavailableError(Exception):
 
 INCREASE_DECREASE_STEP = 10
 
-ITEM_TYPE = ['color', 'contact', 'dimmer', 'location', 'number', 'player', 'rollershutter', 'string', 'switch']
+ITEM_TYPE = sorted(['color', 'contact', 'dimmer', 'location', 'number', 'player', 'rollershutter', 'string', 'switch'])
 
 
 def check_method_availability(func):
@@ -284,8 +284,8 @@ class NumberItem(AbstractItem):
 
 
 class PlayerItem(AbstractItem):  # TODO Check user_state of players
-    def __init__(self, PlayPause=False, next=False, previous=False, rewind=False, fastforward=False,
-                 discretization=None):
+    def __init__(self, PlayPause=False, play=False, pause=False, next=False, previous=False, rewind=False,
+                 fastforward=False, discretization=None):
         super().__init__(type="player", methods=locals(), discretization=discretization)
         self.playpause = None
         self.observation_space = spaces.Discrete(2)
@@ -295,7 +295,7 @@ class PlayerItem(AbstractItem):  # TODO Check user_state of players
         if init == 'default':
             self.playpause = False
         elif init == 'random':
-            self.playpause = bool(random.randint(0, 1))
+            self.playpause = bool(random.choice([0, 1]))
         elif init in [0, 1, True, False]:
             self.set_state(init)
         else:
@@ -313,11 +313,11 @@ class PlayerItem(AbstractItem):  # TODO Check user_state of players
 
     @check_method_availability
     def play(self):
-        self.playpause = 1
+        self.playpause = True
 
     @check_method_availability
     def pause(self):
-        self.playpause = 0
+        self.playpause = False
 
     @check_method_availability
     def next(self):

@@ -193,11 +193,14 @@ class TVSourceChannel(Channel):
 
 
 class MediaPlayerChannel(Channel):
-    def __init__(self, name='media', description='media control'):
+    def __init__(self, name='media', description='media control', methods=None):
+        if methods is None:
+            methods = dict(play=True, pause=True,
+                           PlayPause=False, next=False, previous=False, rewind=False, fasforward=False)
         super().__init__(
             name=name,
             description=description,
-            item=PlayerItem(PlayPause=True, next=False, previous=False),  # TODO how to visualize state ?
+            item=PlayerItem(**methods),  # TODO how to visualize state ?
             read=True,
             write=True,
             associated_state_description=lambda x: 'play' if x else 'pause',

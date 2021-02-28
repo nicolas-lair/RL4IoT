@@ -304,3 +304,14 @@ class DQNAgent:
             logger.debug('Update of target net')
             self.update_target_net()
             logger.debug('done')
+
+    def save(self, path):
+        import os
+
+        torch.save(self.policy_network.state_dict(), path.joinpath('policy_net.pth'))
+        torch.save(self.language_model.state_dict(), path.joinpath('language_model.pth'))
+        torch.save(self.action_model.state_dict(), path.joinpath('action_model.pth'))
+        try:
+            torch.save(self.node_description_embedder.state_dict(), path.joinpath('description_embedding.pth'))
+        except AttributeError:
+            logger.info('description embedder was not saved as it is not a nn.Module')

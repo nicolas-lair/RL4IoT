@@ -1,6 +1,5 @@
-import os
-import re
 import logging
+from pathlib import Path
 from collections import namedtuple
 
 import joblib
@@ -38,23 +37,20 @@ state_embedding_size = value_encoding_size + 2 * description_embedding + len(ITE
 
 policy_context_archi = DeepSetStateNet
 model_archi = FullNet
-filter_state_during_episode = True
+change_focus_during_episode = True
 
 
-def prepare_simulation(simulation_name):
-    base_folder = '../results/'
-    base_name = f'simulation_{simulation_name}' + (len(simulation_name) > 0) * '_'
+def prepare_simulation(simulation_name='default'):
+    base_folder = Path('../results/').joinpath(simulation_name)
+    try:
+        max_idx = max([int(idx.name) for idx in base_folder.iterdir()])
+        next_idx = max_idx + 1
+    except FileNotFoundError:
+        next_idx = 0
 
-    simulation_list = [name for name in os.listdir(base_folder) if re.match(base_name + r"[0-9]+", name)]
-    if simulation_list:
-        simulation_list = [int(name.split('_')[-1]) for name in simulation_list]
-        sim_id = max([int(id) for id in simulation_list]) + 1
-
-    else:
-        sim_id = 0
-    simulation_id = f'{simulation_name}_{sim_id}'
-    path_dir = os.path.join(base_folder, base_name + f'{sim_id}/')
-    os.mkdir(path_dir)
+    path_dir = base_folder.joinpath(str(next_idx))
+    path_dir.mkdir(parents=True)
+    simulation_id = f'{simulation_name}_{next_idx}'
     return path_dir, simulation_id
 
 
@@ -62,7 +58,7 @@ env_params = dict(
     max_episode_length=2,
     ignore_exec_action=True,
     allow_do_nothing=True,
-    filter_state_during_episode=filter_state_during_episode,
+    filter_state_during_episode=change_focus_during_episode,
     thing_params=[
         # ThingParam(SimpleLight, dict(name='plug', simple=True)),
         # ThingParam(SimpleLight, dict(name='switch', simple=True)),
