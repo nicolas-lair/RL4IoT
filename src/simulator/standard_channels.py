@@ -18,7 +18,7 @@ roller_description = {
     'open': GoalDescription(sentences=["Open {name} {location}",
                                        "You opened the {name} {location}"], need_power=False),
     'close': GoalDescription(sentences=["Close {name} {location}",
-                                         "You closed the {name} {location}"], need_power=False)
+                                        "You closed the {name} {location}"], need_power=False)
 }
 
 media_description = {
