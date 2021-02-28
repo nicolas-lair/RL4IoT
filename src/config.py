@@ -13,10 +13,11 @@ from simulator.Action import ACTION_SPACE
 from simulator.discrete_parameters import color_list, N_LEVELS, TVchannels_list
 from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState, DoubleAttDeepSet
 from architecture.dqn import FullNet, FullNetWithGatedAttention
-from simulator.Thing import PlugSwitch
-from TV_thing import LGTV
 from simulator.lighting_things import AdorneLight, BigAssFan, HueLightBulb, SimpleLight, \
     StructuredHueLight
+from simulator.TV_thing import SimpleTV, TVWithVolume, TVWithMediaControl, TVFullOption
+from simulator.Speaker import SimpleSpeaker, SpeakerWithMediaControl
+from simulator.Blinds import SimpleBlinds
 
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
 vector_cache = '/home/nicolas/PycharmProjects/RL4IoT/.vector_cache'
@@ -88,6 +89,8 @@ env_params = dict(
         #            )
     ],
 )
+
+
 def generate_env_params():
     return env_params
 
@@ -146,12 +149,48 @@ def generate_language_model_params(device='cuda', use_pretrained_model=False):
     return language_model_params
 
 
-def generate_reward_params(archi=DeepSetStateNet):
+def generate_model_params(context_architeture=policy_context_archi):
+    # Build context net parameters
+    context_net_params = dict(instruction_embedding=instruction_embedding,
+                              state_embedding=state_embedding_size,
+                              hidden_state_size=action_embedding,
+                              aggregate='mean')
+    if issubclass(context_architeture, DeepSetStateNet):
+        scaler_layer_params = dict(hidden_size=256, output_size=512, last_activation='relu')
+        context_net_params.update(scaler_layer_params=scaler_layer_params)
+    elif ('FlatStateNet' in str(context_architeture)) or ('AttentionFlatState' in str(context_architeture)):
+        pass
+    else:
+        raise NotImplementedError()
+
+    model_params = dict(
+        context_model=context_architeture,
+        action_embedding_size=action_embedding,  # TODO
+        raw_action_size=dict(
+            description_node=description_embedding,
+            openHAB_action=len(ACTION_SPACE),
+            setPercent_params=N_LEVELS,
+            setHSB_params=len(color_list),
+            setString_params=len(TVchannels_list),
+        ),
+        net_params=dict(
+            q_network=dict(
+                hidden1_out=512,
+                hidden2_out=256
+            ),
+            context_net=context_net_params,
+        ),
+    )
+
+    return model_params
+
+
+def generate_reward_params(context_architecture=DeepSetStateNet):
     reward_net_params = dict(instruction_embedding=instruction_embedding,
                              hidden_state_size=0,
                              state_embedding=state_embedding_size + value_encoding_size,
                              aggregate='mean')
-    if 'DeepSetStateNet' in str(archi):
+    if 'DeepSetStateNet' in str(context_architecture):
         reward_net_params.update(scaler_layer_params=dict(hidden1_out=256, latent_out=512, last_activation='relu'))
 
     reward_fit_params = dict(
@@ -161,7 +200,7 @@ def generate_reward_params(archi=DeepSetStateNet):
         n_epoch=250,
         sampler_params=dict(num_samples=8000, pos_weight=0.2),
     )
-    reward_params = dict(context_model=archi,
+    reward_params = dict(context_model=context_architecture,
                          net_params=reward_net_params,
                          fit_params=reward_fit_params)
     return reward_params
@@ -202,7 +241,7 @@ def get_reward_training_params(name=None, device='cuda'):
         state_embedder_params=generate_state_embedder_params(),
         description_embedder_params=generate_description_embedder_params(),
         context_archi=context_archi,
-        reward_params=generate_reward_params(archi=context_archi),
+        reward_params=generate_reward_params(context_architecture=context_archi),
         logger=dict(
             level=logging.INFO,
             console=True,
@@ -215,59 +254,21 @@ def get_reward_training_params(name=None, device='cuda'):
     return params
 
 
-def generate_params(simulation_name='default_simulation', use_pretrained_language_model=False, save_path=True,
-                    device='cuda', dqn_loss='mse'):
-    env_params = generate_env_params()
-    language_model_params = generate_language_model_params(device=device,
-                                                           use_pretrained_model=use_pretrained_language_model)
-
-    device = device
-    reward_params = generate_reward_params(archi=policy_context_archi)
-    simulation_name = simulation_name
-    if save_path:
-        path_dir, simulation_id = prepare_simulation(simulation_name)
-    else:
-        path_dir, simulation_id = simulation_name
-
-    # Build context net parameters
-    context_net_params = dict(instruction_embedding=instruction_embedding,
-                              state_embedding=state_embedding_size,
-                              hidden_state_size=action_embedding,
-                              aggregate='mean')
-    if issubclass(policy_context_archi, DeepSetStateNet):
-        scaler_layer_params = dict(hidden_size=256, output_size=512, last_activation='relu')
-        context_net_params.update(scaler_layer_params=scaler_layer_params)
-    elif ('FlatStateNet' in str(policy_context_archi)) or ('AttentionFlatState' in str(policy_context_archi)):
-        pass
-    else:
-        raise NotImplementedError()
+def generate_trainer_params(simulation_name='default_simulation', use_pretrained_language_model=False, save_path=True,
+                            device='cuda', dqn_loss='mse', context_architecture=policy_context_archi):
+    path_dir, simulation_id = prepare_simulation(simulation_name) if save_path else (None, simulation_name)
 
     # Instantiate the param dict
     params = dict(
         simulation_name=simulation_name,
-        env_params=env_params,
+        env_params=generate_env_params(),
         model_archi=model_archi,
-        model_params=dict(
-            context_model=policy_context_archi,
-            action_embedding_size=action_embedding,  # TODO
-            raw_action_size=dict(
-                description_node=description_embedding,
-                openHAB_action=len(ACTION_SPACE),
-                setPercent_params=N_LEVELS,
-                setHSB_params=len(color_list),
-                setString_params=len(TVchannels_list),
-            ),
-            net_params=dict(
-                q_network=dict(
-                    hidden1_out=512,
-                    hidden2_out=256
-                ),
-                context_net=context_net_params,
-            ),
-        ),
+        model_params=generate_model_params(context_architeture=context_architecture),
         state_embedder_params=generate_state_embedder_params(),
         description_embedder_params=generate_description_embedder_params(),
-        reward_params=reward_params,
+        reward_params=generate_reward_params(context_architecture=context_architecture),
+        language_model_params=generate_language_model_params(device=device,
+                                                             use_pretrained_model=use_pretrained_language_model),
         goal_sampler_params=dict(
             goal_sampling_stategy='random',
             oracle_strategy='exhaustive_feedback'
@@ -293,7 +294,6 @@ def generate_params(simulation_name='default_simulation', use_pretrained_languag
         # lr_scheduler=optim.lr_scheduler.ReduceLROnPlateau,
         lr_scheduler=None,
         lr_scheduler_params=dict(mode='min'),
-        language_model_params=language_model_params,
         logger=generate_logger_params(simulation_id),
         n_episode=15000,
         target_update_frequence=20,
@@ -326,7 +326,7 @@ def format_config(config):
 
 def save_config(config, file_name='simulation_params.jbl'):
     out = format_config(config)
-    joblib.dump(out, os.path.join(out["save_directory"], file_name))
+    joblib.dump(out, config["save_directory"].joinpath(file_name))
 
 
 def setup_new_simulation(params):
