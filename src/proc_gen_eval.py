@@ -2,10 +2,10 @@ from pprint import pformat
 import logging
 
 from records import Records
-from utils import run_episode, test_agent
+from utils import run_episode, test_agent, load_agent_state_dict
 from logger import get_logger, set_logger_handler
 from config import generate_proc_gen_eval_params, save_config, format_config, setup_new_simulation, ThingParam, \
-    BigAssFan
+    BigAssFan, SimpleLight
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
 from architecture.dqnagent import DQNAgent
@@ -61,23 +61,23 @@ if __name__ == "__main__":
         metrics_records = Records(save_path=params['save_directory'], rolling_window=rolling_window)
 
         num_episodes = params['n_episode']
+        n_iter_test = params['n_iter_test']
+        test_frequence = params['test_frequence']
 
         if load_agent:
-            agent.load(folder=load_agent_path)
+            load_agent_state_dict(agent=agent, path=load_agent_path, oracle=oracle,
+                                  test_env=test_env, params=n_iter_test, metrics_records=metrics_records)
 
         for ep in range(num_episodes):
             logger.info('%' * 5 + f' Episode {ep} ' + '%' * 5)
-            if introduce_new_object:
-                logger.info(f'New object were introduced at episode {metrics_records.new_objet_introduction_episode}')
-
             run_episode(agent=agent, env=env, oracle=oracle, save_transitions=True, episode=ep)
             agent.update(episode=ep, max_episodes=num_episodes)
 
-            if ep > 0 and ep % params['test_frequence'] == 0:
-                test_scores = test_agent(agent=agent, test_env=test_env, oracle=oracle, n_test=params['n_iter_test'])
+            if ep > 0 and ep % test_frequence == 0:
+                test_scores = test_agent(agent=agent, test_env=test_env, oracle=oracle, n_test=n_iter_test)
                 metrics_records.update_records(agent=agent, episode=ep, test_scores=test_scores,
                                                train_things=train_things)
-                if ep % 10 * params['test_frequence'] == 0:
+                if ep % 10 * test_frequence == 0:
                     metrics_records.save()
 
                 # TODO check from here
@@ -89,7 +89,7 @@ if __name__ == "__main__":
 
         metrics_records.update_records(agent=agent, episode=num_episodes,
                                        test_scores=test_agent(agent=agent, test_env=test_env, oracle=oracle,
-                                                              n_test=params['n_iter_test']),
+                                                              n_test=n_iter_test),
                                        train_things=train_things)
         metrics_records.save()
         metrics_records.save_as_object()

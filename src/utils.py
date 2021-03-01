@@ -8,6 +8,13 @@ logger = get_logger(__name__)
 logger.setLevel(20)
 
 
+def load_agent_state_dict(agent, path, oracle, test_env, params, metrics_records):
+    logger.info('Loading agent')
+    agent.load(folder=path)
+    test_scores = test_agent(agent=agent, test_env=test_env, oracle=oracle, n_test=params['n_iter_test'])
+    metrics_records.update_records(agent=agent, episode=0, test_scores=test_scores)
+
+
 def run_episode(agent, env, oracle, episode, save_transitions=True, target_goal=None):
     if env.episode_reset:
         env.reset()

@@ -30,8 +30,8 @@ channel_description_embedding = 25
 value_encoding_size = 3  # size of the vector in which is encoded the value of a channel
 action_embedding = 30
 
-one_hot_thing_size = 4
-one_hot_channel_size = 5
+one_hot_thing_size = 7
+one_hot_channel_size = 7
 
 vocab_for_word_embedding = torchtext.vocab.GloVe(name='6B', dim=word_embedding_size, cache=vector_cache)
 

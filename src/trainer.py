@@ -11,11 +11,11 @@ from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
 from architecture.dqnagent import DQNAgent
 from architecture.language_model import LanguageModel
-from utils import run_episode, test_agent
+from utils import run_episode, test_agent, load_agent_state_dict
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-n', '--name', help='Simulation name', default='four_simple_debug')
-parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cuda:1')
+parser.add_argument('-n', '--name', help='Simulation name', default='four_simple_onehot')
+parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cuda:2')
 parser.add_argument('-ns', '--n_simulation', help='number of simulation to run', type=int, default=1)
 parser.add_argument('-lm', '--pretrained_language_model', help='use pretrained language model', choices=['0', '1'],
                     default=0)
@@ -28,17 +28,18 @@ N_SIMULATION = args.n_simulation
 use_pretrained_language_model = bool(int(args.pretrained_language_model))
 optim_loss = args.optim_loss
 
-n_episode = 4000
-test_frequence = 200
+n_episode = 10000
+test_frequence = 1000
 
 load_agent = False
-load_agent_path = '../results/four_simple_debug/0/agent'
+load_agent_path = '../results/four_simple_debug/8/agent'
 
 thing = [
     ThingParam(SimpleLight, dict(name="light", simple=True)),
     ThingParam(SimpleLight, dict(name="plug", simple=True)),
     ThingParam(SimpleLight, dict(name="heater", simple=True)),
     ThingParam(SimpleLight, dict(name="bulb", simple=True)),
+    # ThingParam(SimpleLight, dict(name="television", simple=True)),
     # ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
 ]
 
@@ -70,23 +71,26 @@ if __name__ == "__main__":
         metrics_records = Records(save_path=params['save_directory'])
 
         num_episodes = params['n_episode']
+        n_iter_test = params['n_iter_test']
+        test_frequence = params['test_frequence']
 
         if load_agent:
-            agent.load(folder=load_agent_path)
+            load_agent_state_dict(agent=agent, path=load_agent_path, oracle=oracle,
+                                  test_env=test_env, params=n_iter_test, metrics_records=metrics_records)
 
         for ep in range(num_episodes):
             logger.info('%' * 5 + f' Episode {ep} ' + '%' * 5)
             run_episode(agent=agent, env=env, oracle=oracle, save_transitions=True, episode=ep)
             agent.update(episode=ep, max_episodes=num_episodes)
 
-            if ep > 0 and ep % params['test_frequence'] == 0:
-                test_scores = test_agent(agent=agent, test_env=test_env, oracle=oracle, n_test=params['n_iter_test'])
+            if ep > 0 and ep % test_frequence == 0:
+                test_scores = test_agent(agent=agent, test_env=test_env, oracle=oracle, n_test=n_iter_test)
                 metrics_records.update_records(agent=agent, episode=ep, test_scores=test_scores)
-                if ep % 10 * params['test_frequence'] == 0:
+                if ep % 10 * test_frequence == 0:
                     metrics_records.save()
 
         metrics_records.update_records(agent, num_episodes, test_agent(agent=agent, test_env=test_env, oracle=oracle,
-                                                                       n_test=params['n_iter_test']))
+                                                                       n_test=n_iter_test))
         metrics_records.save()
         metrics_records.save_as_object()
         logger.info('The End')
