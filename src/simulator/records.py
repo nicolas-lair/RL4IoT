@@ -19,15 +19,16 @@ class RollingAverage(deque):
 
 
 class Records:
-    def __init__(self, save_path=None):
+    def __init__(self, save_path=None, rolling_window=5):
         self.test_record = dict()
         self.goal_sampler_records = dict()
 
         self.best_result = (-1, {'overall': 0})
-        self.rolling_average = RollingAverage()
+        self.train_rolling_average = RollingAverage(maxlen=rolling_window)
+        self.new_objet_introduction_episode = -1
 
         self.save_path = Path(save_path)
-        self.model_path = self.save_path.joinpath('model_weights')
+        self.model_path = self.save_path.joinpath('agent')
         self.model_path.mkdir()
 
     def update_test_records(self, episode, test_scores, train_things=None):
@@ -41,12 +42,13 @@ class Records:
         thing_list = list(test_scores)
         if train_things is not None:
             d['overall train'] = self.compute_test_scores_over_things(test_scores, train_things)
+            self.update_rolling_average(d['overall train'])
             d['overall test'] = self.compute_test_scores_over_things(test_scores,
                                                                      set(thing_list).difference(train_things))
         d['overall'] = self.compute_test_scores_over_things(test_scores, thing_list)
         self.test_record[episode] = d
 
-        logger.info("%" * 5 + f" Test after {episode} episodes " + "%" * 5 + "\n" + yaml.dump(d))
+        logger.info("%" * 5 + f" Test after {episode} episodes " + "%" * 5 + "\n" + yaml.dump(d, sort_keys=False))
 
     def keep_best_agent(self, episode, agent):
         if self.test_record[episode]['overall'] > self.best_result[1]['overall']:
@@ -55,11 +57,11 @@ class Records:
             logger.info('This is best result!')
         else:
             logger.info("%" * 5 + f" Best result after {self.best_result[0]} episodes " + "%" * 5 + "\n" + yaml.dump(
-                self.best_result[1]))
+                self.best_result[1], sort_keys=False))
 
     def update_rolling_average(self, score):
-        self.rolling_average.append(score)
-        logger.info(f" Rolling average over {self.rolling_average.maxlen} tests: {self.rolling_average.get_mean()}")
+        self.train_rolling_average.append(score)
+        logger.info(f" Rolling average over {self.train_rolling_average.maxlen} tests: {self.train_rolling_average.get_mean()}")
 
     def update_goal_sampler_records(self, goal_sampler):
         self.goal_sampler_records = goal_sampler.get_records()

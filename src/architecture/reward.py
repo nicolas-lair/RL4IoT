@@ -259,7 +259,7 @@ if __name__ == "__main__":
     from collections import namedtuple
     from sklearn.preprocessing import OneHotEncoder
 
-    from config import generate_params
+    from config import generate_trainer_params
     from architecture.language_model import LanguageModel
     from simulator.description_embedder import Description_embedder
     from simulator.Environment import preprocess_raw_observation
@@ -268,7 +268,7 @@ if __name__ == "__main__":
     StateRecord = namedtuple('StateRecord', ('state', 'instruction', 'reward'))
     EpisodeRecord = namedtuple('EpisodeRecord', ('initial_state', 'final_state', 'instruction', 'reward'))
 
-    params = generate_params(save_path=False)
+    params = generate_trainer_params(save_path=False)
     state_path = '/home/nicolas/PycharmProjects/imagineIoT/results/state_records.jbl'
     episode_path = '/home/nicolas/PycharmProjects/imagineIoT/results/episodes_records3.jbl'
 

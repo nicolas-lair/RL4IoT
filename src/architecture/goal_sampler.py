@@ -61,11 +61,11 @@ class TrainGoal(Goal):
 
 class GoalSampler:
     def __init__(self, language_model, goal_sampling_stategy='random', oracle_strategy='exhaustive_feedback'):
-        self.discovered_goals = dict()
 
         self.oracle_strategy = oracle_strategy
         self.goal_sampling_strategy = goal_sampling_stategy
 
+        self.discovered_goals = dict()
         self.record = dict(nb_feedbacks=0,
                            nb_positive_feedbacks=0,
                            target_goal_sequence=[],
@@ -134,10 +134,29 @@ class GoalSampler:
         return record
 
     def get_record_for_logging(self):
-        d ={
+        d = {
             g.goal_string: g.record for g in self.discovered_goals.values()
         }
         d['nb_feedbacks'] = self.record['nb_feedbacks'],
         d['nb_positive_feedbacks'] = self.record['nb_positive_feedbacks'],
         # d['overall'] = self.record
         return d
+
+    def save(self, path):
+        state_dict = {
+            'discovered_goals': self.discovered_goals,
+            'oracle_strategy': self.oracle_strategy,
+            'goal_sampling_strategy': self.goal_sampling_strategy,
+            'record': self.record,
+        }
+        joblib.dump(state_dict, path)
+
+    @classmethod
+    def load_from_file(cls, language_model, path):
+        state_dict = joblib.load(path)
+        instance = cls(language_model=language_model, goal_sampling_stategy=state_dict['goal_sampling_strategy'],
+                       oracle_strategy=state_dict['oracle_strategy'])
+        instance.discovered_goals = state_dict['discovered_goals']
+        instance.record = state_dict['record']
+        instance.update_embedding()
+        return instance

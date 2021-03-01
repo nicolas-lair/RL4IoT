@@ -222,6 +222,19 @@ class AbstractDescriptionEmbedder(ABC):
     def clear_cache(self):
         self.cache.clear()
 
+    def eval(self):
+        pass
+
+    def train(self):
+        pass
+
+    @abstractmethod
+    def state_dict(self):
+        pass
+
+    @abstractmethod
+    def load_state_dict(self, state_dict):
+        pass
 
 class PreTrainedDescriptionEmbedder(AbstractDescriptionEmbedder):
     def __init__(self, vocab, reduction='mean', device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs):

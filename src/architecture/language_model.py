@@ -28,7 +28,7 @@ class LanguageModel(nn.Module):
         """
         super().__init__()
         self.frozen = False
-        self.feq_update = freq_update
+        self.freq_update = freq_update
         self.out_features = out_features
         self.word_to_ix = dict()
         self.type = type
@@ -115,9 +115,9 @@ class LanguageModel(nn.Module):
         -------
 
         """
-        if episode % self.feq_update == 0:
+        if episode % self.freq_update == 0:
             self.unfreeze()
-        elif episode % self.feq_update == 1:
+        elif episode % self.freq_update == 1:
             self.freeze()
 
     def freeze(self):
@@ -171,7 +171,7 @@ if __name__ == '__main__':
 #         """
 #         super().__init__()
 #         self.frozen = False
-#         self.feq_update = freq_update
+#         self.freq_update = freq_update
 #         self.out_features = out_features
 #         self.word_to_ix = dict()
 #         self.type = type
@@ -261,9 +261,9 @@ if __name__ == '__main__':
 #         -------
 #
 #         """
-#         if episode % self.feq_update == 0:
+#         if episode % self.freq_update == 0:
 #             self.unfreeze()
-#         elif episode % self.feq_update == 1:
+#         elif episode % self.freq_update == 1:
 #             self.freeze()
 #
 #     def freeze(self):

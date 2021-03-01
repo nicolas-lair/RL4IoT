@@ -252,7 +252,7 @@ class DQNAgent:
         element_wise_loss = self.loss(expected_value.detach(), Q_sa.squeeze(), reduction='none')
         weights = torch.FloatTensor(weights).to(self.device)
         loss = torch.mean(element_wise_loss * weights)
-        logger.info(f'Train loss : {loss}')
+        logger.info(f'Train loss : {loss:.2e}')
 
         logger.debug('Backward pass')
         loss.backward()
@@ -305,13 +305,57 @@ class DQNAgent:
             self.update_target_net()
             logger.debug('done')
 
-    def save(self, path):
-        import os
+    def eval(self):
+        self.policy_network.eval()
+        self.language_model.eval()
+        self.action_model.eval()
+        self.node_description_embedder.eval()
 
-        torch.save(self.policy_network.state_dict(), path.joinpath('policy_net.pth'))
-        torch.save(self.language_model.state_dict(), path.joinpath('language_model.pth'))
-        torch.save(self.action_model.state_dict(), path.joinpath('action_model.pth'))
-        try:
-            torch.save(self.node_description_embedder.state_dict(), path.joinpath('description_embedding.pth'))
-        except AttributeError:
-            logger.info('description embedder was not saved as it is not a nn.Module')
+    def train(self):
+        self.policy_network.train()
+        self.language_model.train()
+        self.action_model.train()
+        self.node_description_embedder.train()
+
+    def save(self, path):
+        state_dict = dict(
+            policy_net=self.policy_network.state_dict(),
+            language_model=self.language_model.state_dict(),
+            action_model=self.action_model.state_dict(),
+            optimizer=self.optimizer.state_dict(),
+            description_embedding=self.node_description_embedder.state_dict(),
+            exploration_threshold=self.exploration_threshold,
+        )
+        torch.save(state_dict, path.joinpath('dqnagent.pth'))
+        self.goal_sampler.save(path.joinpath('goal_sampler_state.jbl'))
+
+    def load_weights(self, path):
+        checkpoint = torch.load(path, map_location=self.device)
+        self.policy_network.load_state_dict(checkpoint['policy_net'])
+        self.policy_network.to(self.device)
+        self.target_network.load_state_dict(self.policy_network.state_dict())
+        self.target_network.eval()
+
+        self.language_model.load_state_dict(checkpoint['language_model'])
+        self.language_model.to(self.device)
+
+        self.action_model.load_state_dict(checkpoint['action_model'])
+        self.action_model.to(self.device)
+
+        self.optimizer.load_state_dict(checkpoint['optimizer'])
+        self.exploration_threshold = checkpoint['exploration_threshold']
+
+        self.node_description_embedder.load_state_dict(checkpoint['description_embedding'])
+        self.node_description_embedder.to(self.device)
+
+    def load(self, folder=None, dqnagent_dict_path=None, goal_sampler_path=None):
+        if folder is not None:
+            import pathlib
+            folder = pathlib.Path(folder)
+            dqnagent_dict_path = folder.joinpath('dqnagent.pth')
+            goal_sampler_path = folder.joinpath('goal_sampler_state.jbl')
+        else:
+            assert dqnagent_dict_path is not None and goal_sampler_path is not None
+
+        self.load_weights(dqnagent_dict_path)
+        self.goal_sampler = GoalSampler.load_from_file(self.language_model, path=goal_sampler_path)
