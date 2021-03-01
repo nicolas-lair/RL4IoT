@@ -65,7 +65,7 @@ if __name__ == "__main__":
         env = IoTEnv4ML(**params['env_params'])
         test_env = IoTEnv4ML(**params['env_params'])
 
-        oracle = Oracle(thing_list=env.get_thing_list())
+        oracle = Oracle(thing_list=env.get_things(), **params['oracle_params'])
         language_model = LanguageModel(**params['language_model_params'])
         agent = DQNAgent(language_model=language_model, params=params)
         metrics_records = Records(save_path=params['save_directory'])

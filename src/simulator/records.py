@@ -31,7 +31,7 @@ class Records:
         self.model_path = self.save_path.joinpath('agent')
         self.model_path.mkdir()
 
-    def update_test_records(self, episode, test_scores, train_things=None):
+    def update_test_records(self, episode, test_scores, train_goals=None):
         d = dict()
         for thing_name, thing_score in test_scores.items():
             d[thing_name] = thing_score.copy()
@@ -40,12 +40,11 @@ class Records:
             d[thing_name][f'overall {thing_name}'] = overall_thing
 
         thing_list = list(test_scores)
-        if train_things is not None:
-            d['overall train'] = self.compute_test_scores_over_things(test_scores, train_things)
+        if train_goals is not None:
+            d['overall train'] = self.compute_average_scores_over_list_of_goals(test_scores, keep_list=train_goals)
             self.update_rolling_average(d['overall train'])
-            d['overall test'] = self.compute_test_scores_over_things(test_scores,
-                                                                     set(thing_list).difference(train_things))
-        d['overall'] = self.compute_test_scores_over_things(test_scores, thing_list)
+            d['overall test'] = self.compute_average_scores_over_list_of_goals(test_scores, exclude_list=train_goals)
+        d['overall'] = self.compute_average_scores_over_list_of_goals(test_scores)
         self.test_record[episode] = d
 
         logger.info("%" * 5 + f" Test after {episode} episodes " + "%" * 5 + "\n" + yaml.dump(d, sort_keys=False))
@@ -61,7 +60,8 @@ class Records:
 
     def update_rolling_average(self, score):
         self.train_rolling_average.append(score)
-        logger.info(f" Train rolling average over {self.train_rolling_average.maxlen} tests: {self.train_rolling_average.get_mean()}")
+        logger.info(
+            f" Train rolling average over {self.train_rolling_average.maxlen} tests: {self.train_rolling_average.get_mean()}")
 
     def update_goal_sampler_records(self, goal_sampler):
         self.goal_sampler_records = goal_sampler.get_records()
@@ -70,19 +70,20 @@ class Records:
     def save_best_agent(self, agent):
         agent.save(self.model_path)
 
-    def update_records(self, agent, episode, test_scores, train_things=None):
-        self.update_test_records(episode, test_scores, train_things)
+    def update_records(self, agent, episode, test_scores, train_goals=None):
+        self.update_test_records(episode, test_scores, train_goals)
         self.keep_best_agent(episode, agent)
         self.update_goal_sampler_records(agent.goal_sampler)
 
     @staticmethod
-    def compute_test_scores_over_things(test_scores, thing_list):
+    def compute_average_scores_over_list_of_goals(test_scores, keep_list=None, exclude_list=None):
         """
         Used for computing score over train
         Parameters
         ----------
         test_scores :
-        thing_list :
+        keep_list :
+        exclude_list :
 
         Returns
         -------
@@ -90,9 +91,18 @@ class Records:
         """
         d = dict()
         for thing_name, thing_score in test_scores.items():
-            if thing_name in thing_list:
-                d.update(thing_score)
-        return float(np.round(np.mean(list(d.values())), 2))
+            d.update(thing_score)
+
+        if keep_list is None and exclude_list is None:
+            d = list(d.values())
+        elif keep_list is not None and exclude_list is None:
+            d = [d[k] for k in keep_list]
+        elif keep_list is not None and exclude_list is None:
+            d = [d[k] for k in set(d.keys()).difference(exclude_list)]
+        else:
+            raise EOFError('keep_list and exclude_list cannot be both None')
+
+        return float(np.round(np.mean(d), 2))
 
     def save(self):
         # Test record

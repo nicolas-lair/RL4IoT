@@ -11,13 +11,9 @@ from logger import update_logger
 from simulator.Items import ITEM_TYPE
 from simulator.Action import ACTION_SPACE
 from simulator.discrete_parameters import color_list, N_LEVELS, TVchannels_list
-from architecture.contextnet import DeepSetStateNet, FlatStateNet, AttentionFlatState, DoubleAttDeepSet
-from architecture.dqn import FullNet, FullNetWithGatedAttention
-from simulator.lighting_things import AdorneLight, BigAssFan, HueLightBulb, SimpleLight, \
-    StructuredHueLight
-from simulator.TV_thing import SimpleTV, TVWithVolume, TVWithMediaControl, TVFullOption
-from simulator.Speaker import SimpleSpeaker, SpeakerWithMediaControl
-from simulator.Blinds import SimpleBlinds
+from architecture.contextnet import DeepSetStateNet
+from architecture.dqn import FullNet
+from utils import extend_dict
 
 ThingParam = namedtuple('ThingParam', ('Class', 'Params'))
 vector_cache = '/home/nicolas/PycharmProjects/RL4IoT/.vector_cache'
@@ -65,43 +61,6 @@ def prepare_simulation(simulation_name='default'):
 
 
 def generate_env_params(thing):
-    if thing is None:
-        thing = [
-            # ThingParam(SimpleLight, dict(name='plug', simple=True)),
-            # ThingParam(SimpleLight, dict(name='switch', simple=True)),
-            # ThingParam(SimpleLight, dict(name='heater', simple=True)),
-            # ThingParam(SimpleLight, dict(name='television', simple=True)),
-            # ThingParam(SimpleLight, dict(name='speaker', simple=True, is_visible=False)),
-            # ThingParam(AdorneLight, dict(name="light", simple=True, always_on=True)),
-            ThingParam(BigAssFan, dict(name="light", simple=True, always_on=True)),
-            # ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True, is_visible=False)),
-            ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
-            # ThingParam(StructuredHueLight, dict(name="colored light", simple=True, always_on=False)),
-            # ThingParam(TVFullOption, dict(name="television", simple=True, always_on=True)),
-            # ThingParam(SimpleBlinds, dict(name="blinds", simple=True)),
-            # ThingParam(SimpleSpeaker, dict(name='speaker', simple=True, always_on=True))
-            #
-            # ThingParam(PlugSwitch,
-            #            dict(name='first plug',
-            #                 description='This is a plug',
-            #                 is_visible=True,
-            #                 init_type='random',
-            #                 init_params=dict())
-            #            ),
-            # ThingParam(PowerThing,
-            #            dict(name='first light bulb',
-            #                 description='This is a light bulb',
-            #                 is_visible=True,
-            #                 init_type='random',
-            #                 init_params=dict())
-            #            ),
-            # ThingParam(LGTV, dict(name='television',
-            #                       description='This is a television',
-            #                       is_visible=True,
-            #                       init_type='random',
-            #                       init_params=dict())
-            #            )
-        ]
     env_params = dict(
         max_episode_length=2,
         ignore_exec_action=True,
@@ -205,6 +164,7 @@ def generate_model_params(context_architeture=policy_context_archi):
 def generate_action_model_params(desc_embedder=description_embedder_type):
     merge_thing_action_embedding = (desc_embedder != 'one_hot')
     action_model_params = dict(
+        use_attention=True,
         raw_action_size=dict(
             thing=thing_description_embedding,
             channel=channel_description_embedding,
@@ -216,6 +176,8 @@ def generate_action_model_params(desc_embedder=description_embedder_type):
         out_features=action_embedding,  # TODO
         merge_thing_action_embedding=merge_thing_action_embedding
     )
+    if action_model_params['use_attention']:
+        action_model_params.update(lm_embedding_size=instruction_embedding)
     return action_model_params
 
 
@@ -290,7 +252,7 @@ def get_reward_training_params(name=None, device='cuda'):
 
 def generate_trainer_params(things_list, simulation_name='default_simulation', use_pretrained_language_model=False,
                             save_path=True, device='cuda', dqn_loss='mse', context_architecture=policy_context_archi,
-                            n_episode=15000, test_frequence=150):
+                            **kwargs):
     path_dir, simulation_id = prepare_simulation(simulation_name) if save_path else (None, simulation_name)
 
     # Instantiate the param dict
@@ -321,6 +283,10 @@ def generate_trainer_params(things_list, simulation_name='default_simulation', u
             beta=0.6,
             prior_eps=1e-6
         ),
+        oracle_params=dict(
+            absolute_instruction=True,
+            relative_instruction=True
+        ),
         use_double_dqn=True,
         discount_factor=0.95,
         batch_size=128,
@@ -331,26 +297,27 @@ def generate_trainer_params(things_list, simulation_name='default_simulation', u
         lr_scheduler=None,
         lr_scheduler_params=dict(mode='min'),
         logger=generate_logger_params(simulation_id),
-        n_episode=n_episode,
+        n_episode=10000,
         target_update_frequence=20,
         device=device,
-        test_frequence=test_frequence,
+        test_frequence=100,
         n_iter_test=25,
         tqdm=False,
         save_directory=path_dir,
-    )
 
+    )
+    for k, v in kwargs.items():
+        extend_dict(params, k, v)
     return params
 
 
 def generate_proc_gen_eval_params(things_list, simulation_name='default_simulation',
                                   use_pretrained_language_model=False, save_path=True, device='cuda', dqn_loss='mse',
-                                  context_architecture=policy_context_archi, n_episode=15000, test_frequence=150):
-
+                                  context_architecture=policy_context_archi, **kwargs):
     params = generate_trainer_params(things_list=things_list, simulation_name=simulation_name,
                                      use_pretrained_language_model=use_pretrained_language_model, save_path=save_path,
                                      device=device, dqn_loss=dqn_loss, context_architecture=context_architecture,
-                                     n_episode=n_episode, test_frequence=test_frequence)
+                                     **kwargs)
     params['new_objects_threshold'] = (5, 0.91)
     return params
 

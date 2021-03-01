@@ -10,11 +10,11 @@ def test_action_effect(thing, test_name, init_params, action, debug=False):
         try:
             thing.do_action(*a)
             s2 = thing.get_state(oracle=True)
-            print(f"{sorted(thing.get_state_change(s1, s2))} after action {a}")
+            print(f"{sorted(thing.get_thing_change(s1, s2))} after action {a}")
             if debug: print(s2)
             s1 = s2
         except MethodUnavailableError:
             s2 = thing.get_state(oracle=True)
-            print(f'Action {a} is not available for {thing.name}', sorted(thing.get_state_change(s1, s2)))
+            print(f'Action {a} is not available for {thing.name}', sorted(thing.get_thing_change(s1, s2)))
             if debug: print(s2)
             s1 = s2

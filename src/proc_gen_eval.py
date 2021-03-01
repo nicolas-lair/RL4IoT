@@ -53,12 +53,13 @@ if __name__ == "__main__":
         rolling_window, score_threshold = params['new_objects_threshold']
 
         env = IoTEnv4ML(**params['env_params'])
-        train_things = [thing.name for thing in env.get_thing_list() if thing.is_visible]
+        env.update_visibility(thing='bulb', channel='brightness', visibility=False)
 
         test_env = IoTEnv4ML(**params['env_params'])
         test_env.set_all_things_visible()
 
-        oracle = Oracle(thing_list=env.get_thing_list())
+        oracle = Oracle(thing_list=env.get_things(), **params['oracle_params'])
+        train_goals = oracle.train_str_instructions
         language_model = LanguageModel(**params['language_model_params'])
         agent = DQNAgent(language_model=language_model, params=params)
         metrics_records = Records(save_path=params['save_directory'], rolling_window=rolling_window)
@@ -73,13 +74,16 @@ if __name__ == "__main__":
 
         for ep in range(num_episodes):
             logger.info('%' * 5 + f' Episode {ep} ' + '%' * 5)
+            if introduce_new_object:
+                logger.info(f'New things/channels were introduced at episode '
+                            f'{metrics_records.new_objet_introduction_episode}')
             run_episode(agent=agent, env=env, oracle=oracle, save_transitions=True, episode=ep)
             agent.update(episode=ep, max_episodes=num_episodes)
 
             if ep > 0 and ep % test_frequence == 0:
                 test_scores = test_agent(agent=agent, test_env=test_env, oracle=oracle, n_test=n_iter_test)
                 metrics_records.update_records(agent=agent, episode=ep, test_scores=test_scores,
-                                               train_things=train_things)
+                                               train_goals=train_goals)
                 if ep % 10 * test_frequence == 0:
                     metrics_records.save()
 
@@ -93,7 +97,7 @@ if __name__ == "__main__":
         metrics_records.update_records(agent=agent, episode=num_episodes,
                                        test_scores=test_agent(agent=agent, test_env=test_env, oracle=oracle,
                                                               n_test=n_iter_test),
-                                       train_things=train_things)
+                                       train_goals=train_goals)
         metrics_records.save()
         metrics_records.save_as_object()
         logger.info('The End')

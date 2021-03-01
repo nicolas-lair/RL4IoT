@@ -2,9 +2,13 @@ from itertools import product
 
 
 class Oracle:
-    def __init__(self, thing_list):
+    def __init__(self, thing_list, absolute_instruction, relative_instruction):
         self.thing_dict = {t.name: t for t in thing_list}
-        self.goals_description_set, self.str_instructions = self.build_instruction_set()
+        self.absolute_instruction = absolute_instruction
+        self.relative_instruction = relative_instruction
+        self.goals_description_set, self.str_instructions = self.build_instruction_set(ignore_visibility=True)
+        self.train_goals_description_set, self.train_str_instructions = self.build_instruction_set(
+            ignore_visibility=False)
 
     def get_state_change(self, previous_state, next_state, ignore_power=False, as_string=True):
         """
@@ -16,9 +20,13 @@ class Oracle:
         achieved_instruction = []
         for thing_name in previous_state:
             thing = self.thing_dict[thing_name]
-            achieved_instruction.extend(thing.get_state_change(previous_state[thing.name], next_state[thing.name],
-                                                               ignore_power,
-                                                               as_string))
+            achieved_instruction.extend(thing.get_thing_change(previous_state[thing.name], next_state[thing.name],
+                                                               ignore_power=ignore_power,
+                                                               as_string=as_string,
+                                                               absolute=self.absolute_instruction,
+                                                               relative=self.relative_instruction
+                                                               )
+                                        )
         return achieved_instruction
 
     def get_state_description(self, state, ignore_power=False, as_string=False):
@@ -42,11 +50,14 @@ class Oracle:
         is_achieved = self.is_achieved(next_state, instruction)
         return is_achieved or (instruction in self.get_state_change(previous_state, next_state))
 
-    def get_thing_goals(self, thing):
+    def get_thing_goals(self, thing, ignore_visibility=True):
         # TODO change to make robust when a description involves two object
-        initialization_states = [thing.init_node(is_visible=True, init_type='random') for _ in range(50)]
+        initialization_states = [thing.init_node(
+            is_visible=True, init_type='random', oracle=ignore_visibility) for _ in range(50)]
         states_pair = product(initialization_states, repeat=2)
-        state_change = [thing.get_state_change(i, j, ignore_power=True, as_string=False) for i, j in states_pair]
+        state_change = [
+            thing.get_thing_change(i, j, ignore_power=True, as_string=False, absolute=self.absolute_instruction,
+                                   relative=self.relative_instruction) for i, j in states_pair]
         state_description = [thing.get_state_description(i) for i in initialization_states]
         goals_set = set(sum(state_description, []) + sum(state_change, []))
         return goals_set
@@ -73,7 +84,8 @@ class Oracle:
 
 if __name__ == '__main__':
     from lighting_things import BigAssFan
-    thing =BigAssFan(name='light', simple=True)
+
+    thing = BigAssFan(name='light', simple=True)
     oracle = Oracle([thing])
     instr1 = oracle.str_instructions
 

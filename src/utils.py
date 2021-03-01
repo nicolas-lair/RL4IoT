@@ -105,3 +105,11 @@ def test_agent(agent, test_env, oracle, n_test):
             reward_table[thing][instruction] = round(current_rewards / n_test, 2)
     agent.train()
     return reward_table
+
+
+def extend_dict(d, k, v):
+    if isinstance(v, dict):
+        for k_, v_ in v.items():
+            extend_dict(d[k], k_, v_)
+    else:
+        d.update({k: v})

@@ -1,6 +1,3 @@
-from collections import OrderedDict, UserDict
-import json
-
 import gym
 
 from simulator.Thing import Thing, ThingState
@@ -51,14 +48,14 @@ class IoTEnv(gym.Env):
         self.oracle_state = self.build_state(oracle=True)
         self.previous_oracle_state = self.oracle_state
 
-    def get_thing_list(self):
-        return list(self._things_lookup_table.values())
+    def get_things(self, name=None):
+        if name is None:
+            return list(self._things_lookup_table.values())
+        else:
+            return self._things_lookup_table[name]
 
     def get_visible_thing_list(self):
-        return [t for t in self.get_thing_list() if t.is_visible]
-
-    def get_thing(self, name):
-        return self._things_lookup_table[name]
+        return [t for t in self.get_things() if t.is_visible]
 
     def step(self, action):
         """
@@ -72,7 +69,7 @@ class IoTEnv(gym.Env):
         :param action:
         :return:
         """
-        thing = self.get_thing(action["thing"])
+        thing = self.get_things(name=action["thing"])
         thing.do_action(action["channel"], action["action"], action["params"])
 
         self.previous_oracle_state = self.oracle_state
@@ -104,7 +101,7 @@ class IoTEnv(gym.Env):
         return State(state)
 
     def reset(self):
-        thing_list = self.get_thing_list()
+        thing_list = self.get_things()
         for thing in thing_list:
             thing.reset()
         self.oracle_state = self.build_state(oracle=True)
@@ -114,8 +111,15 @@ class IoTEnv(gym.Env):
     def render(self, mode='human'):
         raise NotImplementedError
 
+    def update_visibility(self, thing=None, channel=None, visibility=True):
+        thing = self.get_things(name=thing)
+        if channel is None:
+            thing.update_visibility(visibility)
+        else:
+            thing.get_channels(name=channel).update_visibility(visibility)
+
     def set_all_things_visible(self):
-        for thing in self.get_thing_list():
+        for thing in self.get_things():
             thing.update_visibility(visibility=True)
 
 
@@ -141,7 +145,7 @@ class IoTEnv4ML(gym.Wrapper):
         self.filter_state_during_episode = filter_state_during_episode
 
         # # Compute node embedding
-        # things_list = self.get_thing_list()
+        # things_list = self.get_things()
         # description_node_iterator = chain.from_iterable([things_list] + [t.get_channels() for t in things_list])
         # for node in description_node_iterator:
         #     node.embed_node_description(self.description_embedder.get_description_embedding)
@@ -190,7 +194,7 @@ class IoTEnv4ML(gym.Wrapper):
             assert len(self.state) == 1
             thing_name = list(self.state.keys())[0]
             channel_state = self.state[thing_name][action.name]
-            thing_state = ThingState({action.name : channel_state}, description=self.state[thing_name]['description'])
+            thing_state = ThingState({action.name: channel_state}, description=self.state[thing_name]['description'])
             self.state = State({thing_name: thing_state})
 
     def save_running_action(self, action):
@@ -226,4 +230,3 @@ class IoTEnv4ML(gym.Wrapper):
 
     def reset_running_action(self):
         self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
-

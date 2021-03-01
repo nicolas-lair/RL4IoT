@@ -4,7 +4,7 @@ from architecture.goal_sampler import GoalSampler
 
 if __name__ == "__main__":
     env = IoTEnv()
-    oracle = Oracle(thing_list=env.get_thing_list())
+    oracle = Oracle(thing_list=env.get_things())
     goal_sampler = GoalSampler(language_model=lambda x: x)
 
     #####################TURN ON LIGHTBULB ###############
