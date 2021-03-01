@@ -284,11 +284,11 @@ class AbstractDescriptionEmbedder(ABC):
 
     @abstractmethod
     def state_dict(self):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def load_state_dict(self, state_dict):
-        pass
+        raise NotImplementedError
 
 
 class OneHotDescriptionEmbedder(AbstractDescriptionEmbedder):
@@ -317,10 +317,8 @@ class OneHotDescriptionEmbedder(AbstractDescriptionEmbedder):
                     channel_encoder=self.encoder['channel'].state_dict())
 
     def load_state_dict(self, state_dict):
-        self.encoder = {
-            'thing': self.encoder['thing'].load_state_dict(state_dict['thing']),
-            'channel': self.encoder['channel'].load_state_dict(state_dict['channel'])
-        }
+        for k, v in self.encoder.items():
+            v.load_state_dict(state_dict[f'{k}_encoder'])
 
 
 class PreTrainedDescriptionEmbedder(AbstractDescriptionEmbedder):
