@@ -23,22 +23,18 @@ class Thing(ABC, DescriptionNode):
         :param is_visible: boolean
         :param init_type: 'default', 'random', 'custom'
         :param init_params: if init_type is custom, dict {key: value} where key are channels name and value are channels
-        init value
         """
-        super().__init__(name=name, description=description, children=self.get_action_channels(), node_type='thing')
+        super().__init__(name=name, description=description, children=self.get_action_channels(), node_type='thing',
+                         is_visible=is_visible)
         self.goals_dict = initialize_instruction(goal_dict=goals_dict, name=name, location=location)
 
         # self.observation_space, self.action_space = self.build_observation_and_action_space()
         self._channels = self.get_channels()
-        self.initial_values = {'is_visible': is_visible, 'init_type': init_type,
-                               'init_params': init_params if init_params is not None else dict()}
+        self.initial_values.update(dict(init_type=init_type,
+                                        init_params=init_params if init_params is not None else dict()))
 
         self.is_visible = None
-        self.init(**self.initial_values)
-
-    def update_visibility(self, visibility):
-        self.is_visible = visibility
-        self.initial_values['is_visible'] = True
+        self.init_node(**self.initial_values)
 
     def get_channels(self):
         """
@@ -52,11 +48,11 @@ class Thing(ABC, DescriptionNode):
         return self._channels
 
     def get_action_channels(self):
-        action_channels = [x for x in vars(self).values() if (isinstance(x, Channel) and x.write)]
+        action_channels = [x for x in vars(self).values() if (isinstance(x, Channel) and x.write and x.is_visible)]
         return action_channels
 
     def get_observation_channels(self):
-        action_channels = [x for x in vars(self).values() if (isinstance(x, Channel) and x.read)]
+        action_channels = [x for x in vars(self).values() if (isinstance(x, Channel) and x.read and x.is_visible)]
         return action_channels
 
     def build_observation_and_action_space(self):
@@ -100,10 +96,9 @@ class Thing(ABC, DescriptionNode):
 
         """
         state = dict()
-        channels = self.get_channels()
+        channels = self.get_channels() if oracle else self.get_observation_channels()
         for c in channels:
-            if oracle or c.read:
-                state[c.name] = c.get_state()
+            state[c.name] = c.get_state()
         state = ThingState(state, description=self.description)
         return state
 
@@ -111,31 +106,32 @@ class Thing(ABC, DescriptionNode):
         if self.is_visible:
             return self._get_state(oracle)
         else:
-            return None, None, None
+            return None
 
     def do_action(self, channel, action, params=None):
         channel = getattr(self, channel)
         channel.do_action(action, params)
 
-    def init(self, is_visible, init_type, init_params=None):
-        if init_params is None:
-            init_params = dict()
-        self.is_visible = is_visible
+    def init_node(self, is_visible=None, init_params=None, init_type=None, init_visibility=None):
+        super().init_node(is_visible=is_visible)
+        # if init_params is None:
+        #     init_params = dict()
 
         if init_type in ['default', 'random']:
-            init_func = lambda x: init_type
+            init_func = lambda x: dict(is_visible=None, init_value=init_type)
         elif init_type == 'custom':
-            init_func = lambda x: init_params[x]
+            init_visibility = lambda _: None if init_visibility is None else init_visibility
+            init_func = lambda x: dict(init_visibility=init_visibility[x], init_value=init_params[x])
         else:
             raise NotImplementedError('init_type should be one of {default, random, custom}')
 
         for c in self._channels:
-            c.init(init_func(c.name))
+            c.init_node(**init_func(c.name))
 
         return self.get_state(oracle=True)
 
     def reset(self):
-        self.init(**self.initial_values)
+        self.init_node(**self.initial_values)
 
     def get_state_change(self, previous_state, next_state, ignore_power=False, as_string=True):
         previous_matching_descriptions = self.get_state_description(previous_state)
@@ -179,6 +175,9 @@ class Thing(ABC, DescriptionNode):
     @abstractmethod
     def is_powered(self, state=None):
         raise NotImplementedError
+
+    def get_children_nodes(self):
+        return self.get_action_channels()
 
 
 class PowerThing(Thing):

@@ -17,17 +17,14 @@ class ChannelState(OrderedDict):
 
 class Channel(DescriptionNode):
     def __init__(self, name, description, item, read=True, write=True, associated_state_description=None,
-                 associated_state_change=None):
+                 associated_state_change=None, is_visible=True):
 
         self.item = item
         super().__init__(name=name, description=description,
                          children=[OpenHABAction(m, discretization=self.item.discretization[m]) for m in
                                    self.item.methods],
-                         node_type='channel')
-
-        # self.initial_value = value
-        # if value is not None:
-        #     self.item.set_state(value)
+                         node_type='channel',
+                         is_visible=is_visible)
 
         self.read = read
         self.write = write
@@ -55,9 +52,6 @@ class Channel(DescriptionNode):
         if self.node_embedding is not None: state.update({'embedding': self.node_embedding})
         return ChannelState(state)
 
-    # def set_state(self, value):
-    #     return self.item.set_state(value)
-
     def get_observation_space(self):
         return self.item.observation_space
 
@@ -74,8 +68,9 @@ class Channel(DescriptionNode):
     def get_available_actions(self):
         return self.item.methods
 
-    def init(self, init_param):
-        self.item.initialize_value(init_param)
+    def init_node(self, is_visible=None, init_value=None):
+        super().init_node(is_visible=is_visible)
+        self.item.initialize_value(init_value)
 
     def get_state_description_key(self, state):
         keys = [f(*state[self.name]['state']) for f in self.associated_state_description]

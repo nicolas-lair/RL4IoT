@@ -104,19 +104,21 @@ def get_increase_change(previous_brightness, next_brightness, type):
 
 class PowerChannel(Channel):
     def __init__(self, name='power', description='switch on and off',
-                 methods=dict(turnOn=True, turnOff=True)):
+                 methods=dict(turnOn=True, turnOff=True), **kwargs):
         super().__init__(name=name,
                          description=description,
                          item=SwitchItem(**methods),
                          read=True,
                          write=True,
                          associated_state_description=lambda x: 'turn_on' if x else 'turn_off',
-                         associated_state_change=None)
+                         associated_state_change=None,
+                         **kwargs
+                         )
 
 
 class WrapperDimmerChannel(Channel):
     def __init__(self, name, description, type,
-                 methods=dict(setPercent=True, increase=True, decrease=True)):
+                 methods=dict(setPercent=True, increase=True, decrease=True), **kwargs):
         super().__init__(name=name,
                          description=description,
                          item=DimmerItem(**methods, discretization={'setPercent': type}),
@@ -124,40 +126,47 @@ class WrapperDimmerChannel(Channel):
                          write=True,
                          associated_state_description=lambda
                              p: f'{type}_level_{percent_to_level(p, lvl_type=type)}',
-                         associated_state_change=partial(get_increase_change, type=type)
+                         associated_state_change=partial(get_increase_change, type=type),
+                         **kwargs
                          )
 
 
 class BrightnessChannel(WrapperDimmerChannel):
     def __init__(self, name='brightness', description='brightness',
-                 methods=dict(setPercent=True, increase=True, decrease=True)):
+                 methods=dict(setPercent=True, increase=True, decrease=True), **kwargs):
         super().__init__(name=name,
                          description=description,
                          type='brightness',
-                         methods=methods)
+                         methods=methods,
+                         **kwargs
+                         )
 
 
 class ColorTemperatureChannel(WrapperDimmerChannel):
     def __init__(self, name='color_temperature', description='temperature',
-                 methods=dict(setPercent=True, increase=True, decrease=True)):
+                 methods=dict(setPercent=True, increase=True, decrease=True), **kwargs):
         super().__init__(name=name,
                          description=description,
                          type='temperature',
-                         methods=methods)
+                         methods=methods,
+                         **kwargs
+                         )
 
 
 class VolumeChannel(WrapperDimmerChannel):
     def __init__(self, name='volume', description='volume',
-                 methods=dict(setPercent=True, increase=True, decrease=True)):
+                 methods=dict(setPercent=True, increase=True, decrease=True), **kwargs):
         super().__init__(name=name,
                          description=description,
                          type='volume',
-                         methods=methods)
+                         methods=methods,
+                         **kwargs
+                         )
 
 
 class ColorChannel(Channel):
     def __init__(self, name='color', description='color',
-                 methods=None, associated_state_description=None, associated_state_change=None):
+                 methods=None, associated_state_description=None, associated_state_change=None, **kwargs):
 
         if methods is None:
             methods = dict(turnOn=True, turnOff=True, increase=True, decrease=True, setPercent=True, setHSB=True)
@@ -176,11 +185,12 @@ class ColorChannel(Channel):
                          item=ColorItem(**methods, discretization={'setHSB': 'colors', 'setPercent': 'brightness'}),
                          associated_state_description=associated_state_description,
                          associated_state_change=associated_state_change,
+                         **kwargs
                          )
 
 
 class TVSourceChannel(Channel):
-    def __init__(self, name='source', description='channel source'):
+    def __init__(self, name='source', description='channel source', **kwargs):
         super().__init__(
             name=name,
             description=description,
@@ -188,12 +198,13 @@ class TVSourceChannel(Channel):
             read=True,  # TODO Fix Hack
             write=True,
             associated_state_description=lambda s: f'{s}_TVsource',
-            associated_state_change=None
+            associated_state_change=None,
+            **kwargs
         )
 
 
 class MediaPlayerChannel(Channel):
-    def __init__(self, name='media', description='media control', methods=None):
+    def __init__(self, name='media', description='media control', methods=None, **kwargs):
         if methods is None:
             methods = dict(play=True, pause=True,
                            PlayPause=False, next=False, previous=False, rewind=False, fasforward=False)
@@ -204,12 +215,13 @@ class MediaPlayerChannel(Channel):
             read=True,
             write=True,
             associated_state_description=lambda x: 'play' if x else 'pause',
-            associated_state_change=None
+            associated_state_change=None,
+            **kwargs
         )
 
 
 class RollerShutterChannel(Channel):
-    def __init__(self, name='roller', description='roller'):
+    def __init__(self, name='roller', description='roller', **kwargs):
         super().__init__(
             name=name,
             description=description,
@@ -217,5 +229,6 @@ class RollerShutterChannel(Channel):
             read=True,
             write=True,
             associated_state_description=lambda x: 'open' if (x < 50) else 'close',
-            associated_state_change=None
+            associated_state_change=None,
+            **kwargs
         )

@@ -374,7 +374,33 @@ if __name__ == "__main__":
                            )
 
 
-    test_adorne()
-    test_bigass()
-    test_structuredhue()
-    test_goals()
+    def test_bigass_with_hidden_channels():
+        bigassfan = BigAssFan(name='bigass', simple=True)
+        channels = bigassfan.get_channels()
+        assert channels == bigassfan.get_children_nodes()
+
+        obs_channels, act_channels = bigassfan.get_observation_channels(), bigassfan.get_action_channels()
+        assert len(obs_channels) == len(act_channels) == len(channels)
+        assert act_channels == bigassfan.get_children_nodes()
+
+        channels[0].update_visibility(False)
+        obs_channels, act_channels = bigassfan.get_observation_channels(), bigassfan.get_action_channels()
+        assert len(obs_channels) + 1 == len(act_channels) + 1 == len(channels)
+        assert act_channels == bigassfan.get_children_nodes()
+
+        bigassfan.reset()
+        obs_channels, act_channels = bigassfan.get_observation_channels(), bigassfan.get_action_channels()
+        assert len(obs_channels) + 1 == len(act_channels) + 1 == len(channels)
+        assert act_channels == bigassfan.get_children_nodes()
+
+        channels[0].update_visibility(True)
+        obs_channels, act_channels = bigassfan.get_observation_channels(), bigassfan.get_action_channels()
+        assert len(obs_channels) == len(act_channels) == len(channels)
+        assert act_channels == bigassfan.get_children_nodes()
+
+
+    # test_adorne()
+    # test_bigass()
+    # test_structuredhue()
+    # test_goals()
+    test_bigass_with_hidden_channels()

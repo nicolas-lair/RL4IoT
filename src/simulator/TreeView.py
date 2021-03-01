@@ -3,7 +3,6 @@ class Node:
         self.name = name
         self.node_type = node_type
 
-        # self.father = father
         self.children = children
 
         self.node_embedding = node_embedding
@@ -23,14 +22,25 @@ class Node:
 
 
 class DescriptionNode(Node):
-    def __init__(self, name, description, children, node_type='description_node'):
+    def __init__(self, name, description, children, node_type='description_node', is_visible=True):
         super().__init__(name=name, children=children, node_type=node_type)
         self.description = description
         self.has_description = True
+        self.is_visible = is_visible
+        self.initial_values = dict(is_visible=is_visible)
 
     def embed_node_description(self, embedder):
         self.node_embedding = embedder(self.description)
         self.embedding_size = max(self.node_embedding.shape)
+
+    def update_visibility(self, visibility):
+        self.is_visible = visibility
+        self.initial_values['is_visible'] = visibility
+
+    def init_node(self, is_visible=None, **kwargs):
+        if is_visible is None:
+            is_visible = self.initial_values['is_visible']
+        self.is_visible = is_visible
 
 
 class NoDescriptionNode(Node):

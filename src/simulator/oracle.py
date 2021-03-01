@@ -44,7 +44,7 @@ class Oracle:
 
     def get_thing_goals(self, thing):
         # TODO change to make robust when a description involves two object
-        initialization_states = [thing.init(is_visible=True, init_type='random') for _ in range(50)]
+        initialization_states = [thing.init_node(is_visible=True, init_type='random') for _ in range(50)]
         states_pair = product(initialization_states, repeat=2)
         state_change = [thing.get_state_change(i, j, ignore_power=True, as_string=False) for i, j in states_pair]
         state_description = [thing.get_state_description(i) for i in initialization_states]
