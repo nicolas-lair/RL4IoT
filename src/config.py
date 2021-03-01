@@ -351,7 +351,7 @@ def generate_proc_gen_eval_params(things_list, simulation_name='default_simulati
                                      use_pretrained_language_model=use_pretrained_language_model, save_path=save_path,
                                      device=device, dqn_loss=dqn_loss, context_architecture=context_architecture,
                                      n_episode=n_episode, test_frequence=test_frequence)
-    params['new_objects_threshold'] = (5, 0.81)
+    params['new_objects_threshold'] = (5, 0.91)
     return params
 
 

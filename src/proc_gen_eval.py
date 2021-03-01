@@ -17,15 +17,18 @@ N_SIMULATION = 2
 use_pretrained_language_model = False
 optim_loss = 'mse'
 
-n_episode = 5000
-test_frequence = 200
+n_episode = 8000
+test_frequence = 25
 
 load_agent = False
 load_agent_path = '../results/debug/0/agent'
 
 thing = [
-    ThingParam(BigAssFan, dict(name="light", simple=True, always_on=True)),
-    ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True, is_visible=False)),
+    ThingParam(SimpleLight, dict(name="light", simple=True)),
+    ThingParam(SimpleLight, dict(name="plug", simple=True)),
+    ThingParam(SimpleLight, dict(name="heater", simple=True)),
+    ThingParam(SimpleLight, dict(name="bulb", simple=True)),
+    ThingParam(SimpleLight, dict(name="television", simple=True, is_visible=False)),
 ]
 
 params = generate_proc_gen_eval_params(simulation_name=simulation_name, device=device, things_list=thing,

@@ -64,6 +64,7 @@ class LanguageModel(nn.Module):
             self.freeze()
 
     def add_tokens(self, token):
+        raise KeyError(token)
         idx = len(self.word_to_ix)
         if idx in self.word_to_ix.values():
             idx = min(set(range(100000)).difference(self.word_to_ix.values()))
