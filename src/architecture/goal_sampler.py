@@ -27,8 +27,8 @@ class Goal:
         return self.goal_embedding
 
     @classmethod
-    def create_random_goal(cls, goal_embedding_size):
-        return cls('', goal_embedding=torch.rand(goal_embedding_size).view(1, -1))
+    def create_random_goal(cls, goal_embedding_size, device):
+        return cls('', goal_embedding=torch.rand(goal_embedding_size).view(1, -1).to(device))
 
     # For compatibility issue
     def update_record(self, **kwargs):
@@ -106,7 +106,7 @@ class GoalSampler:
 
     def sample_goal(self, strategy='random'):
         if len(self.discovered_goals) == 0:
-            target = Goal.create_random_goal(goal_embedding_size=self.language_model.out_features)
+            target = Goal.create_random_goal(goal_embedding_size=self.language_model.out_features, device=self.language_model.device)
         else:
             strategy = strategy if strategy is not None else self.goal_sampling_strategy
             if strategy == 'random':

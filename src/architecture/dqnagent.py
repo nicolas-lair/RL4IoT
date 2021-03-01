@@ -7,8 +7,8 @@ from torch.nn.utils import clip_grad_norm_
 from logger import get_logger
 from architecture.goal_sampler import GoalSampler
 from architecture.replay_buffer import get_replay_buffer, Transition
-from action_embedder import ActionModel
-from architecture.state_embedder import StateEmbedder, get_description_embedder, OneHotDescriptionEmbedder
+from action_embedder import get_action_model
+from architecture.state_embedder import StateEmbedder, get_description_embedder
 
 logger = get_logger(__name__)
 
@@ -37,7 +37,7 @@ class DQNAgent:
         self.state_embedder = StateEmbedder(description_embedder=self.node_description_embedder, device=self.device,
                                             **params['state_embedder_params'])
 
-        self.action_model = ActionModel(**params['action_model_params'])
+        self.action_model = get_action_model(**params['action_model_params'])
         self.action_model.to(self.device)
 
         self.language_model = language_model.to(self.device)
@@ -81,7 +81,7 @@ class DQNAgent:
         failed_goals = self.goal_sampler.get_failed_goals(achieved_goals_str=achieved_goals_str)
         achieved_goals = [self.goal_sampler.discovered_goals[g] for g in achieved_goals_str]
         for g in achieved_goals:
-            self.store_transitions(goal=g, done=True, reward=1, **kwargs)
+            self.store_transitions(goal=g, done=done, reward=1, **kwargs)
         for g in failed_goals:
             self.store_transitions(goal=g, done=done, reward=0, **kwargs)
 
@@ -105,7 +105,7 @@ class DQNAgent:
         return embedding.float().to(self.device), a.node_type
 
     # TODO adapt to a policy_network of actions, for now suppose that possible attributes are 'embedding' 'description' 'has_description'
-    def embed_actions(self, actions):
+    def embed_actions(self, actions, instructions=None):
         """
         Transform the actions into their standard embedding using a language policy_network for action with description
         or other types of predefined embedding. The embeddings may not have all the same size and will later be
@@ -117,7 +117,7 @@ class DQNAgent:
         actions = [actions] if not isinstance(actions[0], list) else actions
         temp = [[self._embed_one_action(a) for a in action_list] for action_list in actions]
         action_embedding, action_type = zip(*[zip(*t) for t in temp])
-        embedded_actions = self.action_model(action_embedding, action_type)
+        embedded_actions = self.action_model(action_embedding, action_type, instruction=instructions)
         action_padded_mask = (embedded_actions == 0).all(dim=2, keepdim=True)
         return embedded_actions, action_padded_mask
 
@@ -165,7 +165,7 @@ class DQNAgent:
         :return:
         """
         sample = random.random() if exploration else 1
-        embedded_actions, _ = self.embed_actions(actions)
+        embedded_actions, _ = self.embed_actions(actions, instructions=[instruction])
         if sample >= self.exploration_threshold:
             with torch.no_grad():
                 embedded_state = self.state_embedder.embed_state(state)
@@ -193,7 +193,7 @@ class DQNAgent:
 
         logger.debug('Embedding actions')
         actions = [[a] for a in transitions.action]
-        embedded_actions, _ = self.embed_actions(actions)
+        embedded_actions, _ = self.embed_actions(actions, instructions=goals)
 
         logger.debug('Embedding states')
         embedded_states = self.state_embedder.embed_state(transitions.state, use_cache=False)
@@ -201,7 +201,7 @@ class DQNAgent:
         logger.debug('Embedding previous action')
         previous_action = [[a] for a in transitions.previous_action]
         # TODO try detach the hidden state
-        embedded_previous_action, _ = self.embed_actions(previous_action)
+        embedded_previous_action, _ = self.embed_actions(previous_action, instructions=goals)
         # projected_previous_actions = self.policy_network.action_projector(*embedded_previous_action).squeeze()
 
         logger.debug('Computing Q(s,a)')
@@ -220,7 +220,7 @@ class DQNAgent:
                                                           use_cache=False)
             next_av_actions = [a for a, mask in zip(next_av_actions, done) if not mask]
             logger.debug('Embedding next available actions')
-            embedded_next_actions, action_padded_mask = self.embed_actions(next_av_actions)
+            embedded_next_actions, action_padded_mask = self.embed_actions(next_av_actions, instructions=goals[~done])
             if self.double_dqn:
                 next_action_idx = self.get_greedy_action(state=next_states,
                                                          instruction=goals[~done],

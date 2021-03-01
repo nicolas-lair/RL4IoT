@@ -3,6 +3,13 @@ from torch import nn as nn
 from torch.nn.utils import rnn as rnn_utils
 
 
+def get_action_model(use_attention, **kwargs):
+    if use_attention:
+        return ActionModelWithAttention(**kwargs)
+    else:
+        return ActionModel(**kwargs)
+
+
 class ActionModel(nn.Module):
     def __init__(self, raw_action_size, out_features, merge_thing_action_embedding):
         super().__init__()
@@ -19,7 +26,7 @@ class ActionModel(nn.Module):
         if merge_thing_action_embedding:
             self.action_embedding_layers['channel'] = self.action_embedding_layers['thing']
 
-    def forward(self, actions, action_type):
+    def forward(self, actions, action_type, **kwargs):
         """
 
         :param actions: list of size BATCH_SIZE [
@@ -35,19 +42,23 @@ class ActionModel(nn.Module):
             batch.append(torch.cat(embedded_batch))
         return rnn_utils.pad_sequence(batch, batch_first=True)
 
-        # with torch.no_grad():
-        #     action_type_list = list(self.action_embedding_layers.keys())
-        #     action_type_indices = [torch.tensor([action_type_list.index(t) for t in seq]) for seq in action_type]
-        #     action_type_indices = rnn_utils.pad_sequence(action_type_indices, batch_first=True)
-        #     action_type_mask = torch.zeros(*action_type_indices.size(), len(action_type_list))
-        #     action_type_mask = action_type_mask.scatter_(-1, action_type_indices.unsqueeze(dim=-1), 1.).unsqueeze(
-        #         -1).detach()
-        #
-        #     actions = [torch.cat([F.pad(a, pad=(0, self.in_features - a.size(1), 0, 0)) for a in seq], dim=0)
-        #                for seq in actions]
-        #     actions = rnn_utils.pad_sequence(actions, batch_first=True).detach()
-        #
-        # projection = [v(actions) for v in self.action_embedding_layers.values()]
-        # p = torch.stack(projection, dim=-2)
-        # embedded_actions = (action_type_mask.to(p.device) * p).sum(dim=-2, keepdim=False)
-        # return embedded_actions
+
+class ActionModelWithAttention(ActionModel):
+    def __init__(self, lm_embedding_size, raw_action_size, out_features, merge_thing_action_embedding):
+        super().__init__(raw_action_size, out_features, merge_thing_action_embedding)
+        self.attention_layers = nn.ModuleDict({
+            k: nn.Linear(in_features=lm_embedding_size, out_features=v) for k, v in self.in_features.items()
+        })
+        self.attention_layers.update(nn.ModuleDict(dict(root=nn.Linear(in_features=lm_embedding_size,
+                                                                       out_features=self.action_embedding_size))))
+
+        if merge_thing_action_embedding:
+            self.attention_layers['channel'] = self.attention_layers['thing']
+
+    def forward(self, actions, action_type, instruction):
+        batch = []
+        for action_batch, action_type_batch, ins in zip(actions, action_type, instruction):
+            embedded_batch = [self.action_embedding_layers[t](a * self.attention_layers[t](ins))
+                              for a, t in zip(action_batch, action_type_batch)]
+            batch.append(torch.cat(embedded_batch))
+        return rnn_utils.pad_sequence(batch, batch_first=True)
