@@ -23,8 +23,8 @@ class Node:
 
 
 class DescriptionNode(Node):
-    def __init__(self, name, description, children):
-        super().__init__(name=name, children=children, node_type='description_node')
+    def __init__(self, name, description, children, node_type='description_node'):
+        super().__init__(name=name, children=children, node_type=node_type)
         self.description = description
         self.has_description = True
 

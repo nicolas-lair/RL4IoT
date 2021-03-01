@@ -7,10 +7,8 @@ from torch.nn.utils import clip_grad_norm_
 from logger import get_logger
 from architecture.goal_sampler import GoalSampler
 from architecture.replay_buffer import get_replay_buffer, Transition
-from architecture.utils import dict_to_device
 from action_embedder import ActionModel
-from architecture.state_embedder import StateEmbedder, get_description_embedder, PreTrainedDescriptionEmbedder, \
-    LMBasedDescriptionEmbedder
+from architecture.state_embedder import StateEmbedder, get_description_embedder, OneHotDescriptionEmbedder
 
 logger = get_logger(__name__)
 
@@ -39,8 +37,7 @@ class DQNAgent:
         self.state_embedder = StateEmbedder(description_embedder=self.node_description_embedder, device=self.device,
                                             **params['state_embedder_params'])
 
-        self.action_model = ActionModel(raw_action_size=params['model_params']['raw_action_size'],
-                                        out_features=params['model_params']['action_embedding_size'])
+        self.action_model = ActionModel(**params['action_model_params'])
         self.action_model.to(self.device)
 
         self.language_model = language_model.to(self.device)
@@ -61,13 +58,13 @@ class DQNAgent:
             raise NotImplementedError
 
         try:
-            description_embedder_params = list(self.node_description_embedder.parameters())
+            description_embedder_net_params = list(self.node_description_embedder.parameters())
         except AttributeError:
-            description_embedder_params = []
+            description_embedder_net_params = []
         self.optimizer = params['optimizer'](list(self.policy_network.parameters()) +
                                              list(self.language_model.parameters()) +
                                              list(self.action_model.parameters()) +
-                                             list(description_embedder_params),
+                                             list(description_embedder_net_params),
                                              **params['optimizer_params'])
 
         if params['lr_scheduler'] is not None:
@@ -98,7 +95,7 @@ class DQNAgent:
         :return:
         """
         if a.has_description:
-            embedding = self.node_description_embedder.embed_descriptions(a.description)
+            embedding = self.node_description_embedder.embed_descriptions(a.description, type=a.node_type)
         else:
             embedding = a.get_node_embedding()
         if not isinstance(embedding, torch.Tensor):

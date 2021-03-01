@@ -15,7 +15,9 @@ logger.setLevel(20)
 
 def get_description_embedder(description_embedder_params, language_model):
     description_embedder_type = description_embedder_params['type']
-    if description_embedder_type == 'glove_mean':
+    if description_embedder_type == 'one_hot':
+        description_embedder = OneHotDescriptionEmbedder(**description_embedder_params)
+    elif description_embedder_type == 'glove_mean':
         description_embedder = PreTrainedDescriptionEmbedder(**description_embedder_params)
     elif description_embedder_type == 'projection':
         description_embedder = ProjectedDescriptionEmbedder(**description_embedder_params)
@@ -72,6 +74,47 @@ class FixSizeOrderedDict(OrderedDict):
                 del self[oldest]
 
 
+class OrderedOneHotEncoder:
+    def __init__(self, object_list, device, max_size=10):
+        assert len(object_list) <= max_size
+        self.object_list = object_list.copy()
+        self.device = device
+        self.max_size = max_size
+        self.encoder = dict()
+        [self._add_new_encoding(o) for o in object_list]
+
+    def _add_new_encoding(self, obj):
+        u = torch.zeros(self.max_size, device=self.device)
+        u[self.object_list.index(obj)] = 1
+        self.encoder[obj] = u
+        return u
+
+    def embed(self, obj):
+        encoding = self.encoder.get(obj, None)
+        if encoding is None:
+            assert len(self.object_list) < self.max_size
+            self.object_list.append(obj)
+            encoding = self._add_new_encoding(obj)
+        return encoding.clone()
+
+    def to(self, device):
+        self.device = device
+        for o in self.object_list:
+            self.encoder[o] = self.encoder[o].to(device)
+
+    def state_dict(self):
+        state_dict = {
+            k: v.cpu() for k, v in self.encoder.items()
+        }
+        return state_dict
+
+    def load_state_dict(self, state_dict):
+        assert len(state_dict) <= self.max_size
+        self.encoder = {
+            k: v.to(self.device) for k, v in state_dict.items()
+        }
+
+
 class ItemEmbedder:
     def __init__(self, item_type, device, use_cache=True):
         self.item_type_embedder = OneHotEncoder(sparse=False)
@@ -98,8 +141,8 @@ class StateEmbedder:
         self.description_embedder.to(self.device)
 
         self.use_cache = use_cache
-        if self.use_cache:
-            self.channel_cache = FixSizeOrderedDict(max=10000)
+        # if self.use_cache:
+        #     self.channel_cache = FixSizeOrderedDict(max=10000)
 
         self.always_use_cache = self.use_cache and not isinstance(self.description_embedder, LearnedDescriptionEmbedder)
 
@@ -121,12 +164,19 @@ class StateEmbedder:
             channels_descriptions.extend(
                 [c['description'] for t in obs.values() for c in t.values() if isinstance(c, dict)])
 
-        descriptions_embeddings = self.description_embedder.embed_descriptions(
-            thing_descriptions + channels_descriptions, use_cache=use_description_cache)
-
-        thing_description_index = 0
-        channel_description_index = len(thing_descriptions)
-        return descriptions_embeddings, (thing_description_index, channel_description_index)
+        thing_descriptions_embedding = self.description_embedder.embed_descriptions(thing_descriptions,
+                                                                                    use_cache=use_description_cache,
+                                                                                    type='thing')
+        channel_descriptions_embedding = self.description_embedder.embed_descriptions(channels_descriptions,
+                                                                                      use_cache=use_description_cache,
+                                                                                      type='channel')
+        # descriptions_embeddings = self.description_embedder.embed_descriptions(
+        #     thing_descriptions + channels_descriptions, use_cache=use_description_cache)
+        #
+        # thing_description_index = 0
+        # channel_description_index = len(thing_descriptions)
+        # return descriptions_embeddings, (thing_description_index, channel_description_index)
+        return thing_descriptions_embedding, channel_descriptions_embedding
 
     def _build_channel_embedding(self, channel):
         item_embedding = self.item_embedder.embed(channel['item_type'])
@@ -151,33 +201,38 @@ class StateEmbedder:
         -------
 
         """
-        descr_embeddings, (thing_index, channel_index) = self._compute_description_embedding_in_batch(
+        # descr_embeddings, (thing_index, channel_index) = self._compute_description_embedding_in_batch(
+        #     observations=observations, use_description_cache=use_cache)
+        thingdesc_embedding, channeldesc_embeding = self._compute_description_embedding_in_batch(
             observations=observations, use_description_cache=use_cache)
 
+        thing_index, channel_index = 0, 0
         embedded_observations = []
         for obs in observations:
             new_obs = dict()
             for thing_name, thing in obs.items():
                 thing_obs = []
-                thing_description_embedding = descr_embeddings[thing_index].view(-1)
+                # thing_description_embedding = descr_embeddings[thing_index].view(-1)
+                thing_description_embedding = thingdesc_embedding[thing_index].view(-1)
                 thing_index += 1
                 for channel_name, channel in thing.items():
                     if channel_name != 'description':
                         if channel['item_type'] == 'goal_string':
                             raise NotImplementedError
-                        channel_descriptions_embedding = descr_embeddings[channel_index].view(-1)
+                        # channel_descriptions_embedding = descr_embeddings[channel_index].view(-1)
+                        channel_descriptions_embedding = channeldesc_embeding[channel_index].view(-1)
                         channel_index += 1
 
                         channel_embedding = None
-                        if use_cache:
-                            channel_embedding = self.channel_cache.get(channel, None)
+                        # if use_cache:
+                        #     channel_embedding = self.channel_cache.get(channel, None)
                         if not use_cache or channel_embedding is None:
                             item_embedding, value_embedding = self._build_channel_embedding(channel)
                             channel_embedding = torch.cat(
                                 [channel_descriptions_embedding, item_embedding, value_embedding,
                                  thing_description_embedding]).to(self.device).float()
-                            if use_cache:
-                                self.channel_cache[channel] = channel_embedding
+                            # if use_cache:
+                            #     self.channel_cache[channel] = channel_embedding
                         thing_obs.append(channel_embedding)
 
                 new_obs[thing_name] = torch.stack(thing_obs)
@@ -208,7 +263,6 @@ class StateEmbedder:
     def empty_cache(self):
         if isinstance(self.description_embedder, LearnedDescriptionEmbedder):
             # self.cache.clear()
-            self.channel_cache.clear()
             self.description_embedder.clear_cache()
 
 
@@ -216,7 +270,7 @@ class AbstractDescriptionEmbedder(ABC):
     cache = FixSizeOrderedDict(max=2000)
 
     @abstractmethod
-    def embed_descriptions(self, descriptions, use_cache=True):
+    def embed_descriptions(self, descriptions, type, use_cache=True):
         pass
 
     def clear_cache(self):
@@ -235,6 +289,39 @@ class AbstractDescriptionEmbedder(ABC):
     @abstractmethod
     def load_state_dict(self, state_dict):
         pass
+
+
+class OneHotDescriptionEmbedder(AbstractDescriptionEmbedder):
+    def __init__(self, thing_list, channel_list, max_thing, max_channel,
+                 device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs):
+        self.device = device
+        self.encoder = {
+            'thing': OrderedOneHotEncoder(object_list=thing_list, device=device, max_size=max_thing),
+            'channel': OrderedOneHotEncoder(object_list=channel_list, device=device, max_size=max_channel)
+        }
+
+    def embed_descriptions(self, descriptions, type, use_cache=True):
+        if isinstance(descriptions, str):
+            return self.encoder[type].embed(descriptions)
+        elif isinstance(descriptions, list):
+            return [self.encoder[type].embed(d) for d in descriptions]
+        else:
+            raise NotImplementedError
+
+    def to(self, device):
+        self.device = device
+        [encoder.to(device) for encoder in self.encoder.values()]
+
+    def state_dict(self):
+        return dict(thing_encoder=self.encoder['thing'].state_dict(),
+                    channel_encoder=self.encoder['channel'].state_dict())
+
+    def load_state_dict(self, state_dict):
+        self.encoder = {
+            'thing': self.encoder['thing'].load_state_dict(state_dict['thing']),
+            'channel': self.encoder['channel'].load_state_dict(state_dict['channel'])
+        }
+
 
 class PreTrainedDescriptionEmbedder(AbstractDescriptionEmbedder):
     def __init__(self, vocab, reduction='mean', device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs):
@@ -258,7 +345,7 @@ class PreTrainedDescriptionEmbedder(AbstractDescriptionEmbedder):
         self.cache.update({description: description_embedding})
         return description_embedding
 
-    def embed_descriptions(self, descriptions, use_cache=True):
+    def embed_descriptions(self, descriptions, type, **kwargs):
         def aux(d):
             assert isinstance(d, str), 'description should be goal_string'
             embedded_description = self.cache.get(d, self.embed_single_description(d))
@@ -288,7 +375,7 @@ class LearnedDescriptionEmbedder(AbstractDescriptionEmbedder):
     def compute_batch_description_embedding(self, descriptions):
         pass
 
-    def embed_descriptions(self, descriptions, use_cache=True):
+    def embed_descriptions(self, descriptions, type, use_cache=True):
         if isinstance(descriptions, str):
             descriptions = [descriptions]
 

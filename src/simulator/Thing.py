@@ -25,7 +25,7 @@ class Thing(ABC, DescriptionNode):
         :param init_params: if init_type is custom, dict {key: value} where key are channels name and value are channels
         init value
         """
-        super().__init__(name=name, description=description, children=self.get_action_channels())
+        super().__init__(name=name, description=description, children=self.get_action_channels(), node_type='thing')
         self.goals_dict = initialize_instruction(goal_dict=goals_dict, name=name, location=location)
 
         # self.observation_space, self.action_space = self.build_observation_and_action_space()
@@ -38,6 +38,7 @@ class Thing(ABC, DescriptionNode):
 
     def update_visibility(self, visibility):
         self.is_visible = visibility
+        self.initial_values['is_visible'] = True
 
     def get_channels(self):
         """

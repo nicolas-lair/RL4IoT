@@ -24,17 +24,25 @@ vector_cache = '/home/nicolas/PycharmProjects/RL4IoT/.vector_cache'
 
 word_embedding_size = 50
 instruction_embedding = 50
-description_embedding = 25
+thing_description_embedding = 25
+channel_description_embedding = 25
+
 value_encoding_size = 3  # size of the vector in which is encoded the value of a channel
 action_embedding = 30
 
+one_hot_thing_size = 4
+one_hot_channel_size = 5
+
 vocab_for_word_embedding = torchtext.vocab.GloVe(name='6B', dim=word_embedding_size, cache=vector_cache)
 
-description_embedder_type = 'projection'
+description_embedder_type = 'one_hot'
 if description_embedder_type == 'glove_mean':
-    description_embedding = word_embedding_size
+    thing_description_embedding = channel_description_embedding = word_embedding_size
+elif description_embedder_type == 'one_hot':
+    thing_description_embedding, channel_description_embedding = one_hot_thing_size, one_hot_channel_size
 
-state_embedding_size = value_encoding_size + 2 * description_embedding + len(ITEM_TYPE)
+state_embedding_size = value_encoding_size + thing_description_embedding + channel_description_embedding + len(
+    ITEM_TYPE)
 
 policy_context_archi = DeepSetStateNet
 model_archi = FullNet
@@ -44,7 +52,8 @@ change_focus_during_episode = True
 def prepare_simulation(simulation_name='default'):
     base_folder = Path('../results/').joinpath(simulation_name)
     try:
-        max_idx = max([int(idx.name) for idx in base_folder.iterdir()])
+        existing_simulation = [int(idx.name) for idx in base_folder.iterdir()]
+        max_idx = max(existing_simulation) if existing_simulation else -1
         next_idx = max_idx + 1
     except FileNotFoundError:
         next_idx = 0
@@ -55,63 +64,78 @@ def prepare_simulation(simulation_name='default'):
     return path_dir, simulation_id
 
 
-env_params = dict(
-    max_episode_length=2,
-    ignore_exec_action=True,
-    allow_do_nothing=True,
-    filter_state_during_episode=change_focus_during_episode,
-    thing_params=[
-        # ThingParam(SimpleLight, dict(name='plug', simple=True)),
-        # ThingParam(SimpleLight, dict(name='switch', simple=True)),
-        # ThingParam(AdorneLightBulb, dict(name="light", simple=True, always_on=False)),
-        ThingParam(BigAssFanLightBulb, dict(name="light", simple=True, always_on=False)),
-        # ThingParam(StructuredHueLight, dict(name="colored light", simple=True, always_on=False)),
-
-        # ThingParam(PlugSwitch,
-        #            dict(name='first plug',
-        #                 description='This is a plug',
-        #                 is_visible=True,
-        #                 init_type='random',
-        #                 init_params=dict())
-        #            ),
-        # ThingParam(LightBulb,
-        #            dict(name='first light bulb',
-        #                 description='This is a light bulb',
-        #                 is_visible=True,
-        #                 init_type='random',
-        #                 init_params=dict())
-        #            ),
-        # ThingParam(LGTV, dict(name='television',
-        #                       description='This is a television',
-        #                       is_visible=True,
-        #                       init_type='random',
-        #                       init_params=dict())
-        #            )
-    ],
-)
-
-
-def generate_env_params():
+def generate_env_params(thing):
+    if thing is None:
+        thing = [
+            # ThingParam(SimpleLight, dict(name='plug', simple=True)),
+            # ThingParam(SimpleLight, dict(name='switch', simple=True)),
+            # ThingParam(SimpleLight, dict(name='heater', simple=True)),
+            # ThingParam(SimpleLight, dict(name='television', simple=True)),
+            # ThingParam(SimpleLight, dict(name='speaker', simple=True, is_visible=False)),
+            # ThingParam(AdorneLight, dict(name="light", simple=True, always_on=True)),
+            ThingParam(BigAssFan, dict(name="light", simple=True, always_on=True)),
+            # ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True, is_visible=False)),
+            ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
+            # ThingParam(StructuredHueLight, dict(name="colored light", simple=True, always_on=False)),
+            # ThingParam(TVFullOption, dict(name="television", simple=True, always_on=True)),
+            # ThingParam(SimpleBlinds, dict(name="blinds", simple=True)),
+            # ThingParam(SimpleSpeaker, dict(name='speaker', simple=True, always_on=True))
+            #
+            # ThingParam(PlugSwitch,
+            #            dict(name='first plug',
+            #                 description='This is a plug',
+            #                 is_visible=True,
+            #                 init_type='random',
+            #                 init_params=dict())
+            #            ),
+            # ThingParam(PowerThing,
+            #            dict(name='first light bulb',
+            #                 description='This is a light bulb',
+            #                 is_visible=True,
+            #                 init_type='random',
+            #                 init_params=dict())
+            #            ),
+            # ThingParam(LGTV, dict(name='television',
+            #                       description='This is a television',
+            #                       is_visible=True,
+            #                       init_type='random',
+            #                       init_params=dict())
+            #            )
+        ]
+    env_params = dict(
+        max_episode_length=2,
+        ignore_exec_action=True,
+        allow_do_nothing=True,
+        filter_state_during_episode=change_focus_during_episode,
+        thing_params=thing,
+        episode_reset=True
+    )
     return env_params
 
 
-def generate_description_embedder_params(description_embedder_type=description_embedder_type):
-    if description_embedder_type == 'glove_mean':
-        description_embedder_params = dict(
-            type=description_embedder_type,
+def generate_description_embedder_params(desc_embedder=description_embedder_type):
+    description_embedder_params = dict(type=desc_embedder)
+
+    if desc_embedder == 'one_hot':
+        description_embedder_params.update(
+            thing_list=[],  # TODO
+            channel_list=[],
+            max_thing=thing_description_embedding,
+            max_channel=channel_description_embedding
+        )
+    elif desc_embedder == 'glove_mean':
+        description_embedder_params.update(
             vocab=vocab_for_word_embedding,
             reduction='mean',
         )
-    elif description_embedder_type == 'projection':
-        description_embedder_params = dict(
-            type=description_embedder_type,
+    elif desc_embedder == 'projection':
+        description_embedder_params.update(
             vocab=vocab_for_word_embedding,
-            embedding_size=description_embedding,
+            embedding_size=thing_description_embedding,
         )
-    elif description_embedder_type == 'learned_lm':
-        description_embedder_params = dict(
-            type=description_embedder_type,
-            embedding_size=description_embedding,
+    elif desc_embedder == 'learned_lm':
+        description_embedder_params.update(
+            embedding_size=thing_description_embedding,
         )
     else:
         raise NotImplementedError
@@ -165,24 +189,34 @@ def generate_model_params(context_architeture=policy_context_archi):
 
     model_params = dict(
         context_model=context_architeture,
-        action_embedding_size=action_embedding,  # TODO
-        raw_action_size=dict(
-            description_node=description_embedding,
-            openHAB_action=len(ACTION_SPACE),
-            setPercent_params=N_LEVELS,
-            setHSB_params=len(color_list),
-            setString_params=len(TVchannels_list),
-        ),
+        action_embedding_size=action_embedding,
         net_params=dict(
             q_network=dict(
                 hidden1_out=512,
                 hidden2_out=256
             ),
             context_net=context_net_params,
-        ),
+        )
     )
 
     return model_params
+
+
+def generate_action_model_params(desc_embedder=description_embedder_type):
+    merge_thing_action_embedding = (desc_embedder != 'one_hot')
+    action_model_params = dict(
+        raw_action_size=dict(
+            thing=thing_description_embedding,
+            channel=channel_description_embedding,
+            openHAB_action=len(ACTION_SPACE),
+            setPercent_params=N_LEVELS,
+            setHSB_params=len(color_list),
+            setString_params=len(TVchannels_list),
+        ),
+        out_features=action_embedding,  # TODO
+        merge_thing_action_embedding=merge_thing_action_embedding
+    )
+    return action_model_params
 
 
 def generate_reward_params(context_architecture=DeepSetStateNet):
@@ -254,18 +288,20 @@ def get_reward_training_params(name=None, device='cuda'):
     return params
 
 
-def generate_trainer_params(simulation_name='default_simulation', use_pretrained_language_model=False, save_path=True,
-                            device='cuda', dqn_loss='mse', context_architecture=policy_context_archi):
+def generate_trainer_params(things_list, simulation_name='default_simulation', use_pretrained_language_model=False,
+                            save_path=True, device='cuda', dqn_loss='mse', context_architecture=policy_context_archi,
+                            n_episode=15000, test_frequence=150):
     path_dir, simulation_id = prepare_simulation(simulation_name) if save_path else (None, simulation_name)
 
     # Instantiate the param dict
     params = dict(
         simulation_name=simulation_name,
-        env_params=generate_env_params(),
+        env_params=generate_env_params(thing=things_list),
         model_archi=model_archi,
         model_params=generate_model_params(context_architeture=context_architecture),
+        action_model_params=generate_action_model_params(description_embedder_type),
         state_embedder_params=generate_state_embedder_params(),
-        description_embedder_params=generate_description_embedder_params(),
+        description_embedder_params=generate_description_embedder_params(desc_embedder=description_embedder_type),
         reward_params=generate_reward_params(context_architecture=context_architecture),
         language_model_params=generate_language_model_params(device=device,
                                                              use_pretrained_model=use_pretrained_language_model),
@@ -295,11 +331,10 @@ def generate_trainer_params(simulation_name='default_simulation', use_pretrained
         lr_scheduler=None,
         lr_scheduler_params=dict(mode='min'),
         logger=generate_logger_params(simulation_id),
-        n_episode=15000,
+        n_episode=n_episode,
         target_update_frequence=20,
         device=device,
-        episode_reset=True,
-        test_frequence=250,
+        test_frequence=test_frequence,
         n_iter_test=25,
         tqdm=False,
         save_directory=path_dir,
@@ -308,16 +343,28 @@ def generate_trainer_params(simulation_name='default_simulation', use_pretrained
     return params
 
 
+def generate_proc_gen_eval_params(things_list, simulation_name='default_simulation',
+                                  use_pretrained_language_model=False, save_path=True, device='cuda', dqn_loss='mse',
+                                  context_architecture=policy_context_archi, n_episode=15000, test_frequence=150):
+
+    params = generate_trainer_params(things_list=things_list, simulation_name=simulation_name,
+                                     use_pretrained_language_model=use_pretrained_language_model, save_path=save_path,
+                                     device=device, dqn_loss=dqn_loss, context_architecture=context_architecture,
+                                     n_episode=n_episode, test_frequence=test_frequence)
+    params['new_objects_threshold'] = (5, 0.81)
+    return params
+
+
 def format_config(config):
-    def aux(d, out):
+    def aux(d, out_):
         for k, v in d.items():
             if isinstance(v, dict):
-                out[k] = aux(v, {})
+                out_[k] = aux(v, {})
             elif isinstance(v, (str, int, bool)):
-                out[k] = v
+                out_[k] = v
             else:
-                out[k] = str(v)
-        return out
+                out_[k] = str(v)
+        return out_
 
     out = {}
     aux(config, out)

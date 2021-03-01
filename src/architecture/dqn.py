@@ -23,7 +23,7 @@ class BasicQnet(nn.Module):
 
 
 class FullNet(nn.Module):
-    def __init__(self, context_model, action_embedding_size, net_params, **kwargs):
+    def __init__(self, context_model, action_embedding_size, net_params):
         super().__init__()
 
         self.context_net = context_model(**net_params['context_net'])

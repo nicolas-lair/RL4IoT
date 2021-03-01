@@ -22,7 +22,8 @@ class Channel(DescriptionNode):
         self.item = item
         super().__init__(name=name, description=description,
                          children=[OpenHABAction(m, discretization=self.item.discretization[m]) for m in
-                                   self.item.methods])
+                                   self.item.methods],
+                         node_type='channel')
 
         # self.initial_value = value
         # if value is not None:

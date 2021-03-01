@@ -1,11 +1,10 @@
 import torch
 from torch import nn as nn
-from torch.nn import functional as F
 from torch.nn.utils import rnn as rnn_utils
 
 
 class ActionModel(nn.Module):
-    def __init__(self, raw_action_size, out_features):
+    def __init__(self, raw_action_size, out_features, merge_thing_action_embedding):
         super().__init__()
         self.in_features = raw_action_size
         self.action_embedding_size = out_features
@@ -16,16 +15,9 @@ class ActionModel(nn.Module):
             k: nn.Linear(in_features=v, out_features=self.action_embedding_size) for k, v in self.in_features.items()
         })
         self.action_embedding_layers.update(nn.ModuleDict({'root': nn.Identity()}))
-        # self.action_embedding_layers = nn.ModuleDict({
-        #     'root': nn.Identity(),
-        #     'description_node': nn.Linear(in_features=self.in_features, out_features=self.action_embedding_size),
-        #     'openHAB_action': nn.Linear(in_features=self.in_features, out_features=self.action_embedding_size),
-        # })
-        # self.action_embedding_layers.update(
-        #     nn.ModuleDict(
-        #         {k + '_params': nn.Linear(in_features=self.in_features, out_features=self.action_embedding_size)
-        #          for k in env_discrete_params})
-        # )
+
+        if merge_thing_action_embedding:
+            self.action_embedding_layers['channel'] = self.action_embedding_layers['thing']
 
     def forward(self, actions, action_type):
         """

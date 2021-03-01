@@ -3,7 +3,7 @@ from itertools import product
 
 class Oracle:
     def __init__(self, thing_list):
-        self.thing_list = thing_list
+        self.thing_dict = {t.name: t for t in thing_list}
         self.goals_description_set, self.str_instructions = self.build_instruction_set()
 
     def get_state_change(self, previous_state, next_state, ignore_power=False, as_string=True):
@@ -14,7 +14,8 @@ class Oracle:
         :return: list of string one per StateDescription change in the environment
         """
         achieved_instruction = []
-        for thing in self.thing_list:
+        for thing_name in previous_state:
+            thing = self.thing_dict[thing_name]
             achieved_instruction.extend(thing.get_state_change(previous_state[thing.name], next_state[thing.name],
                                                                ignore_power,
                                                                as_string))
@@ -26,7 +27,8 @@ class Oracle:
         :return: list of StateDescription object
         """
         current_descriptions = []
-        for thing in self.thing_list:
+        for thing_name in state:
+            thing = self.thing_dict[thing_name]
             current_descriptions.extend(thing.get_state_description(state[thing.name], ignore_power))
 
         if as_string:
@@ -52,7 +54,7 @@ class Oracle:
     def build_instruction_set(self, mode='first'):
         str_instructions = dict()
         state_description_set = dict()
-        for thing in self.thing_list:
+        for thing in self.thing_dict.values():
             state_description_set[thing.name] = self.get_thing_goals(thing)
             if mode == 'all':
                 str_instructions[thing.name] = sum(

@@ -54,6 +54,9 @@ class IoTEnv(gym.Env):
     def get_thing_list(self):
         return list(self._things_lookup_table.values())
 
+    def get_visible_thing_list(self):
+        return [t for t in self.get_thing_list() if t.is_visible]
+
     def get_thing(self, name):
         return self._things_lookup_table[name]
 
@@ -87,7 +90,7 @@ class IoTEnv(gym.Env):
         :return:
         """
         if thing is None:
-            thing_list = self.get_thing_list()
+            thing_list = self.get_visible_thing_list()
         elif isinstance(thing, Thing):
             thing_list = [thing]
         elif isinstance(thing, list):
@@ -111,10 +114,14 @@ class IoTEnv(gym.Env):
     def render(self, mode='human'):
         raise NotImplementedError
 
+    def set_all_things_visible(self):
+        for thing in self.get_thing_list():
+            thing.update_visibility(visibility=True)
+
 
 class IoTEnv4ML(gym.Wrapper):
     def __init__(self, thing_params, ignore_exec_action, allow_do_nothing, max_episode_length,
-                 filter_state_during_episode, env_class=IoTEnv):
+                 filter_state_during_episode, episode_reset, env_class=IoTEnv):
         super().__init__(env=env_class(thing_params))
 
         self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
@@ -122,6 +129,7 @@ class IoTEnv4ML(gym.Wrapper):
         self.ignore_exec_action = ignore_exec_action
         self.allow_do_nothing = allow_do_nothing
         self.max_episode_length = max_episode_length
+        self.episode_reset = episode_reset
 
         self.episode_length = 0
         self.available_actions = None
@@ -211,7 +219,7 @@ class IoTEnv4ML(gym.Wrapper):
         return self.state, self.available_actions
 
     def get_root_actions(self):
-        available_things = self.get_thing_list()
+        available_things = self.get_visible_thing_list()
         if self.allow_do_nothing:
             available_things.append(DoNothing())
         return available_things
@@ -219,9 +227,3 @@ class IoTEnv4ML(gym.Wrapper):
     def reset_running_action(self):
         self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
 
-    if __name__ == "__main__":
-        env2 = IoTEnv()
-        initial_state2 = env2.reset()
-
-        env = IoTEnv4ML(env_class=IoTEnv, params={})
-        initial_state = env.reset()
