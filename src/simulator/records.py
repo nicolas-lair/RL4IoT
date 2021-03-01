@@ -15,7 +15,7 @@ class RollingAverage(deque):
         super().__init__(maxlen=maxlen)
 
     def get_mean(self):
-        return np.mean(self)
+        return np.round(np.mean(self), 2)
 
 
 class Records:
@@ -61,7 +61,7 @@ class Records:
 
     def update_rolling_average(self, score):
         self.train_rolling_average.append(score)
-        logger.info(f" Rolling average over {self.train_rolling_average.maxlen} tests: {self.train_rolling_average.get_mean()}")
+        logger.info(f" Train rolling average over {self.train_rolling_average.maxlen} tests: {self.train_rolling_average.get_mean()}")
 
     def update_goal_sampler_records(self, goal_sampler):
         self.goal_sampler_records = goal_sampler.get_records()

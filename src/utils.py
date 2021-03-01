@@ -85,6 +85,7 @@ def run_episode(agent, env, oracle, episode, save_transitions=True, target_goal=
 
 def test_agent(agent, test_env, oracle, n_test):
     logger.info('Testing agent')
+    agent.eval()
     reward_table = dict()
     for thing, test_instruction in oracle.str_instructions.items():
         reward_table[thing] = dict()
@@ -95,8 +96,6 @@ def test_agent(agent, test_env, oracle, n_test):
                 logger.debug('New test episode')
                 test_env.reset()
                 initial_state = test_env.oracle_state
-                # while oracle.is_achieved(state=test_env.oracle_state, instruction=instruction):
-                #     test_env.reset()
 
                 test_goal = Goal(goal_string=instruction, language_model=agent.language_model)
                 run_episode(agent=agent, env=test_env, target_goal=test_goal, oracle=None, save_transitions=False,
@@ -104,4 +103,5 @@ def test_agent(agent, test_env, oracle, n_test):
                 current_rewards += int(
                     oracle.was_achieved(initial_state, test_env.oracle_state, instruction))
             reward_table[thing][instruction] = round(current_rewards / n_test, 2)
+    agent.train()
     return reward_table
