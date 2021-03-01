@@ -39,7 +39,7 @@ class AdorneLight(PowerThing):
             self.brightness = BrightnessChannel()
         else:
             self.power = PowerChannel(name='power', description='Turn device on and off')
-            self.brightness = BrightnessChannel(name='brightness', description="Set device's brightness", )
+            self.brightness = BrightnessChannel(name='brightness', description="Set device's brightness")
 
         super().__init__(always_on=always_on, name=name, description=description, init_type=init_type,
                          init_params=init_params, is_visible=is_visible, location=location, goals_dict=goals)

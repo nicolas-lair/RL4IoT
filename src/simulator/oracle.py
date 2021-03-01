@@ -69,3 +69,17 @@ class Oracle:
             str_instructions[thing.name] = sorted(str_instructions[thing.name])
 
         return state_description_set, str_instructions
+
+
+if __name__ == '__main__':
+    from lighting_things import BigAssFan
+    thing =BigAssFan(name='light', simple=True)
+    oracle = Oracle([thing])
+    instr1 = oracle.str_instructions
+
+    channels = thing.get_channels()
+    channels[0].update_visibility(False)
+    oracle = Oracle([thing])
+    instr2 = oracle.str_instructions
+
+    assert instr1 == instr2
