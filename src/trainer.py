@@ -4,48 +4,59 @@ import logging
 from pprint import pformat
 
 from logger import get_logger, set_logger_handler
-from config import generate_trainer_params, save_config, format_config, setup_new_simulation, ThingParam, BigAssFan, \
-    SimpleLight
+from config import generate_trainer_params, save_config, format_config, setup_new_simulation, ThingParam
+from simulator.lighting_things import BigAssFan, SimpleLight, AdorneLight
 from records import Records
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
 from architecture.dqnagent import DQNAgent
 from architecture.language_model import LanguageModel
 from utils import run_episode, test_agent, load_agent_state_dict
+#
+# parser = argparse.ArgumentParser()
+# parser.add_argument('-n', '--name', help='Simulation name', default='diverse_lights')
+# parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cuda:0')
+# parser.add_argument('-ns', '--n_simulation', help='number of simulation to run', type=int, default=2)
+# parser.add_argument('-lm', '--pretrained_language_model', help='use pretrained language model', choices=['0', '1'],
+#                     default=0)
+# parser.add_argument('-l', '--optim_loss', help='DQN loss', choices=['mse', 'smooth_l1'], default='mse')
+# args = parser.parse_args()
+#
+# simulation_name = args.name
+# device = args.device
+# N_SIMULATION = args.n_simulation
+# use_pretrained_language_model = bool(int(args.pretrained_language_model))
+# optim_loss = args.optim_loss
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-n', '--name', help='Simulation name', default='four_simple_onehot')
-parser.add_argument('-d', '--device', help='device on which to run the simulation', default='cuda:2')
-parser.add_argument('-ns', '--n_simulation', help='number of simulation to run', type=int, default=1)
-parser.add_argument('-lm', '--pretrained_language_model', help='use pretrained language model', choices=['0', '1'],
-                    default=0)
-parser.add_argument('-l', '--optim_loss', help='DQN loss', choices=['mse', 'smooth_l1'], default='mse')
-args = parser.parse_args()
+simulation_name = 'bigass_onehot_v2_nodonothing'
+device = 'cuda:3'
+N_SIMULATION = 1
+use_pretrained_language_model = False
+optim_loss = 'mse'
 
-simulation_name = args.name
-device = args.device
-N_SIMULATION = args.n_simulation
-use_pretrained_language_model = bool(int(args.pretrained_language_model))
-optim_loss = args.optim_loss
-
-n_episode = 10000
-test_frequence = 1000
+n_episode = 30000
+test_frequence = 200
 
 load_agent = False
-load_agent_path = '../results/four_simple_debug/8/agent'
+load_agent_path = '../results/debug/0/agent'
+
+oracle_params = dict(relative_instruction=False)
 
 thing = [
-    ThingParam(SimpleLight, dict(name="light", simple=True)),
-    ThingParam(SimpleLight, dict(name="plug", simple=True)),
-    ThingParam(SimpleLight, dict(name="heater", simple=True)),
-    ThingParam(SimpleLight, dict(name="bulb", simple=True)),
+    ThingParam(BigAssFan, dict(name="bulb", simple=True)),
+    # ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
+    # ThingParam(BigAssFan, dict(name="heater", simple=True, always_on=True)),
+    # ThingParam(SimpleLight, dict(name="plug", simple=True)),
+    # ThingParam(AdorneLight, dict(name="light", simple=True, always_on=True)),
+    # ThingParam(SimpleLight, dict(name="bulb", simple=True)),
     # ThingParam(SimpleLight, dict(name="television", simple=True)),
     # ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
 ]
 
 params = generate_trainer_params(things_list=thing, simulation_name=simulation_name,
                                  use_pretrained_language_model=use_pretrained_language_model,
-                                 device=device, n_episode=n_episode, test_frequence=test_frequence)
+                                 device=device, n_episode=n_episode, test_frequence=test_frequence,
+                                 oracle_params=oracle_params)
 
 set_logger_handler(**params['logger'], log_path=params['save_directory'])
 logger = get_logger(__name__)
@@ -80,7 +91,8 @@ if __name__ == "__main__":
 
         for ep in range(num_episodes):
             logger.info('%' * 5 + f' Episode {ep} ' + '%' * 5)
-            run_episode(agent=agent, env=env, oracle=oracle, save_transitions=True, episode=ep)
+            run_episode(agent=agent, env=env, oracle=oracle, save_transitions=True, episode=ep,
+                        allow_do_nothing=params['env_params']['allow_do_nothing'])
             agent.update(episode=ep, max_episodes=num_episodes)
 
             if ep > 0 and ep % test_frequence == 0:

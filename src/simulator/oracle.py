@@ -37,7 +37,7 @@ class Oracle:
         current_descriptions = []
         for thing_name in state:
             thing = self.thing_dict[thing_name]
-            current_descriptions.extend(thing.get_state_description(state[thing.name], ignore_power))
+            current_descriptions.extend(thing.get_thing_description(state[thing.name], ignore_power))
 
         if as_string:
             current_descriptions = sum([state_des.sentences for state_des in current_descriptions], [])
@@ -58,15 +58,15 @@ class Oracle:
         state_change = [
             thing.get_thing_change(i, j, ignore_power=True, as_string=False, absolute=self.absolute_instruction,
                                    relative=self.relative_instruction) for i, j in states_pair]
-        state_description = [thing.get_state_description(i) for i in initialization_states]
+        state_description = [thing.get_thing_description(i, ignore_power=True) for i in initialization_states]
         goals_set = set(sum(state_description, []) + sum(state_change, []))
         return goals_set
 
-    def build_instruction_set(self, mode='first'):
+    def build_instruction_set(self, mode='first', ignore_visibility=False):
         str_instructions = dict()
         state_description_set = dict()
         for thing in self.thing_dict.values():
-            state_description_set[thing.name] = self.get_thing_goals(thing)
+            state_description_set[thing.name] = self.get_thing_goals(thing, ignore_visibility=ignore_visibility)
             if mode == 'all':
                 str_instructions[thing.name] = sum(
                     [state_des.sentences for state_des in state_description_set[thing.name]],

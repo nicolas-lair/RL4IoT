@@ -145,7 +145,9 @@ if __name__ == "__main__":
         oracle = Oracle([adorne, adorne_on,
                          bigass, bigass_on,
                          hue,
-                         structuredHue, structuredHue_on])
+                         structuredHue, structuredHue_on],
+                        absolute_instruction=True,
+                        relative_instruction=True)
         print(yaml.dump(oracle.str_instructions))
 
 
@@ -399,8 +401,8 @@ if __name__ == "__main__":
         assert act_channels == bigassfan.get_children_nodes()
 
 
-    # test_adorne()
-    # test_bigass()
-    # test_structuredhue()
-    # test_goals()
+    test_adorne()
+    test_bigass()
+    test_structuredhue()
+    test_goals()
     test_bigass_with_hidden_channels()

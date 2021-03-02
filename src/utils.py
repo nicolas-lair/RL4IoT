@@ -15,7 +15,7 @@ def load_agent_state_dict(agent, path, oracle, test_env, params, metrics_records
     metrics_records.update_records(agent=agent, episode=0, test_scores=test_scores)
 
 
-def run_episode(agent, env, oracle, episode, save_transitions=True, target_goal=None):
+def run_episode(agent, env, oracle, episode, save_transitions=True, target_goal=None, allow_do_nothing=True):
     if env.episode_reset:
         env.reset()
     else:
@@ -65,11 +65,12 @@ def run_episode(agent, env, oracle, episode, save_transitions=True, target_goal=
                                                              next_state=(next_state, next_available_actions),
                                                              previous_action=previous_action)
 
-                agent.store_transitions(goal=target_goal, state=next_state, action=DoNothing(),
-                                        next_state=([], []),
-                                        done=True,
-                                        reward=int(target_goal.goal_string in achieved_goals_str),
-                                        previous_action=action)
+                if allow_do_nothing:
+                    agent.store_transitions(goal=target_goal, state=next_state, action=DoNothing(),
+                                            next_state=([], []),
+                                            done=True,
+                                            reward=int(target_goal.goal_string in achieved_goals_str),
+                                            previous_action=action)
                 action_record.append('/')
             elif info == 'do_nothing':
                 pass  # TODO use internal reward function
@@ -91,13 +92,13 @@ def test_agent(agent, test_env, oracle, n_test):
         reward_table[thing] = dict()
         for instruction in test_instruction:
             logger.info(f'Test : {instruction}')
+            test_goal = Goal(goal_string=instruction, language_model=agent.language_model)
             current_rewards = 0
             for _ in range(n_test):
                 logger.debug('New test episode')
                 test_env.reset()
                 initial_state = test_env.oracle_state
 
-                test_goal = Goal(goal_string=instruction, language_model=agent.language_model)
                 run_episode(agent=agent, env=test_env, target_goal=test_goal, oracle=None, save_transitions=False,
                             episode=None)
                 current_rewards += int(
@@ -112,4 +113,5 @@ def extend_dict(d, k, v):
         for k_, v_ in v.items():
             extend_dict(d[k], k_, v_)
     else:
+        assert k in d.keys()
         d.update({k: v})

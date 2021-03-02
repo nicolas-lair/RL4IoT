@@ -31,6 +31,15 @@ class Records:
         self.model_path = self.save_path.joinpath('agent')
         self.model_path.mkdir()
 
+    def best_agent_criterion(self, episode):
+        train_score = self.test_record[episode].get('overall train', self.test_record[episode]['overall'])
+        test_score = self.test_record[episode].get('overall test', self.test_record[episode]['overall'])
+        best_res_dict = self.best_result[1]
+        best_train_score = best_res_dict.get('overall train', best_res_dict['overall'])
+        best_test_score = best_res_dict.get('overall test', best_res_dict['overall'])
+
+        return train_score + test_score > best_train_score + best_test_score
+
     def update_test_records(self, episode, test_scores, train_goals=None):
         d = dict()
         for thing_name, thing_score in test_scores.items():
@@ -50,7 +59,7 @@ class Records:
         logger.info("%" * 5 + f" Test after {episode} episodes " + "%" * 5 + "\n" + yaml.dump(d, sort_keys=False))
 
     def keep_best_agent(self, episode, agent):
-        if self.test_record[episode]['overall'] > self.best_result[1]['overall']:
+        if self.best_agent_criterion(episode):
             self.best_result = (episode, self.test_record[episode])
             self.save_best_agent(agent)
             logger.info('This is best result!')
@@ -61,7 +70,8 @@ class Records:
     def update_rolling_average(self, score):
         self.train_rolling_average.append(score)
         logger.info(
-            f" Train rolling average over {self.train_rolling_average.maxlen} tests: {self.train_rolling_average.get_mean()}")
+            f" Train rolling average over {self.train_rolling_average.maxlen} tests: "
+            f"{self.train_rolling_average.get_mean()}")
 
     def update_goal_sampler_records(self, goal_sampler):
         self.goal_sampler_records = goal_sampler.get_records()
@@ -90,19 +100,24 @@ class Records:
 
         """
         d = dict()
-        for thing_name, thing_score in test_scores.items():
-            d.update(thing_score)
-
         if keep_list is None and exclude_list is None:
-            d = list(d.values())
+            mode = 'all'
         elif keep_list is not None and exclude_list is None:
-            d = [d[k] for k in keep_list]
-        elif keep_list is not None and exclude_list is None:
-            d = [d[k] for k in set(d.keys()).difference(exclude_list)]
+            mode = 'keep'
+        elif keep_list is None and exclude_list is not None:
+            mode = 'exclude'
         else:
             raise EOFError('keep_list and exclude_list cannot be both None')
 
-        return float(np.round(np.mean(d), 2))
+        for thing_name, thing_score in test_scores.items():
+            if mode == 'all':
+                d.update(thing_score)
+            elif mode == 'keep':
+                d.update({ins: thing_score[ins] for ins in keep_list[thing_name]})
+            elif mode == 'exclude':
+                d.update({ins: thing_score[ins] for ins in thing_score.keys() if ins not in exclude_list[thing_name]})
+
+        return float(np.round(np.mean(list(d.values())), 2))
 
     def save(self):
         # Test record

@@ -295,7 +295,7 @@ def generate_trainer_params(things_list, simulation_name='default_simulation', u
         optimizer_params=dict(),  # TODO optimize
         # lr_scheduler=optim.lr_scheduler.ReduceLROnPlateau,
         lr_scheduler=None,
-        lr_scheduler_params=dict(mode='min'),
+        lr_scheduler_params=dict(mode='min', patience=300, min_lr=1e-8, factor=0.5),
         logger=generate_logger_params(simulation_id),
         n_episode=10000,
         target_update_frequence=20,

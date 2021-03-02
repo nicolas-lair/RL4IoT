@@ -4,36 +4,41 @@ import logging
 from records import Records
 from utils import run_episode, test_agent, load_agent_state_dict
 from logger import get_logger, set_logger_handler
-from config import generate_proc_gen_eval_params, save_config, format_config, setup_new_simulation, ThingParam, \
-    BigAssFan, SimpleLight
+from config import generate_proc_gen_eval_params, save_config, format_config, setup_new_simulation, ThingParam
+from simulator.lighting_things import BigAssFan, SimpleLight, AdorneLight
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
 from architecture.dqnagent import DQNAgent
 from architecture.language_model import LanguageModel
 
-simulation_name = 'bigass_transfer'
-device = 'cuda:3'
+simulation_name = 'three_lights_alwayson_onehot'
+device = 'cuda:1'
 N_SIMULATION = 2
 use_pretrained_language_model = False
 optim_loss = 'mse'
 
-n_episode = 8000
-test_frequence = 25
+n_episode = 20000
+test_frequence = 300
 
 load_agent = False
 load_agent_path = '../results/debug/0/agent'
 
-thing = [
-    ThingParam(SimpleLight, dict(name="light", simple=True)),
-    ThingParam(SimpleLight, dict(name="plug", simple=True)),
-    ThingParam(SimpleLight, dict(name="heater", simple=True)),
-    ThingParam(SimpleLight, dict(name="bulb", simple=True)),
-    ThingParam(SimpleLight, dict(name="television", simple=True, is_visible=False)),
-]
 
+thing = [
+    ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
+    # ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
+    # ThingParam(BigAssFan, dict(name="heater", simple=True, always_on=True)),
+    ThingParam(SimpleLight, dict(name="plug", simple=True, always_on=True)),
+    ThingParam(AdorneLight, dict(name="light", simple=True)),
+    # ThingParam(SimpleLight, dict(name="bulb", simple=True)),
+    # ThingParam(SimpleLight, dict(name="television", simple=True)),
+    # ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
+]
 params = generate_proc_gen_eval_params(simulation_name=simulation_name, device=device, things_list=thing,
                                        use_pretrained_language_model=use_pretrained_language_model,
-                                       n_episode=n_episode, test_frequence=test_frequence)
+                                       n_episode=n_episode, test_frequence=test_frequence,
+                                       oracle_params=dict(relative_instruction=False),
+                                       )
 
 set_logger_handler(**params['logger'], log_path=params['save_directory'])
 logger = get_logger(__name__)
@@ -54,6 +59,7 @@ if __name__ == "__main__":
 
         env = IoTEnv4ML(**params['env_params'])
         env.update_visibility(thing='bulb', channel='brightness', visibility=False)
+        env.update_visibility(thing='heater', channel='color_temperature', visibility=False)
 
         test_env = IoTEnv4ML(**params['env_params'])
         test_env.set_all_things_visible()
@@ -77,7 +83,8 @@ if __name__ == "__main__":
             if introduce_new_object:
                 logger.info(f'New things/channels were introduced at episode '
                             f'{metrics_records.new_objet_introduction_episode}')
-            run_episode(agent=agent, env=env, oracle=oracle, save_transitions=True, episode=ep)
+            run_episode(agent=agent, env=env, oracle=oracle, save_transitions=True, episode=ep,
+                        allow_do_nothing=params['env_params']['allow_do_nothing'])
             agent.update(episode=ep, max_episodes=num_episodes)
 
             if ep > 0 and ep % test_frequence == 0:

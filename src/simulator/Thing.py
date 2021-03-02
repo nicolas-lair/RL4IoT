@@ -122,8 +122,8 @@ class Thing(ABC, DescriptionNode):
         if init_type in ['default', 'random']:
             init_func = lambda x: dict(is_visible=None, init_value=init_type)
         elif init_type == 'custom':
-            init_visibility = lambda _: None if init_visibility is None else init_visibility
-            init_func = lambda x: dict(init_visibility=init_visibility[x], init_value=init_params[x])
+            init_visibility = {k: None for k in init_params.keys()} if init_visibility is None else init_visibility
+            init_func = lambda x: dict(is_visible=init_visibility[x], init_value=init_params[x])
         else:
             raise NotImplementedError('init_type should be one of {default, random, custom}')
 
@@ -163,7 +163,7 @@ class Thing(ABC, DescriptionNode):
             descriptions_change = [d.get_instruction() for d in descriptions_change]
         return list(descriptions_change)
 
-    def get_state_description(self, state=None, ignore_power=False):
+    def get_thing_description(self, state=None, ignore_power=False):
         state = self.get_state(oracle=True) if state is None else state
         is_powered = self.is_powered(state)
 
@@ -245,7 +245,7 @@ class PowerThing(Thing):
 #         #     write=False,
 #         # )
 #
-#     def get_state_description(self, state):
+#     def get_thing_description(self, state):
 #         matching_instructions = []
 #
 #         state = state["switch_binary"]["state"][0]
