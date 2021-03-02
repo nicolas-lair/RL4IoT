@@ -262,6 +262,7 @@ class DQNAgent:
         self.optimizer.step()
         if self.lr_scheduler:
             self.lr_scheduler.step(loss)
+            logger.info(f'learning rate is {self.optimizer.param_groups[0]["lr"]:.2e}')
 
         if self.per:
             # Update PER priorities
