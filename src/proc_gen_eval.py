@@ -79,12 +79,16 @@ if __name__ == "__main__":
                                   test_env=test_env, params=n_iter_test, metrics_records=metrics_records)
 
         for ep in range(num_episodes):
+            if env.episode_reset:
+                env.reset()
+            else:
+                raise NotImplementedError
+
             logger.info('%' * 5 + f' Episode {ep} ' + '%' * 5)
             if introduce_new_object:
                 logger.info(f'New things/channels were introduced at episode '
                             f'{metrics_records.new_objet_introduction_episode}')
-            run_episode(agent=agent, env=env, oracle=oracle, save_transitions=True, episode=ep,
-                        allow_do_nothing=params['env_params']['allow_do_nothing'])
+            run_episode(agent=agent, env=env, oracle=oracle, save_transitions=True, episode=ep)
             agent.update(episode=ep, max_episodes=num_episodes)
 
             if ep > 0 and ep % test_frequence == 0:

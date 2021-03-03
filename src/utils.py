@@ -15,11 +15,12 @@ def load_agent_state_dict(agent, path, oracle, test_env, params, metrics_records
     metrics_records.update_records(agent=agent, episode=0, test_scores=test_scores)
 
 
-def run_episode(agent, env, oracle, episode, save_transitions=True, target_goal=None, allow_do_nothing=True):
-    if env.episode_reset:
-        env.reset()
-    else:
-        raise NotImplementedError
+def run_episode(agent, env, oracle, episode, save_transitions=True, target_goal=None, reset=True):
+    if reset:
+        if env.episode_reset:
+            env.reset()
+        else:
+            raise NotImplementedError
 
     if target_goal is None:
         target_goal = agent.sample_goal()
@@ -46,64 +47,78 @@ def run_episode(agent, env, oracle, episode, save_transitions=True, target_goal=
         action_record.append(action.name)
 
         (next_state, next_available_actions), reward, done, info = env.step(action=action)
-        logger.debug(f'Agent state \n {format_oracle_state_log(next_state)}')
+        logger.debug(f'Agent state \n {format_oracle_state_log(env.state)}')
 
         if info == 'exec_action':
             logger.debug(f'State: \n {format_oracle_state_log(env.oracle_state)}')
 
         if save_transitions:
-            # if info in ['exec_action'] or done:
-            if info in ['exec_action']:
-                logger.debug(f'Running action: {"/".join(action_record)}')
-                achieved_goals_str = oracle.get_state_change(env.previous_oracle_state, env.oracle_state)
-                logger.debug(f'Achieved goals: {achieved_goals_str}')
-                agent.goal_sampler.update(reached_goals_str=achieved_goals_str, iter=episode)
-                agent.store_transitions_with_oracle_feedback(achieved_goals_str=achieved_goals_str,
-                                                             done=done,
-                                                             state=state,
-                                                             action=action,
-                                                             next_state=(next_state, next_available_actions),
-                                                             previous_action=previous_action)
-
-                if allow_do_nothing:
-                    agent.store_transitions(goal=target_goal, state=next_state, action=DoNothing(),
-                                            next_state=([], []),
-                                            done=True,
-                                            reward=int(target_goal.goal_string in achieved_goals_str),
-                                            previous_action=action)
-                action_record.append('/')
-            elif info == 'do_nothing':
-                pass  # TODO use internal reward function
-
-            elif len(target_goal.goal_string) > 0:
-                assert info != 'do_nothing'
-                agent.store_transitions(goal=target_goal, state=state, action=action,
-                                        next_state=(next_state, next_available_actions), done=done, reward=reward,
-                                        previous_action=previous_action)
+            save_transitions_replay_buffer(agent=agent, env=env, oracle=oracle, episode=episode,
+                                           target_goal=target_goal, state=state, action=action, next_state=next_state,
+                                           next_actions=next_available_actions, previous_action=previous_action,
+                                           reward=reward, done=done, info=info)
 
     logger.info(f'Action summary: {"/".join(action_record)}')
+
+
+def save_transitions_replay_buffer(agent, env, oracle, episode, target_goal, previous_action, state, action, next_state,
+                                   next_actions, reward, done, info):
+    # if info in ['exec_action'] or done:
+    if info in ['exec_action']:
+        # logger.debug(f'Running action: {"/".join(action_record)}')
+        achieved_goals_str = oracle.get_state_change(env.previous_oracle_state, env.oracle_state)
+        logger.debug(f'Achieved goals: {achieved_goals_str}')
+        agent.goal_sampler.update(reached_goals_str=achieved_goals_str, iter=episode)
+        agent.store_transitions_with_oracle_feedback(achieved_goals_str=achieved_goals_str,
+                                                     done=done,
+                                                     state=state,
+                                                     action=action,
+                                                     next_state=(next_state, next_actions),
+                                                     previous_action=previous_action)
+
+        if env.allow_do_nothing and len(target_goal.goal_string) > 0:
+            agent.store_transitions(goal=target_goal, state=next_state, action=DoNothing(),
+                                    next_state=([], []),
+                                    done=True,
+                                    reward=int(target_goal.goal_string in achieved_goals_str),
+                                    previous_action=action)
+        # action_record.append('/')
+    elif info == 'do_nothing':
+        pass  # TODO use internal reward function
+
+    elif len(target_goal.goal_string) > 0:
+        assert info != 'do_nothing'
+        agent.store_transitions(goal=target_goal, state=state, action=action,
+                                next_state=(next_state, next_actions), done=done, reward=reward,
+                                previous_action=previous_action)
 
 
 def test_agent(agent, test_env, oracle, n_test):
     logger.info('Testing agent')
     agent.eval()
     reward_table = dict()
-    for thing, test_instruction in oracle.str_instructions.items():
-        reward_table[thing] = dict()
-        for instruction in test_instruction:
-            logger.info(f'Test : {instruction}')
-            test_goal = Goal(goal_string=instruction, language_model=agent.language_model)
-            current_rewards = 0
-            for _ in range(n_test):
-                logger.debug('New test episode')
-                test_env.reset()
-                initial_state = test_env.oracle_state
+    for thing, thing_goals in oracle.goals_description_set.items():
+        table = dict()
+        for goals in thing_goals:
+            power_before_episode = goals.is_relative
+            for instruction in goals.get_sentences_iterator():
+                logger.info(f'Test : {instruction}')
+                test_goal = Goal(goal_string=instruction, language_model=agent.language_model)
+                current_rewards = 0
+                for _ in range(n_test):
+                    logger.debug('New test episode')
+                    test_env.reset()
+                    if power_before_episode:
+                        test_env.get_things(goals.object_name).power_on()
 
-                run_episode(agent=agent, env=test_env, target_goal=test_goal, oracle=None, save_transitions=False,
-                            episode=None)
-                current_rewards += int(
-                    oracle.was_achieved(initial_state, test_env.oracle_state, instruction))
-            reward_table[thing][instruction] = round(current_rewards / n_test, 2)
+                    initial_state = test_env.oracle_state
+
+                    run_episode(agent=agent, env=test_env, target_goal=test_goal, oracle=None, save_transitions=False,
+                                episode=None, reset=False)
+                    current_rewards += int(
+                        oracle.was_achieved(initial_state, test_env.oracle_state, instruction))
+                table[instruction] = round(current_rewards / n_test, 2)
+        reward_table[thing] = dict(sorted(table.items()))
     agent.train()
     return reward_table
 

@@ -5,7 +5,10 @@ from pprint import pformat
 
 from logger import get_logger, set_logger_handler
 from config import generate_trainer_params, save_config, format_config, setup_new_simulation, ThingParam
-from simulator.lighting_things import BigAssFan, SimpleLight, AdorneLight
+from simulator.things.TV_thing import TVFullOption, TVWithMediaControl
+from simulator.things.Speaker import SpeakerWithMediaControl, SimpleSpeaker
+from simulator.things.lighting_things import SimpleLight, BigAssFan, AdorneLight, StructuredHueLight
+from simulator.things.Blinds import SimpleBlinds
 from records import Records
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
@@ -28,23 +31,25 @@ from utils import run_episode, test_agent, load_agent_state_dict
 # use_pretrained_language_model = bool(int(args.pretrained_language_model))
 # optim_loss = args.optim_loss
 
-simulation_name = 'bigass_onehot_v2_nodonothing'
+simulation_name = 'living_room_easy'
 device = 'cuda:3'
 N_SIMULATION = 1
 use_pretrained_language_model = False
 optim_loss = 'mse'
 
-n_episode = 30000
-test_frequence = 200
+n_episode = 20000
+test_frequence = 100
 
 load_agent = False
 load_agent_path = '../results/debug/0/agent'
 
-oracle_params = dict(relative_instruction=False)
+oracle_params = dict(relative_instruction=True)
 
 thing = [
-    ThingParam(BigAssFan, dict(name="bulb", simple=True)),
-    # ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
+    ThingParam(TVWithMediaControl, dict(name="television", simple=True, always_on=True)),
+    ThingParam(SimpleSpeaker, dict(name="speaker", simple=True, always_on=True)),
+    ThingParam(SimpleLight, dict(name="light", simple=True)),
+    ThingParam(SimpleBlinds, dict(name="blinds", simple=True)),
     # ThingParam(BigAssFan, dict(name="heater", simple=True, always_on=True)),
     # ThingParam(SimpleLight, dict(name="plug", simple=True)),
     # ThingParam(AdorneLight, dict(name="light", simple=True, always_on=True)),
@@ -90,9 +95,12 @@ if __name__ == "__main__":
                                   test_env=test_env, params=n_iter_test, metrics_records=metrics_records)
 
         for ep in range(num_episodes):
+            if env.episode_reset:
+                env.reset()
+            else:
+                raise NotImplementedError
             logger.info('%' * 5 + f' Episode {ep} ' + '%' * 5)
-            run_episode(agent=agent, env=env, oracle=oracle, save_transitions=True, episode=ep,
-                        allow_do_nothing=params['env_params']['allow_do_nothing'])
+            run_episode(agent=agent, env=env, oracle=oracle, save_transitions=True, episode=ep)
             agent.update(episode=ep, max_episodes=num_episodes)
 
             if ep > 0 and ep % test_frequence == 0:
