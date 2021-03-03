@@ -1,4 +1,4 @@
-from simulator.Thing import Thing
+from things.Thing import Thing
 from simulator.standard_channels import RollerShutterChannel, build_description_and_change_dicts
 
 description_keys = ['roller']
@@ -17,6 +17,9 @@ class SimpleBlinds(Thing):
 
     def is_powered(self, state=None):
         return True
+
+    def power_on(self):
+        pass
 
 
 if __name__ == "__main__":

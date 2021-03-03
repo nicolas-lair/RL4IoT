@@ -135,29 +135,34 @@ class Thing(ABC, DescriptionNode):
     def reset(self):
         self.init_node(**self.initial_values)
 
-    def get_absolute_change(self, previous_state, next_state):
-        previous_matching_descriptions = self.get_state_description(previous_state)
-        next_matching_descriptions = self.get_state_description(next_state)
+    def get_absolute_change(self, previous_state, next_state, ignore_power=False):
+        previous_matching_descriptions = self.get_thing_description(previous_state, ignore_power=False)
+        next_matching_descriptions = self.get_thing_description(next_state, ignore_power=False)
         absolute_change = set(next_matching_descriptions).difference(set(previous_matching_descriptions))
+
+        was_powered = self.is_powered(previous_state)
+        is_powered = self.is_powered(next_state)
+        absolute_change = self.power_status_filtering(absolute_change, ignore_power=ignore_power,
+                                                      powered_bool=was_powered and is_powered)
+
         return list(absolute_change)
 
-    def get_relative_change(self, previous_state, next_state, ignore_power=False, as_string=True):
+    def get_relative_change(self, previous_state, next_state, ignore_power=False):
         was_powered = self.is_powered(previous_state)
         is_powered = self.is_powered(next_state)
         state_change_descriptions_keys = []
         for c in self.get_channels():
             state_change_descriptions_keys.extend(c.get_state_change_key(previous_state, next_state))
-
-        relative_state_change_descriptions = [self.goals_dict['change'][key] for key in state_change_descriptions_keys]
-        if not (ignore_power or (is_powered and was_powered)):
-            relative_state_change_descriptions = [d for d in relative_state_change_descriptions if not d.need_power]
-        return relative_state_change_descriptions
+        relative_change_descr = [self.goals_dict['change'][key] for key in state_change_descriptions_keys]
+        relative_change_descr = self.power_status_filtering(descriptions=relative_change_descr,
+                                                            powered_bool=is_powered and was_powered,
+                                                            ignore_power=ignore_power)
+        return relative_change_descr
 
     def get_thing_change(self, previous_state, next_state, ignore_power=False, as_string=True, absolute=True,
                          relative=True):
-        absolute_change_desc = self.get_absolute_change(previous_state, next_state) if absolute else []
-        relative_change_desc = self.get_relative_change(previous_state, next_state, ignore_power, as_string
-                                                        ) if relative else []
+        absolute_change_desc = self.get_absolute_change(previous_state, next_state, ignore_power) if absolute else []
+        relative_change_desc = self.get_relative_change(previous_state, next_state, ignore_power) if relative else []
         descriptions_change = set(absolute_change_desc).union(relative_change_desc)
         if as_string:
             descriptions_change = [d.get_instruction() for d in descriptions_change]
@@ -176,12 +181,22 @@ class Thing(ABC, DescriptionNode):
         matching_description = [self.goals_dict['description'][key] for key in state_description_key_list]
 
         # Filter if object is not powered
-        if not ignore_power and not is_powered:
-            matching_description = [d for d in matching_description if not d.need_power]
+        matching_description = self.power_status_filtering(descriptions=matching_description, powered_bool=is_powered,
+                                                           ignore_power=ignore_power)
         return matching_description
+
+    @staticmethod
+    def power_status_filtering(descriptions, powered_bool, ignore_power):
+        if not ignore_power and not powered_bool:
+            descriptions = [d for d in descriptions if not d.need_power]
+        return descriptions
 
     @abstractmethod
     def is_powered(self, state=None):
+        raise NotImplementedError
+
+    @abstractmethod
+    def power_on(self):
         raise NotImplementedError
 
     def get_children_nodes(self):
@@ -201,8 +216,8 @@ class PowerThing(Thing):
         if self.always_on:
             return True
         else:
-            state = self.power.get_state() if state is None else state['power']['state']
-            return bool(state[0])
+            state = self.power.get_state() if state is None else state['power']
+            return bool(state['state'][0])
 
     def power_on(self):
         if not self.is_powered():

@@ -67,16 +67,8 @@ class Oracle:
         state_description_set = dict()
         for thing in self.thing_dict.values():
             state_description_set[thing.name] = self.get_thing_goals(thing, ignore_visibility=ignore_visibility)
-            if mode == 'all':
-                str_instructions[thing.name] = sum(
-                    [state_des.sentences for state_des in state_description_set[thing.name]],
-                    [])
-            elif mode == 'first':
-                str_instructions[thing.name] = [state_des.sentences[0] for state_des in
-                                                state_description_set[thing.name]]
-            else:
-                raise NotImplementedError(f'mode should be one of all or first, was {mode}')
-
+            str_instructions[thing.name] = sum(
+                [state_des.get_sentences_iterator(mode=mode) for state_des in state_description_set[thing.name]], [])
             str_instructions[thing.name] = sorted(str_instructions[thing.name])
 
         return state_description_set, str_instructions

@@ -60,9 +60,11 @@ change = dict()
 for k in dimmers_levels_dict:
     change[k] = {
         f'increase_{k}': GoalDescription(sentences=[f"Increase {k} of {{name}} {{location}}",
-                                                    f"You increased the {k} of {{name}} {{location}}"]),
+                                                    f"You increased the {k} of {{name}} {{location}}"],
+                                         is_relative=True),
         f'decrease_{k}': GoalDescription(sentences=[f"Decrease {k} of {{name}} {{location}}",
-                                                    f"You decreased the {k} of {{name}} {{location}}"])
+                                                    f"You decreased the {k} of {{name}} {{location}}"],
+                                         is_relative=True)
     }
 
 
@@ -207,7 +209,7 @@ class MediaPlayerChannel(Channel):
     def __init__(self, name='media', description='media control', methods=None, **kwargs):
         if methods is None:
             methods = dict(play=True, pause=True,
-                           PlayPause=False, next=False, previous=False, rewind=False, fasforward=False)
+                           PlayPause=False, next=False, previous=False, rewind=False, fastforward=False)
         super().__init__(
             name=name,
             description=description,

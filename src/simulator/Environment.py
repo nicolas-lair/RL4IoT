@@ -1,6 +1,6 @@
 import gym
 
-from simulator.Thing import Thing, ThingState
+from things.Thing import Thing, ThingState
 from simulator.Channel import Channel, ChannelState
 from simulator.Action import ExecAction, OpenHABAction, Params, DoNothing
 from simulator.TreeView import Node
@@ -44,9 +44,11 @@ class IoTEnv(gym.Env):
         # })
 
         self.discrete_params = discrete_parameters
-
-        self.oracle_state = self.build_state(oracle=True)
         self.previous_oracle_state = self.oracle_state
+
+    @property
+    def oracle_state(self):
+        return self.build_state(oracle=True)
 
     def get_things(self, name=None):
         if name is None:
@@ -69,12 +71,9 @@ class IoTEnv(gym.Env):
         :param action:
         :return:
         """
+        self.previous_oracle_state = self.oracle_state
         thing = self.get_things(name=action["thing"])
         thing.do_action(action["channel"], action["action"], action["params"])
-
-        self.previous_oracle_state = self.oracle_state
-        self.oracle_state = self.build_state(oracle=True)
-
         reward = None
         done = None
         info = None
@@ -104,9 +103,9 @@ class IoTEnv(gym.Env):
         thing_list = self.get_things()
         for thing in thing_list:
             thing.reset()
-        self.oracle_state = self.build_state(oracle=True)
-        self.previous_oracle_state = self.oracle_state
-        return self.oracle_state
+        state = self.oracle_state
+        self.previous_oracle_state = state
+        return state
 
     def render(self, mode='human'):
         raise NotImplementedError

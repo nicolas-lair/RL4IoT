@@ -11,13 +11,16 @@ def initialize_instruction(goal_dict, name, location):
 
 
 class GoalDescription:
-    def __init__(self, sentences, need_power=True, mode='first'):
+    def __init__(self, sentences, need_power=True, is_relative=False, mode='first'):
         if isinstance(sentences, str):
             sentences = [sentences]
 
         self.mode = mode
         self.sentences = sentences
         self.need_power = need_power
+        self.is_relative = is_relative  # relative goals are only meaningful if thing is powered on
+        self.object_name = None
+        self.object_location = None
 
     def get_instruction(self, mode=None):
         mode = mode if mode is not None else self.mode
@@ -25,6 +28,8 @@ class GoalDescription:
             return choice(self.sentences)
         elif mode == 'first':
             return self.sentences[0]
+        else:
+            raise NotImplementedError(f'mode should be one of all or first, was {mode}')
 
     def __eq__(self, other):
         equal = False
@@ -39,8 +44,19 @@ class GoalDescription:
         return hash(''.join(self.sentences))
 
     def set_name_and_location(self, name, location):
+        self.object_name = name
+        self.object_location = location
         location = 'in ' + location if location else ''
         self.sentences = [' '.join(s.format(name=name, location=location).split()) for s in self.sentences]
+
+    def get_sentences_iterator(self, mode=None):
+        mode = mode if mode is not None else self.mode
+        if mode == 'first':
+            return [self.get_instruction(mode='first')]
+        elif mode == 'all':
+            return self.sentences
+        else:
+            raise NotImplementedError(f'mode should be one of all or first, was {mode}')
 
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-from simulator.Thing import PowerThing
+from things.Thing import PowerThing
 from simulator.standard_channels import PowerChannel, VolumeChannel, MediaPlayerChannel, \
     build_description_and_change_dicts
 
@@ -60,7 +60,9 @@ if __name__ == "__main__":
         volume_tv_on = SpeakerWithMediaControl(name='volume_tv_on', always_on=True, simple=True)
 
         oracle = Oracle([simple_tv, simple_tv_on,
-                         volume_tv, volume_tv_on])
+                         volume_tv, volume_tv_on],
+                        relative_instruction=True,
+                        absolute_instruction=True)
         print('Instruction \n', yaml.dump(oracle.str_instructions))
 
 
@@ -117,12 +119,12 @@ if __name__ == "__main__":
 
         test_action_effect(thing, test_name="Play -> Pause - > Play",
                            init_params=dict(power=1, volume=50, media=1),
-                           action=[('media', 'PlayPause'), ('media', 'PlayPause')]
+                           action=[('media', 'pause'), ('media', 'play')]
                            )
 
         test_action_effect(thing, test_name="Play / Pause while off",
                            init_params=dict(power=0, volume=50, media=1),
-                           action=[('media', 'PlayPause'), ('media', 'PlayPause')]
+                           action=[('media', 'pause'), ('media', 'play')]
                            )
 
 

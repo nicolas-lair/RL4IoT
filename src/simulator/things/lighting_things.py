@@ -1,4 +1,4 @@
-from simulator.Thing import Thing, PowerThing
+from things.Thing import Thing, PowerThing
 from simulator.discrete_parameters import get_color_name_from_hsb
 from simulator.standard_channels import PowerChannel, BrightnessChannel, ColorTemperatureChannel, ColorChannel, \
     build_description_and_change_dicts
