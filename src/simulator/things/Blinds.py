@@ -31,12 +31,12 @@ if __name__ == "__main__":
     def test_goals():
         simple_tv = SimpleBlinds(name='blinds', simple=True)
 
-        oracle = Oracle([simple_tv])
+        oracle = Oracle([simple_tv], relative_instruction=True, absolute_instruction=True)
         print('Instruction \n', yaml.dump(oracle.str_instructions))
 
 
     ########### Simple Speaker  ###############
-    def test_simple_speaker():
+    def test_simple_blinds():
         thing = SimpleBlinds(name="blinds", simple=True)
         print('*' * 10 + thing.name + '*' * 10)
 
@@ -62,4 +62,4 @@ if __name__ == "__main__":
 
 
     test_goals()
-    test_simple_speaker()
+    test_simple_blinds()

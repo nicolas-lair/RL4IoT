@@ -139,7 +139,8 @@ def generate_model_params(context_architeture=policy_context_archi):
                               hidden_state_size=action_embedding,
                               aggregate='mean')
     if issubclass(context_architeture, DeepSetStateNet):
-        scaler_layer_params = dict(hidden_size=256, output_size=512, last_activation='relu')
+        scaler_layer_params = dict(hidden_size=64, output_size=128, last_activation='relu')
+        # scaler_layer_params = dict(hidden_size=128, output_size=256, last_activation='relu')
         context_net_params.update(scaler_layer_params=scaler_layer_params)
     elif ('FlatStateNet' in str(context_architeture)) or ('AttentionFlatState' in str(context_architeture)):
         pass
@@ -151,8 +152,10 @@ def generate_model_params(context_architeture=policy_context_archi):
         action_embedding_size=action_embedding,
         net_params=dict(
             q_network=dict(
-                hidden1_out=512,
-                hidden2_out=256
+                hidden1_out=128,
+                hidden2_out=128
+                # hidden1_out=256,
+                # hidden2_out=256
             ),
             context_net=context_net_params,
         )
@@ -274,7 +277,7 @@ def generate_trainer_params(things_list, simulation_name='default_simulation', u
         exploration_params=dict(
             start_eps=0.9,
             min_eps=0.05,
-            eps_decay=500
+            eps_decay=300 # 500
         ),
         replay_buffer_params=dict(
             per=True,
@@ -318,7 +321,7 @@ def generate_proc_gen_eval_params(things_list, simulation_name='default_simulati
                                      use_pretrained_language_model=use_pretrained_language_model, save_path=save_path,
                                      device=device, dqn_loss=dqn_loss, context_architecture=context_architecture,
                                      **kwargs)
-    params['new_objects_threshold'] = (5, 0.91)
+    params['new_objects_threshold'] = (5, 0.95)
     return params
 
 

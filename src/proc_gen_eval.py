@@ -5,7 +5,7 @@ from records import Records
 from utils import run_episode, test_agent, load_agent_state_dict
 from logger import get_logger, set_logger_handler
 from config import generate_proc_gen_eval_params, save_config, format_config, setup_new_simulation, ThingParam
-from simulator.lighting_things import BigAssFan, SimpleLight, AdorneLight
+from simulator.things.lighting_things import BigAssFan, SimpleLight, AdorneLight
 from simulator.Environment import IoTEnv4ML
 from simulator.oracle import Oracle
 from architecture.dqnagent import DQNAgent
@@ -25,15 +25,12 @@ load_agent_path = '../results/debug/0/agent'
 
 
 thing = [
-    ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
-    # ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
-    # ThingParam(BigAssFan, dict(name="heater", simple=True, always_on=True)),
-    ThingParam(SimpleLight, dict(name="plug", simple=True, always_on=True)),
-    ThingParam(AdorneLight, dict(name="light", simple=True)),
-    # ThingParam(SimpleLight, dict(name="bulb", simple=True)),
-    # ThingParam(SimpleLight, dict(name="television", simple=True)),
-    # ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
-]
+    ThingParam(SimpleLight, dict(name="light", simple=True)),
+    ThingParam(SimpleLight, dict(name="bulb", simple=True)),
+    ThingParam(SimpleLight, dict(name="lamp", simple=True)),
+    ThingParam(SimpleLight, dict(name="heater", simple=True)),
+    ]
+
 params = generate_proc_gen_eval_params(simulation_name=simulation_name, device=device, things_list=thing,
                                        use_pretrained_language_model=use_pretrained_language_model,
                                        n_episode=n_episode, test_frequence=test_frequence,

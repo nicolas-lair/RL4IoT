@@ -4,7 +4,6 @@ from simulator.Items import MethodUnavailableError
 def test_action_effect(thing, test_name, init_params, action, debug=False):
     print('     ' + '*' * 3 + f'{test_name}' + '*' * 3)
     s1 = thing.init_node(is_visible=True, init_type='custom', init_params=init_params)
-    print(f"Current thing descriptions: {[d.get_instruction() for d in thing.get_thing_description()]}")
     action = action if isinstance(action, list) else [action]
     if debug: print(s1)
     for a in action:

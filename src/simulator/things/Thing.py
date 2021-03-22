@@ -12,6 +12,16 @@ class ThingState(ChannelState):
         state['description'] = description
         super().__init__(state)
 
+    def get_channels_keys(self):
+        keys = list(self.keys())
+        keys.remove('description')
+        return keys
+
+    def get_channels_state(self):
+        keys = self.get_channels_keys()
+        return [self[k] for k in keys]
+
+
 
 class Thing(ABC, DescriptionNode):
     def __init__(self, name, description, is_visible, init_type, init_params, location, goals_dict):
@@ -111,7 +121,7 @@ class Thing(ABC, DescriptionNode):
             return None
 
     def do_action(self, channel, action, params=None):
-        channel = getattr(self, channel)
+        channel = self.get_channels(channel)
         channel.do_action(action, params)
 
     def init_node(self, is_visible=None, init_params=None, init_type=None, init_visibility=None, oracle=True):
@@ -151,8 +161,8 @@ class Thing(ABC, DescriptionNode):
         was_powered = self.is_powered(previous_state)
         is_powered = self.is_powered(next_state)
         state_change_descriptions_keys = []
-        for c in self.get_channels():
-            state_change_descriptions_keys.extend(c.get_state_change_key(previous_state, next_state))
+        for c in next_state.get_channels_keys():
+            state_change_descriptions_keys.extend(self.get_channels(c).get_state_change_key(previous_state, next_state))
         relative_change_descr = [self.goals_dict['change'][key] for key in state_change_descriptions_keys]
         relative_change_descr = self.power_status_filtering(descriptions=relative_change_descr,
                                                             powered_bool=is_powered and was_powered,
@@ -174,8 +184,8 @@ class Thing(ABC, DescriptionNode):
 
         # Collect all keys
         state_description_key_list = []
-        for c in self.get_channels():
-            state_description_key_list.extend(c.get_state_description_key(state))
+        for c in state.get_channels_keys():
+            state_description_key_list.extend(self.get_channels(c).get_state_description_key(state))
 
         # Get corresponding StateDescriptions
         matching_description = [self.goals_dict['description'][key] for key in state_description_key_list]

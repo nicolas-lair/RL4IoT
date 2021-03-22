@@ -210,30 +210,27 @@ class StateEmbedder:
         embedded_observations = []
         for obs in observations:
             new_obs = dict()
-            for thing_name, thing in obs.items():
+            for thing_name, thing_state in obs.items():
                 thing_obs = []
-                # thing_description_embedding = descr_embeddings[thing_index].view(-1)
                 thing_description_embedding = thingdesc_embedding[thing_index].view(-1)
                 thing_index += 1
-                for channel_name, channel in thing.items():
-                    if channel_name != 'description':
-                        if channel['item_type'] == 'goal_string':
-                            raise NotImplementedError
-                        # channel_descriptions_embedding = descr_embeddings[channel_index].view(-1)
-                        channel_descriptions_embedding = channeldesc_embeding[channel_index].view(-1)
-                        channel_index += 1
+                for channel_state in thing_state.get_channels_state():
+                    if channel_state['item_type'] == 'goal_string':
+                        raise NotImplementedError
+                    channel_descriptions_embedding = channeldesc_embeding[channel_index].view(-1)
+                    channel_index += 1
 
-                        channel_embedding = None
+                    channel_embedding = None
+                    # if use_cache:
+                    #     channel_embedding = self.channel_cache.get(channel, None)
+                    if not use_cache or channel_embedding is None:
+                        item_embedding, value_embedding = self._build_channel_embedding(channel_state)
+                        channel_embedding = torch.cat(
+                            [channel_descriptions_embedding, item_embedding, value_embedding,
+                             thing_description_embedding]).to(self.device).float()
                         # if use_cache:
-                        #     channel_embedding = self.channel_cache.get(channel, None)
-                        if not use_cache or channel_embedding is None:
-                            item_embedding, value_embedding = self._build_channel_embedding(channel)
-                            channel_embedding = torch.cat(
-                                [channel_descriptions_embedding, item_embedding, value_embedding,
-                                 thing_description_embedding]).to(self.device).float()
-                            # if use_cache:
-                            #     self.channel_cache[channel] = channel_embedding
-                        thing_obs.append(channel_embedding)
+                        #     self.channel_cache[channel] = channel_embedding
+                    thing_obs.append(channel_embedding)
 
                 new_obs[thing_name] = torch.stack(thing_obs)
                 assert len(new_obs[thing_name].size()) == 2

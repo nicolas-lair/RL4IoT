@@ -37,6 +37,9 @@ class Goal:
     def __eq__(self, other):
         return self.goal_string == other.goal_string
 
+    def __repr__(self):
+        return self.goal_string
+
 
 class TrainGoal(Goal):
     def __init__(self, goal_string, episode_discovery, target_counter=0, reached_counter=0, goal_embedding=None,

@@ -1,6 +1,6 @@
 import gym
 
-from things.Thing import Thing, ThingState
+from simulator.things.Thing import Thing, ThingState
 from simulator.Channel import Channel, ChannelState
 from simulator.Action import ExecAction, OpenHABAction, Params, DoNothing
 from simulator.TreeView import Node
@@ -120,6 +120,8 @@ class IoTEnv(gym.Env):
     def set_all_things_visible(self):
         for thing in self.get_things():
             thing.update_visibility(visibility=True)
+            for channel in thing.get_channels():
+                channel.update_visibility(visibility=True)
 
 
 class IoTEnv4ML(gym.Wrapper):
@@ -155,8 +157,8 @@ class IoTEnv4ML(gym.Wrapper):
         assert isinstance(action, Node), 'ERROR : action should be a Node'
         self.previous_available_actions = self.available_actions
         if isinstance(action, ExecAction):
-            super().step(self.running_action)
             self.previous_state = self.state
+            super().step(self.running_action)
             self.state = self.build_state(oracle=False)
             self.reset_running_action()
             self.episode_length += 1
@@ -229,3 +231,17 @@ class IoTEnv4ML(gym.Wrapper):
 
     def reset_running_action(self):
         self.running_action = {"thing": None, 'channel': None, 'action': None, 'params': None}
+
+    @property
+    def action_step(self):
+        available_actions = self.available_actions
+        if any([isinstance(a, Thing) for a in available_actions]):
+            return 'thing'
+        elif any([isinstance(a, Channel) for a in available_actions]):
+            return 'channel'
+        elif any([isinstance(a, OpenHABAction) for a in available_actions]):
+            return 'action'
+        elif any([isinstance(a, Params) for a in available_actions]):
+            return 'params'
+        else:
+            raise NotImplementedError

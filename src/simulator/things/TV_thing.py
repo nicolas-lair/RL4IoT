@@ -1,4 +1,4 @@
-from things.Thing import PowerThing
+from simulator.things.Thing import PowerThing
 from simulator.standard_channels import PowerChannel, TVSourceChannel, VolumeChannel, MediaPlayerChannel, \
     build_description_and_change_dicts
 

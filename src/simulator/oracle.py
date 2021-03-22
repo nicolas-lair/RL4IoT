@@ -66,11 +66,16 @@ class Oracle:
         str_instructions = dict()
         state_description_set = dict()
         for thing in self.thing_dict.values():
-            state_description_set[thing.name] = self.get_thing_goals(thing, ignore_visibility=ignore_visibility)
-            str_instructions[thing.name] = sum(
-                [state_des.get_sentences_iterator(mode=mode) for state_des in state_description_set[thing.name]], [])
-            str_instructions[thing.name] = sorted(str_instructions[thing.name])
-
+            if ignore_visibility or thing.is_visible:
+                state_description_set[thing.name] = self.get_thing_goals(thing, ignore_visibility=ignore_visibility)
+                str_instructions[thing.name] = sum(
+                    [state_des.get_sentences_iterator(mode=mode) for state_des in state_description_set[thing.name]],
+                    [])
+                str_instructions[thing.name] = sorted(str_instructions[thing.name])
+            else:
+                state_description_set[thing.name] = []
+                str_instructions[thing.name] = []
+            thing.reset()
         return state_description_set, str_instructions
 
 

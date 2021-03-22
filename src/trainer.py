@@ -5,7 +5,7 @@ from pprint import pformat
 
 from logger import get_logger, set_logger_handler
 from config import generate_trainer_params, save_config, format_config, setup_new_simulation, ThingParam
-from simulator.things.TV_thing import TVFullOption, TVWithMediaControl
+from simulator.things.TV_thing import TVFullOption, TVWithMediaControl, SimpleTV
 from simulator.things.Speaker import SpeakerWithMediaControl, SimpleSpeaker
 from simulator.things.lighting_things import SimpleLight, BigAssFan, AdorneLight, StructuredHueLight
 from simulator.things.Blinds import SimpleBlinds
@@ -31,14 +31,14 @@ from utils import run_episode, test_agent, load_agent_state_dict
 # use_pretrained_language_model = bool(int(args.pretrained_language_model))
 # optim_loss = args.optim_loss
 
-simulation_name = 'living_room_easy'
+simulation_name = 'threebigass_noton_last'
 device = 'cuda:3'
 N_SIMULATION = 1
 use_pretrained_language_model = False
 optim_loss = 'mse'
 
-n_episode = 20000
-test_frequence = 100
+n_episode = 15000
+test_frequence = 150
 
 load_agent = False
 load_agent_path = '../results/debug/0/agent'
@@ -46,17 +46,39 @@ load_agent_path = '../results/debug/0/agent'
 oracle_params = dict(relative_instruction=True)
 
 thing = [
-    ThingParam(TVWithMediaControl, dict(name="television", simple=True, always_on=True)),
-    ThingParam(SimpleSpeaker, dict(name="speaker", simple=True, always_on=True)),
-    ThingParam(SimpleLight, dict(name="light", simple=True)),
-    ThingParam(SimpleBlinds, dict(name="blinds", simple=True)),
-    # ThingParam(BigAssFan, dict(name="heater", simple=True, always_on=True)),
-    # ThingParam(SimpleLight, dict(name="plug", simple=True)),
-    # ThingParam(AdorneLight, dict(name="light", simple=True, always_on=True)),
-    # ThingParam(SimpleLight, dict(name="bulb", simple=True)),
-    # ThingParam(SimpleLight, dict(name="television", simple=True)),
+    # Living Room Hard
+    # ThingParam(TVWithMediaControl, dict(name="television", simple=True, always_on=True)),
+    # ThingParam(SpeakerWithMediaControl, dict(name="speaker", simple=True, always_on=True)),
+    # ThingParam(SimpleLight, dict(name="light", simple=True)),
+    # ThingParam(SimpleBlinds, dict(name="blinds", simple=True)),
     # ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=True)),
+    # ThingParam(SimpleLight, dict(name="heater", simple=True)),
+    # ThingParam(AdorneLight, dict(name="lamp", simple=True, always_on=True)),
+
+    # Four simple 3000 / 50 test
+    # ThingParam(SimpleLight, dict(name="light", simple=True)),
+    # ThingParam(SimpleLight, dict(name="bulb", simple=True)),
+    # ThingParam(SimpleLight, dict(name="lamp", simple=True)),
+    # ThingParam(SimpleLight, dict(name="heater", simple=True)),
+    # ThingParam(SimpleLight, dict(name="television", simple=True)),
+
+    # # Bigass not on 20 000 ep / 300 test
+    # ThingParam(BigAssFan, dict(name="light", simple=True, always_on=False)),
+
+    # # Living room with new object in the middle
+    # ThingParam(SimpleTV, dict(name="television", simple=True, always_on=True)),
+    # ThingParam(SimpleSpeaker, dict(name="speaker", simple=True, always_on=True)),
+    # ThingParam(AdorneLight, dict(name="light", simple=True, always_on=True)),
+    # ThingParam(AdorneLight, dict(name="lamp", simple=True, always_on=True)),
+
+    # Three Bigass
+    ThingParam(BigAssFan, dict(name="light", simple=True, always_on=False)),
+    ThingParam(BigAssFan, dict(name="bulb", simple=True, always_on=False)),
+    ThingParam(BigAssFan, dict(name="lamp", simple=True, always_on=False))
+
+    # ThingParam(BigAssFan, dict(name="light", simple=True, always_on=True))
 ]
+
 
 params = generate_trainer_params(things_list=thing, simulation_name=simulation_name,
                                  use_pretrained_language_model=use_pretrained_language_model,
@@ -93,7 +115,6 @@ if __name__ == "__main__":
         if load_agent:
             load_agent_state_dict(agent=agent, path=load_agent_path, oracle=oracle,
                                   test_env=test_env, params=n_iter_test, metrics_records=metrics_records)
-
         for ep in range(num_episodes):
             if env.episode_reset:
                 env.reset()

@@ -8,6 +8,9 @@ class Node:
         self.node_embedding = node_embedding
         self.embedding_size = None
 
+    def __repr__(self):
+        return str((type(self).__name__, self.name))
+
     def get_node_embedding(self):
         return self.node_embedding
 

@@ -1,5 +1,8 @@
+import random
+
 import torch
 
+from simulator.things.Thing import Thing
 from Action import RootAction, DoNothing
 from goal_sampler import Goal
 from logger import format_oracle_state_log, get_logger
@@ -15,7 +18,36 @@ def load_agent_state_dict(agent, path, oracle, test_env, params, metrics_records
     metrics_records.update_records(agent=agent, episode=0, test_scores=test_scores)
 
 
-def run_episode(agent, env, oracle, episode, save_transitions=True, target_goal=None, reset=True):
+def automatic_action_selection(agent, env, target_goal, exploration=False):
+    state, available_actions = env.get_state_and_action()
+    sample = random.random() if exploration else 1
+    if len(target_goal.goal_string) != 0 and sample >= agent.exploration_threshold:
+        thing_action = [a for a in available_actions if isinstance(a, Thing)]
+        action = None
+        for t in thing_action:
+            if t.name in target_goal.goal_string:
+                action = t
+                break
+        assert action is not None
+    else:
+        action = random.choice(available_actions)
+
+    action_embedding, a_type = agent._embed_one_action(action)
+    action_embedding = agent.action_model(action_embedding, [[a_type]], instruction=[target_goal.goal_embedding])
+    action_embedding = action_embedding.squeeze(0)
+    return action, action_embedding
+
+
+def run_episode(agent, env, oracle=None, episode=None, save_transitions=True, target_goal=None, reset=True,
+                automatic_thing_selection=False, test_mode=False):
+    if test_mode:
+        save_transitions = False
+        exploration = False
+    else:
+        exploration = True
+        assert episode is not None
+        assert oracle is not None
+
     if reset:
         if env.episode_reset:
             env.reset()
@@ -36,11 +68,14 @@ def run_episode(agent, env, oracle, episode, save_transitions=True, target_goal=
 
     while not done:
         previous_action = action
-        state, available_actions = env.get_state_and_action()
 
-        action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
-                                                   actions=available_actions, hidden_state=hidden_state,
-                                                   exploration=save_transitions)
+        state, available_actions = env.get_state_and_action()
+        if automatic_thing_selection and (env.action_step == 'thing'):
+            action, hidden_state = automatic_action_selection(agent, env, target_goal, exploration=exploration)
+        else:
+            action, hidden_state = agent.select_action(state=state, instruction=target_goal.goal_embedding,
+                                                       actions=available_actions, hidden_state=hidden_state,
+                                                       exploration=exploration)
         logger.debug(f'available_actions{[a.name for a in available_actions]}')
 
         logger.debug(action.name)
@@ -53,10 +88,13 @@ def run_episode(agent, env, oracle, episode, save_transitions=True, target_goal=
             logger.debug(f'State: \n {format_oracle_state_log(env.oracle_state)}')
 
         if save_transitions:
-            save_transitions_replay_buffer(agent=agent, env=env, oracle=oracle, episode=episode,
-                                           target_goal=target_goal, state=state, action=action, next_state=next_state,
-                                           next_actions=next_available_actions, previous_action=previous_action,
-                                           reward=reward, done=done, info=info)
+            if automatic_thing_selection and isinstance(action, Thing):
+                pass
+            else:
+                save_transitions_replay_buffer(agent=agent, env=env, oracle=oracle, episode=episode,
+                                               target_goal=target_goal, state=state, action=action,
+                                               next_state=next_state, next_actions=next_available_actions,
+                                               previous_action=previous_action, reward=reward, done=done, info=info)
 
     logger.info(f'Action summary: {"/".join(action_record)}')
 
@@ -93,7 +131,7 @@ def save_transitions_replay_buffer(agent, env, oracle, episode, target_goal, pre
                                 previous_action=previous_action)
 
 
-def test_agent(agent, test_env, oracle, n_test):
+def test_agent(agent, test_env, oracle, n_test, automatic_thing_selection=False):
     logger.info('Testing agent')
     agent.eval()
     reward_table = dict()
@@ -113,8 +151,8 @@ def test_agent(agent, test_env, oracle, n_test):
 
                     initial_state = test_env.oracle_state
 
-                    run_episode(agent=agent, env=test_env, target_goal=test_goal, oracle=None, save_transitions=False,
-                                episode=None, reset=False)
+                    run_episode(agent=agent, env=test_env, target_goal=test_goal, test_mode=True,
+                                reset=False, automatic_thing_selection=automatic_thing_selection)
                     current_rewards += int(
                         oracle.was_achieved(initial_state, test_env.oracle_state, instruction))
                 table[instruction] = round(current_rewards / n_test, 2)
